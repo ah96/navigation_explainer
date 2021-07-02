@@ -192,11 +192,11 @@ if explanationMode == 'tabular':
 
 else:
     # odabir po zelji - deterministicki
-    expID = 92
+    expID = 48
 
     # Dataset1:
     # Dataset2:
-    # Dataset3: #92
+    # Dataset3: #48 #92
     
     # random odabir
     #import random

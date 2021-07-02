@@ -50,6 +50,8 @@ launch = roslaunch.scriptapi.ROSLaunch()
 launch.start()
 '''
 
+perturb_hide_color = 50
+
 def _supported_float_type(input_dtype, allow_complex=False):
     if isinstance(input_dtype, Iterable) and not isinstance(input_dtype, str):
         return np.result_type(*(_supported_float_type(d) for d in input_dtype))
@@ -256,12 +258,12 @@ class ExplainRobotNavigation:
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
 
-            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=50, num_samples=self.num_samples, batch_size=128, segmentation_fn=segm_fn)
+            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=128, segmentation_fn=segm_fn)
 
             #print('self.explanation: ', self.explanation)
 
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=True,
-                                                                           negative_only=False, num_features=1,
+                                                                           negative_only=False, num_features=2,
                                                                            hide_rest=False,
                                                                            min_weight=0.0)  # min_weight=0.1 - default
 
@@ -292,10 +294,11 @@ class ExplainRobotNavigation:
             fig = self.explanation.as_pyplot_figure()
             plt.savefig('explanation.png')
 
-
     def classifier_fn_image(self, sampled_instance):
 
         print('classifier_fn_image started')
+
+        #print('sampled_instance: ', sampled_instance)
         #print('sampled_instance.shape: ', sampled_instance.shape)
         
         #'''
@@ -303,13 +306,13 @@ class ExplainRobotNavigation:
         for i in range(0, sampled_instance.shape[0]):
             for j in range(0, sampled_instance[i].shape[0]):
                 for k in range(0, sampled_instance[i].shape[1]):
-                    if sampled_instance[i][j, k, 0] == 50:
+                    if sampled_instance[i][j, k, 0] == perturb_hide_color:
                         if self.image.iloc[j, k] < 99:
-                            #print('free space')
                             sampled_instance[i][j, k, 0] = 99
+                            #print('free space')
                         else:
-                            #print('obstacle')
                             sampled_instance[i][j, k, 0] = 0
+                            #print('obstacle')
         #'''
 
         #'''
@@ -772,7 +775,7 @@ class ExplainRobotNavigation:
         print('segments_unique_1.shape: ', segments_unique_1.shape)
 
         # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=20, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.1, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
@@ -821,10 +824,15 @@ class ExplainRobotNavigation:
         print('segments_unique: ', segments_unique)
         print('segments_unique.shape: ', segments_unique.shape)
 
-        # plot segments_1 with centroids and weights
+        print('self.exp: ', self.exp)
+        print('len(self.exp): ', len(self.exp))
+
+        # plot segments with centroids and weights
+        plt.imshow(segments_1)
         regions = regionprops(segments_1)
         centers = []
         i = 0
+        print('len(regions): ', len(regions))
         for props in regions:
             v = props.label  # value of label
             cx, cy = props.centroid  # centroid coordinates
@@ -832,18 +840,26 @@ class ExplainRobotNavigation:
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
             for j in range(0, len(self.exp)):
                 if self.exp[j][0] == i:
+                    print('j: ', j)
                     plt.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))   #str(v))
                     break
             i = i + 1
 
         # Save segments as a picture
-        plt.imshow(segments_1)
         plt.savefig('testSegmentation_segments.png')
         plt.clf()
 
         print('mySlic ends')
 
         return segments_1
+
+
+
+
+
+
+
+
 
 
     def slic_help(self, image_rgb, n_segments=100, compactness=10., max_iter=10, sigma=0, spacing=None,
@@ -958,11 +974,6 @@ class ExplainRobotNavigation:
             labels = labels[0]
 
         return labels, centroids
-
-
-
-
-
 
     def matrixflip(self, m, d):
         myl = np.array(m)
