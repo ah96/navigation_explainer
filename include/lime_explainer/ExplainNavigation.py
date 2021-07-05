@@ -60,6 +60,7 @@ class ExplainRobotNavigation:
         self.offset = numOfFirstRowsToDelete
         self.footprints = footprints
 
+        '''
         # print important information
         print('self.mode: ', self.mode)
         print('self.explanationMode: ', self.explanationMode)
@@ -67,6 +68,7 @@ class ExplainRobotNavigation:
         print('self.num_samples: ', self.num_samples)
         print('output_class_name: ', output_class_name)
         print('self.offset: ', self.offset)
+        '''
 
         # if mode is 'image'
         if self.explanationMode == 'image':
@@ -130,11 +132,9 @@ class ExplainRobotNavigation:
                             if self.image[i - 1, j] == 99 and self.image[i + 1, j] == 99 and self.image[i, j - 1] == 99:
                                 self.image[i, j] = 99
             # '''
-
             self.image = self.image * 1.0
 
             # Saving data to .csv files for C++ node
-
             # Save footprint instance to a file
             self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
             self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
@@ -284,8 +284,8 @@ class ExplainRobotNavigation:
 
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=True,
-                                                                           negative_only=False, num_features=1,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
+                                                                           negative_only=True, num_features=1,
                                                                            hide_rest=False,
                                                                            min_weight=0.0)  # min_weight=0.1 - default
 
@@ -515,18 +515,15 @@ class ExplainRobotNavigation:
         self.local_plan_y_list = []
         # print('self.local_plan_tmp.shape: ', self.local_plan_tmp.shape)
         for i in range(0, self.local_plan_tmp.shape[0]):
-            self.local_plan_x_list.append(
-                int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.local_plan_y_list.append(
-                int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+            self.local_plan_x_list.append(int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
         plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
 
         # robot's odometry orientation
         plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
 
         # plot costmap
-        img = np.array(self.image)
-        plt.imshow(img)
+        plt.imshow(self.image)
         plt.savefig('LIME_image_local_costmap.png')
         plt.clf()
 
@@ -583,10 +580,8 @@ class ExplainRobotNavigation:
         self.global_plan_x_list = []
         self.global_plan_y_list = []
         for i in range(19, self.global_plan_tmp.shape[0], 20):
-            self.global_plan_x_list.append(
-                int((self.global_plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
-            self.global_plan_y_list.append(
-                int((self.global_plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
+            self.global_plan_x_list.append(int((self.global_plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
+            self.global_plan_y_list.append(int((self.global_plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
         plt.scatter(self.global_plan_x_list, self.global_plan_y_list, c='yellow', marker='>')
 
         # plot robot's location in the map
@@ -626,7 +621,7 @@ class ExplainRobotNavigation:
 
         # plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
         # plot explanation
-        plt.imshow(mark_boundaries(self.temp_img, self.mask))
+        plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
         plt.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
         plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
         plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
@@ -688,14 +683,14 @@ class ExplainRobotNavigation:
         #segments_rgb = gray2rgb(segments)
 
         # Generate segments - superpixels with my slic function
-        segments = self.mySlic(rgb)
+        segments = self.mySlicTest(rgb)
 
         # Save segments to .csv file
         #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
 
         print('Test segmentation function ending')
 
-    def mySlic(self, img_rgb):
+    def mySlicTest(self, img_rgb):
 
         print('mySlic for testSegmentation starts')
 
@@ -830,7 +825,14 @@ class ExplainRobotNavigation:
             #plt.text(centers[i][0], centers[i][1], str(v))
             for j in range(0, len(self.exp)):
                 if self.exp[j][0] == i:
-                    #print('j: ', j)
+                    '''
+                    print('i: ', i)
+                    print('j: ', j)
+                    print('self.exp[j][0]: ', self.exp[j][0])
+                    print('self.exp[j][1]: ', self.exp[j][1])
+                    print('v: ', v)
+                    print('\n')
+                    '''
                     plt.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))   #str(v))
                     break
             i = i + 1

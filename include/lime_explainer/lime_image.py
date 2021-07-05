@@ -52,6 +52,21 @@ class ImageExplanation(object):
             numpy array that can be used with
             skimage.segmentation.mark_boundaries
         """
+
+        '''
+        # testing
+        import matplotlib.pyplot as plt
+        print('self.local_exp: ', self.local_exp)
+        seg_unique = np.unique(self.segments)
+        print('self.segments_unique: ', seg_unique)
+        plt.imshow(self.segments)
+        plt.savefig('self_segments.png')
+        plt.clf()
+        plt.imshow(self.image)
+        plt.savefig('self_image.png')
+        plt.clf()
+        '''
+
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
         if positive_only & negative_only:
@@ -59,7 +74,6 @@ class ImageExplanation(object):
         segments = self.segments
         image = self.image
         exp = self.local_exp[label]
-        print('exp: ', exp)
         mask = np.zeros(segments.shape, segments.dtype)
         if hide_rest:
             temp = np.zeros(self.image.shape)
@@ -278,6 +292,8 @@ class LimeImageExplainer(object):
         # Save segments as a picture
         plt.savefig('mySlic_segments.png')
         plt.clf()
+
+        segments_1 = segments_1 - 1
 
         print('mySlic ends')
 
