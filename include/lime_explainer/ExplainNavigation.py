@@ -38,7 +38,7 @@ class ExplainRobotNavigation:
                  local_costmap_info,
                  amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, modeParam, explanation_mode,
                  expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints):
-        self.cmd_vel = cmd_vel
+        #self.cmd_vel = cmd_vel
         self.odom = odom
         self.plan = plan
         self.global_plan = teb_global_plan
@@ -228,7 +228,7 @@ class ExplainRobotNavigation:
             self.yaw_odom_x = math.cos(self.yaw_odom)
             self.yaw_odom_y = math.sin(self.yaw_odom)
 
-            '''
+
             # indices of footprint's poses in local costmap
             self.footprint_x_list = []
             self.footprint_y_list = []
@@ -237,7 +237,7 @@ class ExplainRobotNavigation:
                     int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
                 self.footprint_y_list.append(
                     int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-            '''
+
 
 
 
@@ -316,6 +316,158 @@ class ExplainRobotNavigation:
             fig = self.explanation.as_pyplot_figure()
             plt.savefig('explanation.png')
 
+    def plotExplanation(self):
+                print('plotExplanation starts')
+
+                # print important information
+                print('self.mode: ', self.mode)
+                print('self.explanationMode: ', self.explanationMode)
+                print('self.expID: ', self.expID)
+                print('self.num_samples: ', self.num_samples)
+                print('self.offset: ', self.offset)
+                print('self.costmap_info.shape[0]: ', self.costmap_info.shape[0])
+
+                # plot local costmap
+                # plot robot odometry location
+                plt.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
+
+                # indices of local plan's poses in local costmap
+                self.local_plan_x_list = []
+                self.local_plan_y_list = []
+                # print('self.local_plan_tmp.shape: ', self.local_plan_tmp.shape)
+                for i in range(0, self.local_plan_tmp.shape[0]):
+                    self.local_plan_x_list.append(
+                        int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+                    self.local_plan_y_list.append(
+                        int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+                plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
+
+                # robot's odometry orientation
+                plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
+
+                # plot costmap
+                plt.imshow(self.image)
+                plt.savefig('LIME_image_local_costmap.png')
+                plt.clf()
+
+                # plot global map
+                # map info
+                self.mapOriginX = self.map_info.iloc[0, 4]
+                # print('self.mapOriginX: ', self.mapOriginX)
+                self.mapOriginY = self.map_info.iloc[0, 5]
+                # print('self.mapOriginY: ', self.mapOriginY)
+                self.mapResolution = self.map_info.iloc[0, 1]
+                # print('self.mapResolution: ', self.mapResolution)
+                self.mapHeight = self.map_info.iloc[0, 3]
+                # print('self.mapHeight: ', self.mapHeight)
+                self.mapWidth = self.map_info.iloc[0, 2]
+                # print('self.mapWidth: ', self.mapWidth)
+
+                # robot amcl location
+                self.amcl_x = self.amcl_pose_tmp.iloc[0, 0]
+                # print('self.amcl_x: ', self.amcl_x)
+                self.amcl_y = self.amcl_pose_tmp.iloc[0, 1]
+                # print('self.amcl_y: ', self.amcl_y)
+
+                # indices of robot's odometry location in map
+                self.mapIndex_x_amcl = int((self.amcl_x - self.mapOriginX) / self.mapResolution)
+                # print('self.mapIndex_x_amcl: ', self.mapIndex_x_amcl)
+                self.mapIndex_y_amcl = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
+                # print('self.mapIndex_y_amcl: ', self.mapIndex_y_amcl)
+
+                # indices of robot's amcl location in map in a list - suitable for plotting
+                self.x_amcl_index = [self.mapIndex_x_amcl]
+                self.y_amcl_index = [self.mapIndex_y_amcl]
+                plt.scatter(self.x_amcl_index, self.y_amcl_index, c='yellow', marker='o')
+
+                # robot amcl orientation
+                self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
+                self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
+                [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
+                # print('roll_amcl: ', roll_amcl)
+                # print('pitch_amcl: ', pitch_amcl)
+                # print('yaw_amcl: ', self.yaw_amcl)
+                self.yaw_amcl_x = math.cos(self.yaw_amcl)
+                self.yaw_amcl_y = math.sin(self.yaw_amcl)
+                plt.quiver(self.x_amcl_index, self.y_amcl_index, self.yaw_amcl_x, self.yaw_amcl_y, color='white')
+
+                # plan from global planner
+                self.plan_x_list = []
+                self.plan_y_list = []
+                for i in range(19, self.plan_tmp.shape[0], 20):
+                    self.plan_x_list.append(int((self.plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
+                    self.plan_y_list.append(int((self.plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
+                plt.scatter(self.plan_x_list, self.plan_y_list, c='red', marker='<')
+
+                # global plan from teb algorithm
+                self.global_plan_x_list = []
+                self.global_plan_y_list = []
+                for i in range(19, self.global_plan_tmp.shape[0], 20):
+                    self.global_plan_x_list.append(
+                        int((self.global_plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
+                    self.global_plan_y_list.append(
+                        int((self.global_plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
+                plt.scatter(self.global_plan_x_list, self.global_plan_y_list, c='yellow', marker='>')
+
+                # plot robot's location in the map
+                x_map = int((self.amcl_x - self.mapOriginX) / self.mapResolution)
+                y_map = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
+                plt.scatter(x_map, y_map, c='red', marker='o')
+
+                # plot map, fill -1 with 100
+                map_tmp = self.map_data
+                for i in range(0, map_tmp.shape[0]):
+                    for j in range(0, map_tmp.shape[1]):
+                        if map_tmp.iloc[i, j] == -1:
+                            map_tmp.iloc[i, j] = 100
+                plt.imshow(map_tmp)
+                plt.savefig('LIME_image_map.png')
+                plt.clf()
+
+                # plot image_temp
+                plt.imshow(self.temp_img)
+                plt.savefig('LIME_image_temp_img.png')
+                plt.clf()
+
+                # plot mask
+                plt.imshow(self.mask)
+                plt.savefig('LIME_image_mask.png')
+                plt.clf()
+
+                # plot last 100 perturbations
+                plt.imshow(self.perturbations_visualization_final)
+                plt.savefig('LIME_perturbations.png')
+                plt.clf()
+
+                # plot last 10 perturbations
+                plt.imshow(self.perturbations_visualization)
+                plt.savefig('LIME_perturbations_last_row.png')
+                plt.clf()
+
+                # plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
+                # plot explanation
+                plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
+                plt.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
+                plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
+                plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
+                plt.savefig('LIME_image_explanation.png')
+                plt.close()
+
+                print('plotExplanation ends')
+
+    def quaternion_to_euler(self, x, y, z, w):
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll = math.atan2(t0, t1)
+        t2 = +2.0 * (w * y - z * x)
+        t2 = +1.0 if t2 > +1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch = math.asin(t2)
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw = math.atan2(t3, t4)
+        return [yaw, pitch, roll]
+
     def classifier_fn_image(self, sampled_instance):
 
         print('classifier_fn_image started')
@@ -362,286 +514,134 @@ class ExplainRobotNavigation:
         Popen(shlex.split('rosnode kill /perturb_node_image'))
 
         # load command velocities
-        cmd_vel = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
+        self.cmd_vel = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('cmd_vel: ', cmd_vel)
         #print('cmd_vel.shape: ', cmd_vel.shape)
 
         # load local plans
-        #local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
+        self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
         #print('local_plans: ', local_plans)
         #print('local_plans.shape: ', local_plans.shape)
 
         # load transformed plan
-        #transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
+        self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
         #print('transformed_plan: ', transformed_plan)
         #print('transformed_plan.shape: ', transformed_plan.shape)
 
+        self.sampled_instance = sampled_instance
 
-        '''
+        self.classifier_fn_image_plot()
+
+        # classification
+        conditions = [
+            ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+            ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+            ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+            ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+            ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+            ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+            (abs(self.cmd_vel['cmd_vel_lin_x']) < 0.01) # & (self.cmd_vel['cmd_vel_lin_x'] > -0.01))
+        ]
+
+        valuesLeftAhead = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.cmd_vel['left_ahead'] = np.select(conditions, valuesLeftAhead)
+
+        valuesRightAhead = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.cmd_vel['right_ahead'] = np.select(conditions, valuesRightAhead)
+
+        valuesStraightAhead = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+        self.cmd_vel['straight_ahead'] = np.select(conditions, valuesStraightAhead)
+
+        valuesLeftBack = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+        self.cmd_vel['left_back'] = np.select(conditions, valuesLeftBack)
+
+        valuesRightBack = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+        self.cmd_vel['right_back'] = np.select(conditions, valuesRightBack)
+
+        valuesStraightBack = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        self.cmd_vel['straight_back'] = np.select(conditions, valuesStraightBack)
+
+        valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+        self.cmd_vel['stop'] = np.select(conditions, valuesStop)
+
+        print('classifier_fn_image ended')
+
+        return np.array(self.cmd_vel.iloc[:, 3:4])
+
+    def classifier_fn_image_plot(self):
+        #'''
         # Visualise last 10 perturbations and last 100 perturbations separately
-        self.perturbations_visualization = sampled_instance[0][:, :, 0]
-        for i in range(1, sampled_instance.shape[0]):
+        self.perturbations_visualization = self.sampled_instance[0][:, :, 0]
+        for i in range(1, 120):
             if i == 10:
                 self.perturbations_visualization_final = self.perturbations_visualization
-                self.perturbations_visualization = sampled_instance[i][:, :, 0]
+                self.perturbations_visualization = self.sampled_instance[i][:, :, 0]
             elif i % 10 == 0 & i != 10:
-                self.perturbations_visualization_final = np.concatenate(
-                    (self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
-                self.perturbations_visualization = sampled_instance[i][:, :, 0]
+                self.perturbations_visualization_final = np.concatenate((self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
+                self.perturbations_visualization = self.sampled_instance[i][:, :, 0]
             else:
-                self.perturbations_visualization = np.concatenate(
-                    (self.perturbations_visualization, sampled_instance[i][:, :, 0]), axis=1)
-        self.perturbations_visualization_final = np.concatenate(
-            (self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
-        '''
+                self.perturbations_visualization = np.concatenate((self.perturbations_visualization, self.sampled_instance[i][:, :, 0]), axis=1)
+        self.perturbations_visualization_final = np.concatenate((self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
+        #'''
         '''
         # Save perturbations as .csv file
-        for i in range(0, sampled_instance.shape[0]):
-            pd.DataFrame(sampled_instance[i][:, :, 0]).to_csv('~/amar_ws/perturbation_' + str(i) + '.csv', index=False,
-                                                              header=False)
+        for i in range(0, self.sampled_instance.shape[0]):
+            pd.DataFrame(self.sampled_instance[i][:, :, 0]).to_csv('~/amar_ws/perturbation_' + str(i) + '.csv', index=False, header=False)
         '''
 
 
-        '''
+        #'''
         # indices of transformed plan's poses in local costmap
-        transformed_plan_x_list = []
-        transformed_plan_y_list = []
-        for j in range(0, transformed_plan.shape[0]):
-            transformed_plan_x_list.append(
-                int((transformed_plan.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            transformed_plan_y_list.append(
-                int((transformed_plan.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+        self.transformed_plan_x_list = []
+        self.transformed_plan_y_list = []
+        for j in range(0, self.transformed_plan.shape[0]):
+            self.transformed_plan_x_list.append(int((self.transformed_plan.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+            self.transformed_plan_y_list.append(int((self.transformed_plan.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
         # print('i: ', i)
-        # print('local_plan_x_list.size(): ', len(local_plan_x_list))
-        # print('local_plan_y_list.size(): ', len(local_plan_y_list))
+        # print('self.transformed_plan_x_list.size(): ', len(self.transformed_plan_x_list))
+        # print('self.transformed_plan_y_list.size(): ', len(self.transformed_plan_y_list))
 
         # plot every perturbation
-        for i in range(0, sampled_instance.shape[0]):
+        for i in range(0, self.sampled_instance.shape[0]):
 
             # plot perturbed local costmap
-            plt.imshow(sampled_instance[i][:, :, 0])
+            plt.imshow(self.sampled_instance[i][:, :, 0])
 
             # indices of local plan's poses in local costmap
-            local_plan_x_list = []
-            local_plan_y_list = []
-            for j in range(0, local_plans.shape[0]):
-                if local_plans.iloc[j, -1] == i:
-                    local_plan_x_list.append(
-                        int((local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-                    local_plan_y_list.append(
-                        int((local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+            self.local_plan_x_list = []
+            self.local_plan_y_list = []
+            for j in range(0, self.local_plans.shape[0]):
+                if self.local_plans.iloc[j, -1] == i:
+                    self.local_plan_x_list.append(int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+                    self.local_plan_y_list.append(int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
             # print('i: ', i)
-            # print('local_plan_x_list.size(): ', len(local_plan_x_list))
-            # print('local_plan_y_list.size(): ', len(local_plan_y_list))
+            # print('self.local_plan_x_list.size(): ', len(self.local_plan_x_list))
+            # print('self.local_plan_y_list.size(): ', len(self.local_plan_y_list))
 
             # plot transformed plan
-            plt.scatter(transformed_plan_x_list, transformed_plan_y_list, c='blue', marker='x')
+            plt.scatter(self.transformed_plan_x_list, self.transformed_plan_y_list, c='blue', marker='x')
 
             # plot footprint
             plt.scatter(self.footprint_x_list, self.footprint_y_list, c='green', marker='x')
 
             # plot local plan
-            plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
+            plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
 
             # plot local plan last point
-            if len(local_plan_x_list) != 0:
-                plt.scatter([local_plan_x_list[-1]], [local_plan_y_list[-1]], c='black', marker='x')
+            if len(self.local_plan_x_list) != 0:
+                plt.scatter([self.local_plan_x_list[-1]], [self.local_plan_y_list[-1]], c='black', marker='x')
 
             # plot robot's location and orientation
             plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
             plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
 
             # plot command velocities as text
-            plt.text(0.0, -5.0, 'lin_x=' + str(round(cmd_vel.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(cmd_vel.iloc[i, 2], 2)))
+            plt.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel.iloc[i, 2], 2)))
 
             # save figure
             plt.savefig('perturbation_' + str(i) + '.png')
             plt.clf()
-        '''
-
-        # classification
-        conditions = [
-            ((cmd_vel['cmd_vel_ang_z'] >= 0.05) & (cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((cmd_vel['cmd_vel_ang_z'] <= -0.05) & (cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((cmd_vel['cmd_vel_ang_z'] < 0.05) & (cmd_vel['cmd_vel_ang_z'] > -0.05) & (cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((cmd_vel['cmd_vel_ang_z'] >= 0.05) & (cmd_vel['cmd_vel_lin_x'] < 0)),
-            ((cmd_vel['cmd_vel_ang_z'] <= -0.05) & (cmd_vel['cmd_vel_lin_x'] < 0)),
-            ((cmd_vel['cmd_vel_ang_z'] < 0.05) & (cmd_vel['cmd_vel_ang_z'] > -0.05) & (cmd_vel['cmd_vel_lin_x'] < 0)),
-            (abs(cmd_vel['cmd_vel_lin_x']) < 0.01) # & (cmd_vel['cmd_vel_lin_x'] > -0.01))
-        ]
-
-        valuesLeftAhead = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        cmd_vel['left_ahead'] = np.select(conditions, valuesLeftAhead)
-
-        valuesRightAhead = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        cmd_vel['right_ahead'] = np.select(conditions, valuesRightAhead)
-
-        valuesStraightAhead = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
-        cmd_vel['straight_ahead'] = np.select(conditions, valuesStraightAhead)
-
-        valuesLeftBack = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
-        cmd_vel['left_back'] = np.select(conditions, valuesLeftBack)
-
-        valuesRightBack = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-        cmd_vel['right_back'] = np.select(conditions, valuesRightBack)
-
-        valuesStraightBack = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        cmd_vel['straight_back'] = np.select(conditions, valuesStraightBack)
-
-        valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-        cmd_vel['stop'] = np.select(conditions, valuesStop)
-
-        print('classifier_fn_image ended')
-
-        return np.array(cmd_vel.iloc[:, 3:4])
-
-    def plotExplanation(self):
-        print('plotExplanation starts')
-
-        # print important information
-        print('self.mode: ', self.mode)
-        print('self.explanationMode: ', self.explanationMode)
-        print('self.expID: ', self.expID)
-        print('self.num_samples: ', self.num_samples)
-        print('self.offset: ', self.offset)
-        print('self.costmap_info.shape[0]: ', self.costmap_info.shape[0])
-
-        # plot local costmap
-        # plot robot odometry location
-        plt.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
-
-        # indices of local plan's poses in local costmap
-        self.local_plan_x_list = []
-        self.local_plan_y_list = []
-        # print('self.local_plan_tmp.shape: ', self.local_plan_tmp.shape)
-        for i in range(0, self.local_plan_tmp.shape[0]):
-            self.local_plan_x_list.append(int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
-
-        # robot's odometry orientation
-        plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
-
-        # plot costmap
-        plt.imshow(self.image)
-        plt.savefig('LIME_image_local_costmap.png')
-        plt.clf()
-
-        # plot global map
-        # map info
-        self.mapOriginX = self.map_info.iloc[0, 4]
-        #print('self.mapOriginX: ', self.mapOriginX)
-        self.mapOriginY = self.map_info.iloc[0, 5]
-        #print('self.mapOriginY: ', self.mapOriginY)
-        self.mapResolution = self.map_info.iloc[0, 1]
-        #print('self.mapResolution: ', self.mapResolution)
-        self.mapHeight = self.map_info.iloc[0, 3]
-        #print('self.mapHeight: ', self.mapHeight)
-        self.mapWidth = self.map_info.iloc[0, 2]
-        #print('self.mapWidth: ', self.mapWidth)
-
-        # robot amcl location
-        self.amcl_x = self.amcl_pose_tmp.iloc[0, 0]
-        #print('self.amcl_x: ', self.amcl_x)
-        self.amcl_y = self.amcl_pose_tmp.iloc[0, 1]
-        #print('self.amcl_y: ', self.amcl_y)
-
-        # indices of robot's odometry location in map
-        self.mapIndex_x_amcl = int((self.amcl_x - self.mapOriginX) / self.mapResolution)
-        #print('self.mapIndex_x_amcl: ', self.mapIndex_x_amcl)
-        self.mapIndex_y_amcl = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
-        #print('self.mapIndex_y_amcl: ', self.mapIndex_y_amcl)
-
-        # indices of robot's amcl location in map in a list - suitable for plotting
-        self.x_amcl_index = [self.mapIndex_x_amcl]
-        self.y_amcl_index = [self.mapIndex_y_amcl]
-        plt.scatter(self.x_amcl_index, self.y_amcl_index, c='yellow', marker='o')
-
-        # robot amcl orientation
-        self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
-        self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
-        [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
-        #print('roll_amcl: ', roll_amcl)
-        #print('pitch_amcl: ', pitch_amcl)
-        #print('yaw_amcl: ', self.yaw_amcl)
-        self.yaw_amcl_x = math.cos(self.yaw_amcl)
-        self.yaw_amcl_y = math.sin(self.yaw_amcl)
-        plt.quiver(self.x_amcl_index, self.y_amcl_index, self.yaw_amcl_x, self.yaw_amcl_y, color='white')
-
-        # plan from global planner
-        self.plan_x_list = []
-        self.plan_y_list = []
-        for i in range(19, self.plan_tmp.shape[0], 20):
-            self.plan_x_list.append(int((self.plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
-            self.plan_y_list.append(int((self.plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
-        plt.scatter(self.plan_x_list, self.plan_y_list, c='red', marker='<')
-
-        # global plan from teb algorithm
-        self.global_plan_x_list = []
-        self.global_plan_y_list = []
-        for i in range(19, self.global_plan_tmp.shape[0], 20):
-            self.global_plan_x_list.append(int((self.global_plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
-            self.global_plan_y_list.append(int((self.global_plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
-        plt.scatter(self.global_plan_x_list, self.global_plan_y_list, c='yellow', marker='>')
-
-        # plot robot's location in the map
-        x_map = int((self.amcl_x - self.mapOriginX) / self.mapResolution)
-        y_map = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
-        plt.scatter(x_map, y_map, c='red', marker='o')
-
-        # plot map, fill -1 with 100
-        map_tmp = self.map_data
-        for i in range(0, map_tmp.shape[0]):
-            for j in range(0, map_tmp.shape[1]):
-                if map_tmp.iloc[i, j] == -1:
-                    map_tmp.iloc[i, j] = 100
-        plt.imshow(map_tmp)
-        plt.savefig('LIME_image_map.png')
-        plt.clf()
-
-        # plot image_temp
-        plt.imshow(self.temp_img)
-        plt.savefig('LIME_image_temp_img.png')
-        plt.clf()
-
-        # plot mask
-        plt.imshow(self.mask)
-        plt.savefig('LIME_image_mask.png')
-        plt.clf()
-
-        # plot last 100 perturbations
-        #plt.imshow(self.perturbations_visualization_final)
-        #plt.savefig('LIME_perturbations.png')
-        #plt.clf()
-
-        # plot last 10 perturbations
-        #plt.imshow(self.perturbations_visualization)
-        #plt.savefig('LIME_perturbations_last_row.png')
-        #plt.clf()
-
-        # plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
-        # plot explanation
-        plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
-        plt.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
-        plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
-        plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
-        plt.savefig('LIME_image_explanation.png')
-        plt.close()
-
-        print('plotExplanation ends')
-
-    def quaternion_to_euler(self, x, y, z, w):
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll = math.atan2(t0, t1)
-        t2 = +2.0 * (w * y - z * x)
-        t2 = +1.0 if t2 > +1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        pitch = math.asin(t2)
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw = math.atan2(t3, t4)
-        return [yaw, pitch, roll]
+        #'''
 
     def testSegmentation(self):
 

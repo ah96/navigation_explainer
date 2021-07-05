@@ -451,8 +451,9 @@ class LimeImageExplainer(object):
         num_samples = 2 ** n_features
         import itertools
         lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-        lst = np.array(lst).reshape((num_samples, n_features))
-        data = lst
+        data = np.array(lst).reshape((num_samples, n_features))
+        # print('lst: ', lst)
+        # print('len(lst): ', len(lst))
         #print('data: ', data)
         #print('data.shape: ', data.shape)
         #'''
