@@ -27,39 +27,10 @@ from skimage.measure import regionprops
 from collections.abc import Iterable
 
 import math
+import copy
 
-
-new_float_type = {
-    # preserved types
-    np.float32().dtype.char: np.float32,
-    np.float64().dtype.char: np.float64,
-    np.complex64().dtype.char: np.complex64,
-    np.complex128().dtype.char: np.complex128,
-    # altered types
-    np.float16().dtype.char: np.float32,
-    'g': np.float64,  # np.float128 ; doesn't exist on windows
-    'G': np.complex128,  # np.complex256 ; doesn't exist on windows
-}
-
-'''
-import roslaunch
-package = 'teb_local_planner'
-executable = 'perturb_node_image'
-node = roslaunch.core.Node(package, executable)
-launch = roslaunch.scriptapi.ROSLaunch()
-launch.start()
-'''
-
+# important global variables
 perturb_hide_color = 50
-
-def _supported_float_type(input_dtype, allow_complex=False):
-    if isinstance(input_dtype, Iterable) and not isinstance(input_dtype, str):
-        return np.result_type(*(_supported_float_type(d) for d in input_dtype))
-    input_dtype = np.dtype(input_dtype)
-    if not allow_complex and input_dtype.kind == 'c':
-        raise ValueError("complex valued input is not supported")
-    return new_float_type.get(input_dtype.char, np.float64)
-
 
 class ExplainRobotNavigation:
 
@@ -104,7 +75,63 @@ class ExplainRobotNavigation:
             self.index = self.expID
 
             # Get local costmap
-            self.image = self.costmap_data.iloc[(self.expID) * 160:(self.expID + 1) * 160, :]  # srediti ovo 160
+            self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :] # srediti ovo 160
+            self.image = np.array(copy.deepcopy(self.local_costmap_original))
+
+            #'''
+            # Turn inflated area to free space
+            for i in range(0, self.image.shape[0]):
+                for j in range(0, self.image.shape[1]):
+                    if 99 > self.image[i, j] > 0:
+                        self.image[i, j] = 0
+                    elif self.image[i, j] == 100:
+                        self.image[i, j] = 99
+            #'''
+
+            # '''
+            # Turn point free space to point obstacle
+            for i in range(0, self.image.shape[0]):
+                for j in range(0, self.image.shape[1]):
+                    if self.image[i, j] == 0:
+                        # in the middle
+                        if self.image.shape[0]-1 > i > 0 and self.image.shape[1]-1 > j > 0:
+                            if self.image[i-1, j] == 99 and self.image[i+1, j] == 99 and self.image[i, j-1] == 99 and self.image[i, j+1] == 99:
+                                self.image[i,j] = 99
+                        # top left corner
+                        elif i == 0 and j == 0:
+                            if self.image[0, 1] == 99 and self.image[1, 0] == 99 and self.image[1, 1] == 99:
+                                self.image[i,j] = 99
+                        # top edge
+                        if i == 0 and self.image.shape[1]-1 > j > 0:
+                            if self.image[i, j-1] == 99 and self.image[i+1, j] == 99 and self.image[i, j+1] == 99:
+                                self.image[i,j] = 99
+                        # top right corner
+                        elif i == 0 and j == self.image.shape[1]-1:
+                            if self.image[0, self.image.shape[1]-2] == 99 and self.image[1, self.image.shape[1]-1] == 99 and self.image[1, self.image.shape[1]-2] == 99:
+                                self.image[i,j] = 99
+                        # bottom left corner
+                        elif i == self.image.shape[0]-1 and j == 0:
+                            if self.image[self.image.shape[0]-2, 0] == 99 and self.image[self.image.shape[0]-1, 1] == 99 and self.image[self.image.shape[0]-2, 1] == 99:
+                                self.image[i,j] = 99
+                        # bottom edge
+                        if i == self.image.shape[0]-1 and self.image.shape[1]-1 > j > 0:
+                            if self.image[i, j-1] == 99 and self.image[i-1, j] == 99 and self.image[i, j+1] == 99:
+                                self.image[i,j] = 99
+                        # bottom right corner
+                        elif i == self.image.shape[0]-1 and j == self.image.shape[1]-1:
+                            if self.image[self.image.shape[0]-2, self.image.shape[1]-2] == 99 and self.image[self.image.shape[0]-1, self.image.shape[1]-2] == 99 and self.image[self.image.shape[0]-2, self.image.shape[1]-1] == 99:
+                                self.image[i,j] = 99
+                        # left edge
+                        if self.image.shape[0]-1 > i > 0 and j == 0:
+                            if self.image[i - 1, j] == 99 and self.image[i + 1, j] == 99 and self.image[i, j + 1] == 99:
+                                self.image[i, j] = 99
+                        # right edge
+                        if self.image.shape[0]-1 > i > 0 and j == self.image.shape[1]-1:
+                            if self.image[i - 1, j] == 99 and self.image[i + 1, j] == 99 and self.image[i, j - 1] == 99:
+                                self.image[i, j] = 99
+            # '''
+
+            self.image = self.image * 1.0
 
             # Saving data to .csv files for C++ node
 
@@ -246,14 +273,9 @@ class ExplainRobotNavigation:
 
         # if mode is 'image'
         if self.explanationMode == 'image':
-            self.index = self.expID
-
-            # Get local costmap
-            self.image = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :]  # srediti ovo 160
 
             # Use new variable in the algorithm
-            img = self.image
-            img = np.array(img)
+            img = copy.deepcopy(self.image)
 
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
@@ -263,7 +285,7 @@ class ExplainRobotNavigation:
             #print('self.explanation: ', self.explanation)
 
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=True,
-                                                                           negative_only=False, num_features=2,
+                                                                           negative_only=False, num_features=1,
                                                                            hide_rest=False,
                                                                            min_weight=0.0)  # min_weight=0.1 - default
 
@@ -298,69 +320,61 @@ class ExplainRobotNavigation:
 
         print('classifier_fn_image started')
 
+        # sampled_instance info
         #print('sampled_instance: ', sampled_instance)
         #print('sampled_instance.shape: ', sampled_instance.shape)
         
         #'''
+        # I will use channel 0 from sampled_instance as actual perturbed data
+        # Perturbed pixel intensity is perturb_hide_color
         # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
         for i in range(0, sampled_instance.shape[0]):
             for j in range(0, sampled_instance[i].shape[0]):
                 for k in range(0, sampled_instance[i].shape[1]):
                     if sampled_instance[i][j, k, 0] == perturb_hide_color:
-                        if self.image.iloc[j, k] < 99:
+                        if self.image[j, k] == 0:
                             sampled_instance[i][j, k, 0] = 99
                             #print('free space')
-                        else:
+                        elif self.image[j, k] == 99:
                             sampled_instance[i][j, k, 0] = 0
                             #print('obstacle')
         #'''
 
         #'''
-        # Save costmap_data to file
+        # Save perturbed costmap_data to file
         #sampled_instance = sampled_instance.astype(int)
         self.costmap_tmp = pd.DataFrame(sampled_instance[0][:, :, 0])
         for i in range(1, sampled_instance.shape[0]):
-            self.costmap_tmp = pd.concat([self.costmap_tmp, pd.DataFrame(sampled_instance[i][:, :, 0])], join='outer',
-                                         axis=0, sort=False)
-        print('self.costmap_tmp.shape: ', self.costmap_tmp.shape)
+            self.costmap_tmp = pd.concat([self.costmap_tmp, pd.DataFrame(sampled_instance[i][:, :, 0])], join='outer', axis=0, sort=False)
         self.costmap_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', index=False, header=False)
+        # print('self.costmap_tmp.shape: ', self.costmap_tmp.shape)
         # self.costmap_tmp.to_csv('~/amar_ws/costmap_data.csv', index=False, header=False)
         #'''
 
-        # start ROS node
-        node_process = Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
+        # start perturbed_node_image ROS C++ node
+        Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
 
-        #process = launch.launch(node)
-        #print(process.is_alive())
-
-        # Ovdje uvesti ros services
-        #rospy.sleep(20)
-
+        # Wait until perturb_node_image is finished
         rospy.wait_for_service("/perturb_node_image/finished")
-        print('finished')
-
-        #process.stop()
-
-        # stop ROS node
-        #node_process.terminate()
+        #print('perturb_node_image finishedn from python')
 
         # kill ROS node
-        node_process = Popen(shlex.split('rosnode kill /perturb_node_image'))
-        # finish killing node proces
-        #node_process.terminate()
+        Popen(shlex.split('rosnode kill /perturb_node_image'))
 
         # load command velocities
         cmd_vel = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('cmd_vel: ', cmd_vel)
-        print('cmd_vel.shape: ', cmd_vel.shape)
+        #print('cmd_vel.shape: ', cmd_vel.shape)
 
         # load local plans
         #local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
-        # print('local_plans: ', local_plans)
-        # print('local_plans.shape: ', local_plans.shape)
+        #print('local_plans: ', local_plans)
+        #print('local_plans.shape: ', local_plans.shape)
 
         # load transformed plan
         #transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
+        #print('transformed_plan: ', transformed_plan)
+        #print('transformed_plan.shape: ', transformed_plan.shape)
 
 
         '''
@@ -476,13 +490,6 @@ class ExplainRobotNavigation:
 
         valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
         cmd_vel['stop'] = np.select(conditions, valuesStop)
-
-        '''
-        # check if the first sampled instance is the same as the original local costmap
-        comparison = np.array(self.image) == sampled_instance[0][:, :, 0]
-        equal_arrays = comparison.all()
-        print('equal_arrays: ', equal_arrays)
-        '''
 
         print('classifier_fn_image ended')
 
@@ -645,43 +652,23 @@ class ExplainRobotNavigation:
 
         print('Test segmentation function beginning')
 
-        img = self.image
-
-        # '''
-        # Turning inflated area in costmap to free space    
-        for i in range(0, img.shape[0]):
-            # print(i)
-            for j in range(0, img.shape[1]):
-                if 99 > img.iloc[i, j] > 0:
-                    img.iloc[i, j] = 0
-        # '''
+        img_ = copy.deepcopy(self.image)
 
         # Save local costmap to .csv file
-        # img.to_csv('~/amar_ws/local_costmap_gray_segmentation_test.csv', index=False, header=False)
-
-        # Turn img to numpy array
-        img_ = np.array(img)
-        # turn elements to float
-        #img_ = (img_ * 1.0)
+        # pd.DataFrame(img_).to_csv('~/amar_ws/local_costmap_gray_segmentation_test.csv', index=False, header=False)
 
         # Save local costmap as gray image
         plt.imshow(img_)
-        plt.savefig('testSegmentation_local_costmap_gray.png')
+        plt.savefig('testSegmentation_image_gray.png')
         plt.clf()
-
-        # turn elements to float
-        img_ = (img_ * 1.0)
 
         # Turn gray image to rgb image
         rgb = gray2rgb(img_)
 
         # Save local costmap as rgb image
         plt.imshow(rgb)
-        plt.savefig('testSegmentation_local_costmap_rgb_.png')
+        plt.savefig('testSegmentation_image_rgb.png')
         plt.clf()
-
-        # Generate segments - superpixels
-        segments = self.mySlic(rgb)
 
         # Superpixel segmentation with skimage functions
 
@@ -697,63 +684,40 @@ class ExplainRobotNavigation:
         # segments = slic(rgb, n_segments=6, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=5, slic_zero=False, start_label=None, mask=None)
         # segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
 
-        #print('segments.shape: ', segments.shape)
-
-        '''
-        segments_unique = np.unique(segments)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
-        '''
-
-        # Save segments to .csv file
-        # pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
-
-        # Turn gray image to rgb image
+        # Turn segments gray image to rgb image
         #segments_rgb = gray2rgb(segments)
 
-        '''
-        # Save segments as an image
-        plt.imshow(segments)
-        plt.savefig('testSegmentation_segments.png')
-        plt.clf()
-        '''
+        # Generate segments - superpixels with my slic function
+        segments = self.mySlic(rgb)
 
-        '''
-        # plot segments with centroids and weights
-        regions = regionprops(segments)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            plt.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        plt.imshow(segments)
-        plt.savefig('testSegmentation_segments_with_centroids.png')
-        plt.clf()
-        '''
+        # Save segments to .csv file
+        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
 
         print('Test segmentation function ending')
 
     def mySlic(self, img_rgb):
 
-        print('mySlic starts')
+        print('mySlic for testSegmentation starts')
 
+        # import needed libraries
         from skimage.segmentation import slic
         from skimage.measure import regionprops
         import matplotlib.pyplot as plt
 
+        # show original image
         img = img_rgb[:, :, 0]
+        # Save segments_1 as a picture
+        plt.imshow(img)
+        plt.savefig('testSegmentation_img.png')
+        plt.clf()
 
+        # segments_1 - good obstacles
         # Find segments_1
         segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
-
-        # plot segments_1 with centroids and weights
+        # plot segments_1 with centroids and labels
         regions = regionprops(segments_1)
         centers = []
         i = 0
@@ -764,12 +728,11 @@ class ExplainRobotNavigation:
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
             plt.text(centers[i][0], centers[i][1], str(v))
             i = i + 1
-
         # Save segments_1 as a picture
         plt.imshow(segments_1)
         plt.savefig('testSegmentation_segments_1.png')
         plt.clf()
-
+        # find segments_unique_1
         segments_unique_1 = np.unique(segments_1)
         print('segments_unique_1: ', segments_unique_1)
         print('segments_unique_1.shape: ', segments_unique_1.shape)
@@ -777,10 +740,20 @@ class ExplainRobotNavigation:
         # Find segments_2
         segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.1, max_size_factor=5, slic_zero=False,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
-
-        # plot segments_2 with centroids and weights
+        '''
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        print('segments_unique_2: ', segments_unique_2)
+        print('segments_unique_2.shape: ', segments_unique_2.shape)
+        # make obstacles on segments_2 nice - not needed
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 99:
+                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
+        '''
+        # plot segments_2 with centroids and labels
         regions = regionprops(segments_2)
         centers = []
         i = 0
@@ -791,17 +764,16 @@ class ExplainRobotNavigation:
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
             plt.text(centers[i][0], centers[i][1], str(v))
             i = i + 1
-
         # Save segments_2 as a picture
         plt.imshow(segments_2)
         plt.savefig('testSegmentation_segments_2.png')
         plt.clf()
-
+        # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
         print('segments_unique_2: ', segments_unique_2)
         print('segments_unique_2.shape: ', segments_unique_2.shape)
 
-        # Add segments_1 and segments_2
+        # Add/Sum segments_1 and segments_2
         for i in range(0, segments_1.shape[0]):
             for j in range(0, segments_1.shape[1]):
                 if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
@@ -809,38 +781,56 @@ class ExplainRobotNavigation:
                 else:
                     segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
 
+        # plot segments with centroids and labels/weights
+        plt.imshow(segments_1)
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
+            plt.text(centers[i][0], centers[i][1], str(v))
+            i = i + 1
+        # Save segments_1 as a picture before nice segment numbering
+        plt.savefig('testSegmentation_segments_beforeNiceNumbering.png')
+        plt.clf()
+        # find segments_unique before nice segment numbering
         segments_unique = np.unique(segments_1)
         print('segments_unique: ', segments_unique)
         print('segments_unique.shape: ', segments_unique.shape)
 
-        # Get nice segment numbering
+        # Get nice segments' numbering
         for i in range(0, segments_1.shape[0]):
             for j in range(0, segments_1.shape[1]):
                 for k in range(0, segments_unique.shape[0]):
                     if segments_1[i, j] == segments_unique[k]:
                         segments_1[i, j] = k + 1
 
+        # find segments_unique after nice segment numbering
         segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
+        print('segments_unique (with nice numbering): ', segments_unique)
+        print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
 
+        # print explanation
         print('self.exp: ', self.exp)
         print('len(self.exp): ', len(self.exp))
 
-        # plot segments with centroids and weights
+        # plot segments with centroids and labels/weights
         plt.imshow(segments_1)
         regions = regionprops(segments_1)
         centers = []
         i = 0
-        print('len(regions): ', len(regions))
         for props in regions:
             v = props.label  # value of label
             cx, cy = props.centroid  # centroid coordinates
             centers.append([cy, cx])
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
+            #plt.text(centers[i][0], centers[i][1], str(v))
             for j in range(0, len(self.exp)):
                 if self.exp[j][0] == i:
-                    print('j: ', j)
+                    #print('j: ', j)
                     plt.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))   #str(v))
                     break
             i = i + 1
@@ -849,7 +839,7 @@ class ExplainRobotNavigation:
         plt.savefig('testSegmentation_segments.png')
         plt.clf()
 
-        print('mySlic ends')
+        print('mySlic for testSegmentation ends')
 
         return segments_1
 
@@ -861,7 +851,7 @@ class ExplainRobotNavigation:
 
 
 
-
+    # functions that I currently do not use
     def slic_help(self, image_rgb, n_segments=100, compactness=10., max_iter=10, sigma=0, spacing=None,
                   multichannel=True, convert2lab=None,
                   enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, start_label=None, mask=None, channel_axis=-1):
@@ -1151,7 +1141,48 @@ class ExplainRobotNavigation:
 
         return np.array(cmd_vel.iloc[:, 2])
 
+new_float_type = {
+    # preserved types
+    np.float32().dtype.char: np.float32,
+    np.float64().dtype.char: np.float64,
+    np.complex64().dtype.char: np.complex64,
+    np.complex128().dtype.char: np.complex128,
+    # altered types
+    np.float16().dtype.char: np.float32,
+    'g': np.float64,  # np.float128 ; doesn't exist on windows
+    'G': np.complex128,  # np.complex256 ; doesn't exist on windows
+}
 
+def _supported_float_type(input_dtype, allow_complex=False):
+    if isinstance(input_dtype, Iterable) and not isinstance(input_dtype, str):
+        return np.result_type(*(_supported_float_type(d) for d in input_dtype))
+    input_dtype = np.dtype(input_dtype)
+    if not allow_complex and input_dtype.kind == 'c':
+        raise ValueError("complex valued input is not supported")
+    return new_float_type.get(input_dtype.char, np.float64)
+
+
+'''
+# Other code for dealing with calling other ROS node from this one
+import roslaunch
+package = 'teb_local_planner'
+executable = 'perturb_node_image'
+node = roslaunch.core.Node(package, executable)
+launch = roslaunch.scriptapi.ROSLaunch()
+launch.start()
+
+#process = launch.launch(node)
+#print(process.is_alive())
+# Ovdje uvesti ros services
+#rospy.sleep(20)
+#process.stop()
+# stop ROS node
+#node_process.terminate()
+# finish killing node proces
+#node_process.terminate()
+
+#node_process = Popen(shlex.split('rosnode kill /perturb_node_image'))
+'''
 
 
 ''' 

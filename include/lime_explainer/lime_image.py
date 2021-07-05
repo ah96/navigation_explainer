@@ -135,24 +135,29 @@ class LimeImageExplainer(object):
         self.feature_selection = feature_selection
         self.base = lime_base.LimeBase(kernel_fn, verbose, random_state=self.random_state)
 
-
     def mySlic(self, img_rgb):
 
         print('mySlic starts')
 
+        # import needed libraries
         from skimage.segmentation import slic
         from skimage.measure import regionprops
         import matplotlib.pyplot as plt
 
+        # show original image
         img = img_rgb[:, :, 0]
+        # Save segments_1 as a picture
+        plt.imshow(img)
+        plt.savefig('mySlic_img.png')
+        plt.clf()
 
+        # segments_1 - good obstacles
         # Find segments_1
         segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
-
-        # plot segments_1 with centroids and weights
+        # plot segments_1 with centroids and labels
         regions = regionprops(segments_1)
         centers = []
         i = 0
@@ -163,12 +168,11 @@ class LimeImageExplainer(object):
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
             plt.text(centers[i][0], centers[i][1], str(v))
             i = i + 1
-
         # Save segments_1 as a picture
         plt.imshow(segments_1)
-        plt.savefig('segments_1.png')
+        plt.savefig('mySlic_segments_1.png')
         plt.clf()
-
+        # find segments_unique_1
         segments_unique_1 = np.unique(segments_1)
         print('segments_unique_1: ', segments_unique_1)
         print('segments_unique_1.shape: ', segments_unique_1.shape)
@@ -176,10 +180,20 @@ class LimeImageExplainer(object):
         # Find segments_2
         segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.1, max_size_factor=5, slic_zero=False,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
-
-        # plot segments_2 with centroids and weights
+        '''
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        print('segments_unique_2: ', segments_unique_2)
+        print('segments_unique_2.shape: ', segments_unique_2.shape)
+        # make obstacles on segments_2 nice - not needed
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 99:
+                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
+        '''
+        # plot segments_2 with centroids and labels
         regions = regionprops(segments_2)
         centers = []
         i = 0
@@ -190,41 +204,25 @@ class LimeImageExplainer(object):
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
             plt.text(centers[i][0], centers[i][1], str(v))
             i = i + 1
-
-
         # Save segments_2 as a picture
         plt.imshow(segments_2)
-        plt.savefig('segments_2.png')
+        plt.savefig('mySlic_segments_2.png')
         plt.clf()
-
+        # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
         print('segments_unique_2: ', segments_unique_2)
         print('segments_unique_2.shape: ', segments_unique_2.shape)
 
-        # Add segments_1 and segments_2
+        # Add/Sum segments_1 and segments_2
         for i in range(0, segments_1.shape[0]):
             for j in range(0, segments_1.shape[1]):
                 if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
                     segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
                 else:
                     segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-                    
-        segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
 
-        # Get nice segment numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k + 1
-                        
-        segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
-
-        # plot segments_1 with centroids and weights
+        # plot segments with centroids and labels/weights
+        plt.imshow(segments_1)
         regions = regionprops(segments_1)
         centers = []
         i = 0
@@ -235,16 +233,55 @@ class LimeImageExplainer(object):
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
             plt.text(centers[i][0], centers[i][1], str(v))
             i = i + 1
+        # Save segments_1 as a picture before nice segment numbering
+        plt.savefig('mySlic_segments_beforeNiceNumbering.png')
+        plt.clf()
+        # find segments_unique before nice segment numbering
+        segments_unique = np.unique(segments_1)
+        print('segments_unique: ', segments_unique)
+        print('segments_unique.shape: ', segments_unique.shape)
+
+        # Get nice segments' numbering
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                for k in range(0, segments_unique.shape[0]):
+                    if segments_1[i, j] == segments_unique[k]:
+                        segments_1[i, j] = k + 1
+
+        # find segments_unique after nice segment numbering
+        segments_unique = np.unique(segments_1)
+        print('segments_unique (with nice numbering): ', segments_unique)
+        print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
+
+        # print explanation
+        # print('self.exp: ', self.exp)
+        # print('len(self.exp): ', len(self.exp))
+
+        # plot segments with centroids and labels/weights
+        plt.imshow(segments_1)
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
+            plt.text(centers[i][0], centers[i][1], str(v))
+            # for j in range(0, len(self.exp)):
+            #    if self.exp[j][0] == i:
+            #        print('j: ', j)
+            #        plt.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))   #str(v))
+            #        break
+            i = i + 1
 
         # Save segments as a picture
-        plt.imshow(segments_1)
-        plt.savefig('segments.png')
+        plt.savefig('mySlic_segments.png')
         plt.clf()
 
         print('mySlic ends')
 
         return segments_1
-
 
     def explain_instance(self, image, classifier_fn, labels=(1,),
                          hide_color=None,
@@ -295,23 +332,11 @@ class LimeImageExplainer(object):
 
         #print('batch_size: ', batch_size)
 
-        if segmentation_fn == 'custom_segmentation':
-            img = image
-            for i in range(0, img.shape[0]):
-                for j in range(0, img.shape[1]):
-                    if 99 > img[i, j] > 0:
-                        img[i, j] = 0
-                    elif img[i, j] == 100:
-                        img[i, j] = 99
-            img = img * 1.0
 
-        #image = image * 1.0
-        image = img
-        
         # Save segments as a picture
         import matplotlib.pyplot as plt
         plt.imshow(image)
-        plt.savefig('image.png')
+        plt.savefig('self.image.png')
         plt.clf()
         
 
