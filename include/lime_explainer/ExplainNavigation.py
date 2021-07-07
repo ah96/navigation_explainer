@@ -77,7 +77,9 @@ class ExplainRobotNavigation:
             self.index = self.expID
 
             # Get local costmap
-            self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :] # srediti ovo 160
+            #self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :] # srediti ovo 160
+            #self.local_costmap_original.to_csv('~/amar_ws/costmapToChange.csv', index=False, header=True)
+            self.local_costmap_original = pd.read_csv('~/amar_ws/costmapToChange.csv')
             self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
             #'''
@@ -280,12 +282,12 @@ class ExplainRobotNavigation:
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
 
-            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=128, segmentation_fn=segm_fn)
+            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=64, segmentation_fn=segm_fn)
 
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
-                                                                           negative_only=True, num_features=1,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=True,
+                                                                           negative_only=False, num_features=1,
                                                                            hide_rest=False,
                                                                            min_weight=0.0)  # min_weight=0.1 - default
 
@@ -434,15 +436,19 @@ class ExplainRobotNavigation:
                 plt.savefig('LIME_image_mask.png')
                 plt.clf()
 
+                '''
                 # plot last 100 perturbations
                 plt.imshow(self.perturbations_visualization_final)
                 plt.savefig('LIME_perturbations.png')
                 plt.clf()
+                '''
 
+                '''
                 # plot last 10 perturbations
                 plt.imshow(self.perturbations_visualization)
                 plt.savefig('LIME_perturbations_last_row.png')
                 plt.clf()
+                '''
 
                 # plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
                 # plot explanation
@@ -569,7 +575,7 @@ class ExplainRobotNavigation:
         return np.array(self.cmd_vel.iloc[:, 3:4])
 
     def classifier_fn_image_plot(self):
-        #'''
+        '''
         # Visualise last 10 perturbations and last 100 perturbations separately
         self.perturbations_visualization = self.sampled_instance[0][:, :, 0]
         for i in range(1, 120):
@@ -582,7 +588,7 @@ class ExplainRobotNavigation:
             else:
                 self.perturbations_visualization = np.concatenate((self.perturbations_visualization, self.sampled_instance[i][:, :, 0]), axis=1)
         self.perturbations_visualization_final = np.concatenate((self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
-        #'''
+        '''
         '''
         # Save perturbations as .csv file
         for i in range(0, self.sampled_instance.shape[0]):
