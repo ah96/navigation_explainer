@@ -74,30 +74,45 @@ class ImageExplanation(object):
         segments = self.segments
         image = self.image
         exp = self.local_exp[label]
+        #'''
+        exp_list = []
+        for i in range(0, len(exp)):
+            exp_list.append(list(exp[i]))
+            exp_list[i][1] = 0.0
+        exp_list[1][1] = 0.9
+        print('exp_list: ', exp_list)
+        exp = []
+        for i in range(0, len(exp_list)):
+            exp.append(tuple(exp_list[i]))
+        print('exp: ', exp)
+        #'''
         mask = np.zeros(segments.shape, segments.dtype)
         if hide_rest:
             temp = np.zeros(self.image.shape)
         else:
             temp = self.image.copy()
+            temp[segments == 1] = 0.0
         if positive_only:
-            fs = [x[0] for x in exp
-                  if x[1] > 0 and x[1] > min_weight][:num_features]
+            fs = [x[0] for x in exp if x[1] > 0 and x[1] > min_weight][:num_features]
+            print('fs: ', fs)
         if negative_only:
-            fs = [x[0] for x in exp
-                  if x[1] < 0 and abs(x[1]) > min_weight][:num_features]
+            fs = [x[0] for x in exp if x[1] < 0 and abs(x[1]) > min_weight][:num_features]
         if positive_only or negative_only:
             for f in fs:
-                temp[segments == f] = image[segments == f].copy()
+                temp[segments == f, 1] = np.max(image) #image[segments == f].copy()
                 mask[segments == f] = 1
             return temp, mask, exp
         else:
+            temp[segments == 1] = 0.0
             for f, w in exp[:num_features]:
+                print('(f, w): ', (f, w))
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
                 mask[segments == f] = -1 if w < 0 else 1
-                temp[segments == f] = image[segments == f].copy()
+                #temp[segments == f] = image[segments == f].copy()
                 temp[segments == f, c] = np.max(image)
+                #print('np.max(image): ', np.max(image))
                 '''
                 print('f: ', f)
                 print('w: ', w)
@@ -226,7 +241,7 @@ class LimeImageExplainer(object):
         segments_unique_2 = np.unique(segments_2)
         print('segments_unique_2: ', segments_unique_2)
         print('segments_unique_2.shape: ', segments_unique_2.shape)
-
+        '''
         # Add/Sum segments_1 and segments_2
         for i in range(0, segments_1.shape[0]):
             for j in range(0, segments_1.shape[1]):
@@ -234,7 +249,7 @@ class LimeImageExplainer(object):
                     segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
                 else:
                     segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-
+        '''
         # plot segments with centroids and labels/weights
         plt.imshow(segments_1)
         regions = regionprops(segments_1)
