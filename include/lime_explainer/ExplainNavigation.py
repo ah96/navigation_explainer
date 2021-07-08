@@ -957,18 +957,18 @@ class ExplainRobotNavigation:
         plt.figure()
         ax = plt.gca()
         #ax.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
         from matplotlib.patches import Ellipse
-        ellipse = Ellipse(xy=(37.00, 52.00), width=60, height=70, edgecolor='orange', fc='orange', lw=2, alpha=80.0)
+        ellipse = Ellipse(xy=(37.00, 52.00), width=30, height=70, edgecolor='orange', fc='None', lw=2, alpha=80.0)
         ax.add_patch(ellipse)
         from matplotlib.patches import Circle
         circle = Circle(xy=(160 - self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom), radius=round(0.275/self.localCostmapResolution) - 4, edgecolor='blue', fc='blue', lw=2, alpha=100.0)
         ax.add_patch(circle)
-        ax.text(34, 72, 'H', fontsize=12, fontweight=500)
-        ax.text(32, 32, 'PS', fontsize=12, fontweight=500)
-        ax.text(32, 10, 'FV', fontsize=12, fontweight=500)
-        ax.text(160 - self.localCostmapIndex_x_odom - 3, self.localCostmapIndex_y_odom + 3, 'R', fontsize=12, fontweight=700)
+        ax.text(35, 72, 'H', fontsize=12, fontweight=700)
+        ax.text(34, 32, 'PS', fontsize=12, fontweight=700)
+        ax.text(34, 10, 'FV', fontsize=12, fontweight=700)
+        ax.text(160 - self.localCostmapIndex_x_odom - 1, self.localCostmapIndex_y_odom + 2, 'R', fontsize=12, fontweight=700)
 
         # plan from global planner
         # Save plan (from global planner) instance to a file
@@ -1004,7 +1004,7 @@ class ExplainRobotNavigation:
                 self.plan_y_list.append(int((self.plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
         #print('self.plan_x_list: ', self.plan_x_list)
         #print('self.plan_y_list: ', self.plan_y_list)
-        plt.scatter(self.plan_x_list, self.plan_y_list, c='black', marker='<')
+        plt.scatter(self.plan_x_list, self.plan_y_list, c='purple', marker='o')
         import matplotlib
         #print('marked_boundaries_flipped: ', marked_boundaries_flipped)
         marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
