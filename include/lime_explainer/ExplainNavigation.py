@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 
+# import time tabular
 import lime
 import lime.lime_tabular
 
-# lime image
+# lime image - my implementation
 from lime_explainer import lime_image
 
+# for managing data
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# pokretanje ROS node-a
+# for calculations
+import math
+import copy
+
+# for _supported_float_type function
+from collections.abc import Iterable
+
+# for running ROS node
 import shlex
 from psutil import Popen
-
 import rospy
 
+# for managing image
 from skimage import *
 from skimage.color import gray2rgb, rgb2gray, rgb2lab
 from skimage.util import regular_grid
@@ -24,21 +33,17 @@ from skimage.segmentation._slic import (_slic_cython, _enforce_label_connectivit
 from skimage.segmentation.slic_superpixels import _get_grid_centroids, _get_mask_centroids
 from skimage.measure import regionprops
 
-from collections.abc import Iterable
-
-import math
-import copy
-
 # important global variables
 perturb_hide_color = 50
 
 class ExplainRobotNavigation:
 
     def __init__(self, cmd_vel, odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data,
-                 local_costmap_info,
-                 amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, modeParam, explanation_mode,
+                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, modeParam, explanation_mode,
                  expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints):
-        #self.cmd_vel = cmd_vel
+        print('Constructor starting')
+        # save variables as class variables
+        self.cmd_vel = cmd_vel
         self.odom = odom
         self.plan = plan
         self.global_plan = teb_global_plan
@@ -70,20 +75,26 @@ class ExplainRobotNavigation:
         print('self.offset: ', self.offset)
         '''
 
-        # if mode is 'image'
+        # if mode is 'image' - LIME image
         if self.explanationMode == 'image':
             self.explainer = lime_image.LimeImageExplainer(verbose=True)
-
             self.index = self.expID
 
             # Get local costmap
-            #self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :] # srediti ovo 160
-            #self.local_costmap_original.to_csv('~/amar_ws/costmapToChange.csv', index=False, header=True)
+            # Original costmap will be saved to self.local_costmap_original
+            self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :] # fix this 160
+
+            '''
+            # If a custom costmap is used
+            self.local_costmap_original.to_csv('~/amar_ws/costmapToChange.csv', index=False, header=True)
             self.local_costmap_original = pd.read_csv('~/amar_ws/costmapToChange.csv')
+            '''
+
+            # Make image a np.array deepcopy of local costmap
             self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
             #'''
-            # Turn inflated area to free space
+            # Turn inflated area to free space and 100s to 99s
             for i in range(0, self.image.shape[0]):
                 for j in range(0, self.image.shape[1]):
                     if 99 > self.image[i, j] > 0:
@@ -93,7 +104,9 @@ class ExplainRobotNavigation:
             #'''
 
             # '''
-            # Turn point free space to point obstacle
+            # Turn point free space (that is surrounded by obstacles) to point obstacle
+            # Helps in some cases
+            # Because constructor is called only once, this is not a big computational burden (for now)
             for i in range(0, self.image.shape[0]):
                 for j in range(0, self.image.shape[1]):
                     if self.image[i, j] == 0:
@@ -134,20 +147,20 @@ class ExplainRobotNavigation:
                             if self.image[i - 1, j] == 99 and self.image[i + 1, j] == 99 and self.image[i, j - 1] == 99:
                                 self.image[i, j] = 99
             # '''
+
+            # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
             self.image = self.image * 1.0
 
-            # Saving data to .csv files for C++ node
+            # Saving data to .csv files for C++ node - local navigation planner
             # Save footprint instance to a file
             self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
             self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
-            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False,
-                                      header=False)
+            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
             # Save local plan instance to a file
             self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
             self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
-            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False,
-                                       header=False)
+            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
             # Save plan (from global planner) instance to a file
             self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
@@ -157,88 +170,85 @@ class ExplainRobotNavigation:
             # Save global plan instance to a file
             self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
             self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
-            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
-                                        header=False)
+            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
 
-            # Save costmap_info to file
+            # Save costmap_info instance to file
             self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
             self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
             self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
-            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
-                                         header=False)
+            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
-            # Save amcl_pose to file
+            # Save amcl_pose instance to file
             self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
             self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
             self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
-            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False,
-                                      header=False)
+            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
-            # Save tf_odom_map to file
+            # Save tf_odom_map instance to file
             self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
             self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
-                                        header=False)
+            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
 
-            # Save tf_map_odom to file
+            # Save tf_map_odom instance to file
             self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
             self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
-                                        header=False)
+            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
 
-            # Save sampled odom to file
+            # Save odometry instance to file
             self.odom_tmp = self.odom.iloc[self.index, :]
             self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
             self.odom_tmp = self.odom_tmp.iloc[:, 2:]
             self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
-            # save costmap info
+            # save costmap info to class variables
             self.localCostmapOriginX = self.costmap_info_tmp.iloc[0, 3]
-            # print('self.localCostmapOriginX: ', self.localCostmapOriginX)
+            #print('self.localCostmapOriginX: ', self.localCostmapOriginX)
             self.localCostmapOriginY = self.costmap_info_tmp.iloc[0, 4]
-            # print('self.localCostmapOriginY: ', self.localCostmapOriginY)
+            #print('self.localCostmapOriginY: ', self.localCostmapOriginY)
             self.localCostmapResolution = self.costmap_info_tmp.iloc[0, 0]
-            # print('self.localCostmapResolution: ', self.localCostmapResolution)
+            #print('self.localCostmapResolution: ', self.localCostmapResolution)
             self.localCostmapHeight = self.costmap_info_tmp.iloc[0, 2]
-            # print('self.localCostmapHeight: ', self.localCostmapHeight)
+            #print('self.localCostmapHeight: ', self.localCostmapHeight)
             self.localCostmapWidth = self.costmap_info_tmp.iloc[0, 1]
-            # print('self.localCostmapWidth: ', self.localCostmapWidth)
+            #print('self.localCostmapWidth: ', self.localCostmapWidth)
 
-            # save robot odometry location
+            # save robot odometry location to class variables
             self.odom_x = self.odom_tmp.iloc[0, 0]
-            # print('self.odom_x: ', self.odom_x)
+            #print('self.odom_x: ', self.odom_x)
             self.odom_y = self.odom_tmp.iloc[0, 1]
-            # print('self.odom_y: ', self.odom_y)
+            #print('self.odom_y: ', self.odom_y)
 
-            # indices of robot's odometry location in local costmap
+            # save indices of robot's odometry location in local costmap to class variables
             self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
-            # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
+            #print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
             self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
-            # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
+            #print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
 
-            # indices of robot's odometry location in local costmap in a list - suitable for plotting
+            # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
             self.x_odom_index = [self.localCostmapIndex_x_odom]
+            #print('self.x_odom_index: ', self.x_odom_index)
             self.y_odom_index = [self.localCostmapIndex_y_odom]
+            #print('self.y_odom_index: ', self.y_odom_index)
 
-            # robot odometry orientation
+            # save robot odometry orientation to class variables
             self.odom_z = self.odom_tmp.iloc[0, 2]
             self.odom_w = self.odom_tmp.iloc[0, 3]
+            # calculate Euler angles based on orientation quaternion
             [self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
-            # print('roll: ', roll_odom)
-            # print('pitch: ', pitch_odom)
-            # print('yaw: ', yaw_odom)
+            # print('roll_odom: ', roll_odom)
+            # print('pitch_odom: ', pitch_odom)
+            # print('self.yaw_odom: ', self.yaw_odom)
+            # find yaw angles projections on x and y axes and save them to class variables
             self.yaw_odom_x = math.cos(self.yaw_odom)
             self.yaw_odom_y = math.sin(self.yaw_odom)
 
 
-            # indices of footprint's poses in local costmap
+            # save indices of footprint's poses in local costmap to class variables
             self.footprint_x_list = []
             self.footprint_y_list = []
             for j in range(0, self.footprint_tmp.shape[0]):
-                self.footprint_x_list.append(
-                    int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-                self.footprint_y_list.append(
-                    int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+                self.footprint_x_list.append(int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+                self.footprint_y_list.append(int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
 
 
 
@@ -252,7 +262,7 @@ class ExplainRobotNavigation:
                                                                     sample_around_instance=False, random_state=None)
 
         elif self.explanationMode == 'tabular_costmap':
-            self.index = self.expID;
+            self.index = self.expID
             img = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :]
             lista = []
             for i in range(0, img.shape[0]):
@@ -268,14 +278,17 @@ class ExplainRobotNavigation:
                                                                     verbose=True, feature_selection='none',
                                                                     discretize_continuous=False)
 
+        print('Constructor ending')
+
+
     def explain_instance(self, expID):
-        # redni broj instance
+        print('explain_instance function starting')
+        # ordinal number of the instance
         self.expID = expID
-        # print('self.expID: ', self.expID)
+        #print('self.expID: ', self.expID)
 
         # if mode is 'image'
         if self.explanationMode == 'image':
-
             # Use new variable in the algorithm
             img = copy.deepcopy(self.image)
 
@@ -289,14 +302,14 @@ class ExplainRobotNavigation:
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=True,
                                                                            negative_only=False, num_features=5,
                                                                            hide_rest=False,
-                                                                           min_weight=0.1)  # min_weight=0.1 - default
+                                                                           min_weight=0.0)  # min_weight=0.1 - default
 
             self.plotExplanation()
             self.plotExplanationFlipped()
 
 
         elif self.explanationMode == 'tabular':
-            # trazenje indexa reda instance (originalno ime reda instance u haman ulaznim datafrejmovima)
+            # search for instance queue index (original instance queue name in almost (haman) input data frames)
             self.index = self.X_train.index.values[self.expID];
             print('self.index: ', self.index)
 
@@ -318,6 +331,7 @@ class ExplainRobotNavigation:
             # print(self.explanation.as_list())
             fig = self.explanation.as_pyplot_figure()
             plt.savefig('explanation.png')
+        print('explain_instance function ending')
 
     def plotExplanation(self):
                 print('plotExplanation starts')
