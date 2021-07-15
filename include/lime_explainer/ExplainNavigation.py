@@ -323,10 +323,19 @@ class ExplainRobotNavigation:
             self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=64, segmentation_fn=segm_fn)
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
-                                                                           negative_only=False, num_features=10,
-                                                                           hide_rest=False,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=True,
+                                                                           negative_only=False, num_features=1,
+                                                                           hide_rest=True,
                                                                            min_weight=0.0)  # min_weight=0.1 - default
+
+            #'''
+            print(self.temp_img.shape)
+            print(self.mask.shape)
+            pd.DataFrame(self.temp_img[:,:,0]).to_csv('~/amar_ws/temp_img_0.csv', index=False, header=False)
+            pd.DataFrame(self.temp_img[:, :, 1]).to_csv('~/amar_ws/temp_img_1.csv', index=False, header=False)
+            pd.DataFrame(self.temp_img[:, :, 2]).to_csv('~/amar_ws/temp_img_2.csv', index=False, header=False)
+            pd.DataFrame(self.mask[:,:]).to_csv('~/amar_ws/mask.csv', index=False, header=False)
+            #'''
 
             self.plotExplanation()
             self.plotExplanationFlipped()
@@ -334,7 +343,7 @@ class ExplainRobotNavigation:
 
         elif self.explanationMode == 'tabular':
             # search for instance queue index (original instance queue name in almost (haman) input data frames)
-            self.index = self.X_train.index.values[self.expID];
+            self.index = self.X_train.index.values[self.expID]
             print('self.index: ', self.index)
 
             self.explanation = self.explainer.explain_instance(data_row=np.array(self.X_train.iloc[self.expID]),

@@ -53,19 +53,15 @@ class ImageExplanation(object):
             skimage.segmentation.mark_boundaries
         """
 
-        '''
+        print('get_image_and_mask starting')
+
+        #'''
         # testing
         import matplotlib.pyplot as plt
         print('self.local_exp: ', self.local_exp)
         seg_unique = np.unique(self.segments)
         print('self.segments_unique: ', seg_unique)
-        plt.imshow(self.segments)
-        plt.savefig('self_segments.png')
-        plt.clf()
-        plt.imshow(self.image)
-        plt.savefig('self_image.png')
-        plt.clf()
-        '''
+        #'''
 
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
@@ -74,7 +70,9 @@ class ImageExplanation(object):
         segments = self.segments
         image = self.image
         exp = self.local_exp[label]
-        #'''
+
+        '''
+        # plot for the HARL Workshop 2021 paper
         exp_list = []
         for i in range(0, len(exp)):
             exp_list.append(list(exp[i]))
@@ -85,34 +83,75 @@ class ImageExplanation(object):
         for i in range(0, len(exp_list)):
             exp.append(tuple(exp_list[i]))
         print('exp: ', exp)
-        #'''
+        '''
+
         mask = np.zeros(segments.shape, segments.dtype)
         if hide_rest:
             temp = np.zeros(self.image.shape)
         else:
             temp = self.image.copy()
-            temp[segments == 1] = 0.0
+            #temp[segments == 1] = 0.0
         if positive_only:
             fs = [x[0] for x in exp if x[1] > 0 and x[1] > min_weight][:num_features]
             print('fs: ', fs)
         if negative_only:
             fs = [x[0] for x in exp if x[1] < 0 and abs(x[1]) > min_weight][:num_features]
-        if positive_only or negative_only:
+        if positive_only == True and negative_only == False:
             for f in fs:
-                temp[segments == f, 1] = np.max(image) #image[segments == f].copy()
+                if image[segments == f].all() == 0.0:
+                    temp[segments == f, 1] = np.max(image) #image[segments == f].copy()
+                    if hide_rest == False:
+                        temp[segments == f, 0] = 0.0
+                        temp[segments == f, 2] = 0.0
+                else:
+                    temp[segments == f, 1] = np.max(image)  # image[segments == f].copy()
+                    temp[segments == f, 2] = np.max(image)  # image[segments == f].copy()
+                    if hide_rest == False:
+                        temp[segments == f, 0] = 0.0
+                        # temp[segments == f, 2] = 0.0
                 mask[segments == f] = 1
+            print('get_image_and_mask ending')
+            return temp, mask, exp
+        if positive_only == False and negative_only == True:
+            for f in fs:
+                if image[segments == f].all() == 0.0:
+                    temp[segments == f, 0] = np.max(image) #image[segments == f].copy()
+                    if hide_rest == False:
+                        temp[segments == f, 1] = 0.0
+                        temp[segments == f, 2] = 0.0
+                else:
+                    temp[segments == f, 0] = np.max(image)  # image[segments == f].copy()
+                    temp[segments == f, 2] = np.max(image)  # image[segments == f].copy()
+                    if hide_rest == False:
+                        temp[segments == f, 1] = 0.0
+                        #temp[segments == f, 2] = 0.0
+                mask[segments == f] = 1
+            print('get_image_and_mask ending')
             return temp, mask, exp
         else:
-            temp[segments == 1] = 0.0
+            #temp[:,:] = 0.0
             for f, w in exp[:num_features]:
                 print('(f, w): ', (f, w))
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
+                #print('c: ', c)
                 mask[segments == f] = -1 if w < 0 else 1
-                #temp[segments == f] = image[segments == f].copy()
-                temp[segments == f, c] = np.max(image)
+                temp[segments == f] = image[segments == f].copy()
+                obstacle_tmp = True
+                if image[segments == f].all() == 0.0:
+                    obstacle_tmp = False
+                temp[segments == f, c] = np.max(image) # c is channel, RGB - 012
+                print('Obstacle: ', obstacle_tmp)
+                if c == 1:
+                    temp[segments == f, abs(1-c)] = 0.0  # c is channel, RGB - 012
+                elif c == 0 and obstacle_tmp:
+                    temp[segments == f, abs(1 - c)] = 1.0  # c is channel, RGB - 012
+                    #temp[segments == f, c] = 10  # c is channel, RGB - 012
+                    #temp[segments == f, abs(1 - c)] = 0.0  # c is channel, RGB - 012
+                temp[segments == f, 2] = 0.0
                 #print('np.max(image): ', np.max(image))
+                #print('temp[segments == f, c]', temp[segments == f, c])
                 '''
                 print('f: ', f)
                 print('w: ', w)
@@ -121,6 +160,7 @@ class ImageExplanation(object):
                 print('temp[segments == f]: ', temp[segments == f])
                 print('temp[segments == f, c]: ', temp[segments == f, c])
                 '''
+            print('get_image_and_mask ending')
             return temp, mask, exp
 
 
@@ -275,17 +315,11 @@ class LimeImageExplainer(object):
             for j in range(0, segments_1.shape[1]):
                 for k in range(0, segments_unique.shape[0]):
                     if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k + 1
-
+                        segments_1[i, j] = k + 1 # k+1 must be in order for regionprops() function to work correctly
         # find segments_unique after nice segment numbering
         segments_unique = np.unique(segments_1)
         print('segments_unique (with nice numbering): ', segments_unique)
         print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
-
-        # print explanation
-        # print('self.exp: ', self.exp)
-        # print('len(self.exp): ', len(self.exp))
-
         # plot segments with centroids and labels/weights
         plt.imshow(segments_1)
         regions = regionprops(segments_1)
@@ -296,12 +330,7 @@ class LimeImageExplainer(object):
             cx, cy = props.centroid  # centroid coordinates
             centers.append([cy, cx])
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            plt.text(centers[i][0], centers[i][1], str(v))
-            # for j in range(0, len(self.exp)):
-            #    if self.exp[j][0] == i:
-            #        print('j: ', j)
-            #        plt.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))   #str(v))
-            #        break
+            plt.text(centers[i][0], centers[i][1], str(v-1))
             i = i + 1
 
         # Save segments as a picture
@@ -363,13 +392,13 @@ class LimeImageExplainer(object):
 
         #print('batch_size: ', batch_size)
 
-
-        # Save segments as a picture
+        '''
+        # Plot picture
         import matplotlib.pyplot as plt
         plt.imshow(image)
         plt.savefig('self.image.png')
         plt.clf()
-        
+        '''
 
         if len(image.shape) == 2:
             image = gray2rgb(image)
@@ -451,6 +480,9 @@ class LimeImageExplainer(object):
                 data: dense num_samples * num_superpixels
                 labels: prediction probabilities matrix
         """
+
+        print('data_labels starts')
+
         n_features = np.unique(segments).shape[0]
 
         '''
@@ -462,19 +494,24 @@ class LimeImageExplainer(object):
         '''
 
         #'''
-        # My perturbation - test all combinations
+        # My perturbation - test all possible combinations
         num_samples = 2 ** n_features
         import itertools
         lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
         data = np.array(lst).reshape((num_samples, n_features))
-        # print('lst: ', lst)
-        # print('len(lst): ', len(lst))
+        #print('lst: ', lst)
+        #print('len(lst): ', len(lst))
         #print('data: ', data)
         #print('data.shape: ', data.shape)
         #'''
 
         labels = []
+
+        #print("data before: ", data)
         data[0, :] = 1
+        data[-1, :] = 0 # only if I use my perturbation
+        #print("data after: ", data)
+
         imgs = []
         rows = tqdm(data) if progress_bar else data
         for row in rows:
@@ -492,4 +529,7 @@ class LimeImageExplainer(object):
         if len(imgs) > 0:
             preds = classifier_fn(np.array(imgs))
             labels.extend(preds)
+
+        print('data_labels ends')
+
         return data, np.array(labels)
