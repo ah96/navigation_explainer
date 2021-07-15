@@ -282,7 +282,8 @@ class LimeImageExplainer(object):
         segments_unique_2 = np.unique(segments_2)
         print('segments_unique_2: ', segments_unique_2)
         print('segments_unique_2.shape: ', segments_unique_2.shape)
-        '''
+
+        #'''
         # Add/Sum segments_1 and segments_2
         for i in range(0, segments_1.shape[0]):
             for j in range(0, segments_1.shape[1]):
@@ -290,7 +291,7 @@ class LimeImageExplainer(object):
                     segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
                 else:
                     segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        '''
+        #'''
         # plot segments with centroids and labels/weights
         plt.imshow(segments_1)
         regions = regionprops(segments_1)

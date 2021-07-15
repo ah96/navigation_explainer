@@ -324,7 +324,7 @@ class ExplainRobotNavigation:
             #print('self.explanation: ', self.explanation)
 
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
-                                                                           negative_only=False, num_features=4,
+                                                                           negative_only=False, num_features=100,
                                                                            hide_rest=False,
                                                                            min_weight=0.0)  # min_weight=0.1 - default
 
