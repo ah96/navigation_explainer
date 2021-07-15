@@ -129,37 +129,38 @@ class ImageExplanation(object):
             print('get_image_and_mask ending')
             return temp, mask, exp
         else:
-            #temp[:,:] = 0.0
             for f, w in exp[:num_features]:
                 print('(f, w): ', (f, w))
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
-                #print('c: ', c)
                 mask[segments == f] = -1 if w < 0 else 1
-                temp[segments == f] = image[segments == f].copy()
-                obstacle_tmp = True
+                #temp[segments == f] = image[segments == f].copy()
+                # if free space
                 if image[segments == f].all() == 0.0:
-                    obstacle_tmp = False
-                temp[segments == f, c] = np.max(image) # c is channel, RGB - 012
-                print('Obstacle: ', obstacle_tmp)
-                if c == 1:
-                    temp[segments == f, abs(1-c)] = 0.0  # c is channel, RGB - 012
-                elif c == 0 and obstacle_tmp:
-                    temp[segments == f, abs(1 - c)] = 1.0  # c is channel, RGB - 012
-                    #temp[segments == f, c] = 10  # c is channel, RGB - 012
-                    #temp[segments == f, abs(1 - c)] = 0.0  # c is channel, RGB - 012
-                temp[segments == f, 2] = 0.0
-                #print('np.max(image): ', np.max(image))
-                #print('temp[segments == f, c]', temp[segments == f, c])
-                '''
-                print('f: ', f)
-                print('w: ', w)
-                print('c: ', c)
-                print('mask[segments == f]: ', mask[segments == f])
-                print('temp[segments == f]: ', temp[segments == f])
-                print('temp[segments == f, c]: ', temp[segments == f, c])
-                '''
+                    # if positive weight
+                    if c == 1:
+                        temp[segments == f, 1] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
+                        temp[segments == f, 2] = 0.0
+                    # if negative weight
+                    else:
+                        temp[segments == f, 0] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
+                        temp[segments == f, 2] = 0.0
+                # if obstacle
+                else:
+                    # if positive weight
+                    if c == 1:
+                        temp[segments == f, 1] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
+                        temp[segments == f, 2] = 1.0
+                    # if negative weight
+                    else:
+                        temp[segments == f, 0] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
+                        temp[segments == f, 2] = 1.0
+
             print('get_image_and_mask ending')
             return temp, mask, exp
 
