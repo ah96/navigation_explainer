@@ -368,6 +368,65 @@ class ExplainRobotNavigation:
 
         print('explain_instance function ending')
 
+    def testLocalCostmap(self):
+        img = np.array(self.local_costmap_original)
+
+        plt.imshow(img)
+        plt.savefig('local_costmap_original.png')
+        plt.clf()
+
+        # fill -1 with 100
+        map_tmp = copy.deepcopy(self.map_data)
+        for i in range(0, map_tmp.shape[0]):
+            for j in range(0, map_tmp.shape[1]):
+                if map_tmp.iloc[i, j] == -1:
+                    map_tmp.iloc[i, j] = 100
+
+        # transform 99s from local costmap to /odom location and then from /odom to /map frame
+        for i in range(self.local_costmap_original.shape[0]):
+            print(i)
+            for j in range(self.local_costmap_original.shape[1]):
+                if self.local_costmap_original.iloc[i, j] == 99:
+                    # convert point obstacle to /odom location
+                    x_odom_temp = i * self.localCostmapResolution + self.localCostmapOriginX
+                    y_odom_temp = j * self.localCostmapResolution + self.localCostmapOriginY
+
+                    # convert point obstacle location from /odom to /map
+                    # rotation matrix
+                    from scipy.spatial.transform import Rotation as R
+                    r = R.from_quat(
+                        [self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4],
+                         self.tf_odom_map_tmp.iloc[0, 5], self.tf_odom_map_tmp.iloc[0, 6]])
+                    #print('r: ', r.as_matrix())
+                    r_array = np.asarray(r.as_matrix())
+                    #print('r_array: ', r_array)
+                    #print('r_array.shape: ', r_array.shape)
+                    # translation vector
+                    t = np.array([self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
+                    #print('t: ', t)
+                    # point in /odom frame
+                    p_odom = np.array([x_odom_temp, y_odom_temp, 0.0])
+                    #print('p_odom: ', p_odom)
+                    # point in /map frame
+                    p_map = p_odom.dot(r_array) + t
+                    #print('p_map: ', p_map)
+
+                    # get map indices
+                    x_map_index = int((p_map[0] - self.mapOriginX) / self.mapResolution)
+                    y_map_index = int((p_map[1] - self.mapOriginY) / self.mapResolution)
+                    if map_tmp.iloc[x_map_index, y_map_index] != 100:
+                        img[i, j] = 0
+
+                    plt.scatter(x_map_index, y_map_index, c='blue', marker='o')
+
+        plt.imshow(map_tmp)
+        plt.savefig('map.png')
+        plt.clf()
+
+        plt.imshow(img)
+        plt.savefig('local_costmap_changed.png')
+        plt.clf()
+
     def plotExplanation(self):
                 print('plotExplanation starts')
 
