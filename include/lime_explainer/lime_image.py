@@ -513,6 +513,8 @@ class LimeImageExplainer(object):
         data[0, :] = 1
         data[-1, :] = 0 # only if I use my perturbation
         #print("data after: ", data)
+        #import pandas as pd
+        #pd.DataFrame(data).to_csv('~/amar_ws/data.csv', index=False, header=False)
 
         imgs = []
         rows = tqdm(data) if progress_bar else data

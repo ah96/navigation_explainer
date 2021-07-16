@@ -202,15 +202,15 @@ class ExplainRobotNavigation:
 
             # save costmap info to class variables
             self.localCostmapOriginX = self.costmap_info_tmp.iloc[0, 3]
-            #print('self.localCostmapOriginX: ', self.localCostmapOriginX)
+            print('self.localCostmapOriginX: ', self.localCostmapOriginX)
             self.localCostmapOriginY = self.costmap_info_tmp.iloc[0, 4]
-            #print('self.localCostmapOriginY: ', self.localCostmapOriginY)
+            print('self.localCostmapOriginY: ', self.localCostmapOriginY)
             self.localCostmapResolution = self.costmap_info_tmp.iloc[0, 0]
-            #print('self.localCostmapResolution: ', self.localCostmapResolution)
+            print('self.localCostmapResolution: ', self.localCostmapResolution)
             self.localCostmapHeight = self.costmap_info_tmp.iloc[0, 2]
-            #print('self.localCostmapHeight: ', self.localCostmapHeight)
+            print('self.localCostmapHeight: ', self.localCostmapHeight)
             self.localCostmapWidth = self.costmap_info_tmp.iloc[0, 1]
-            #print('self.localCostmapWidth: ', self.localCostmapWidth)
+            print('self.localCostmapWidth: ', self.localCostmapWidth)
 
             # save robot odometry location to class variables
             self.odom_x = self.odom_tmp.iloc[0, 0]
@@ -246,6 +246,7 @@ class ExplainRobotNavigation:
             self.footprint_x_list = []
             self.footprint_y_list = []
             for j in range(0, self.footprint_tmp.shape[0]):
+                #print(str(self.footprint_tmp.iloc[j, 0]) + '  ' + str(self.footprint_tmp.iloc[j, 1]))
                 self.footprint_x_list.append(int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
                 self.footprint_y_list.append(int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
 
@@ -320,13 +321,13 @@ class ExplainRobotNavigation:
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
 
-            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=64, segmentation_fn=segm_fn)
+            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=128, segmentation_fn=segm_fn)
             #print('self.explanation: ', self.explanation)
 
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
-                                                                           min_weight=0.0)  # min_weight=0.1 - default
+                                                                           min_weight=0.1)  # min_weight=0.1 - default
 
             '''
             print(self.temp_img.shape)
@@ -729,7 +730,7 @@ class ExplainRobotNavigation:
 
         self.sampled_instance = sampled_instance
 
-        self.classifier_fn_image_plot()
+        #self.classifier_fn_image_plot()
 
         # classification
         conditions = [
@@ -782,6 +783,7 @@ class ExplainRobotNavigation:
                 self.perturbations_visualization = np.concatenate((self.perturbations_visualization, self.sampled_instance[i][:, :, 0]), axis=1)
         self.perturbations_visualization_final = np.concatenate((self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
         '''
+
         '''
         # Save perturbations as .csv file
         for i in range(0, self.sampled_instance.shape[0]):
@@ -803,6 +805,9 @@ class ExplainRobotNavigation:
         # plot every perturbation
         for i in range(0, self.sampled_instance.shape[0]):
 
+            # save current perturbation as .csv file
+            #pd.DataFrame(self.sampled_instance[i][:, :, 0]).to_csv('perturbation_' + str(i) + '.csv', index=False, header=False)
+
             # plot perturbed local costmap
             plt.imshow(self.sampled_instance[i][:, :, 0])
 
@@ -822,6 +827,39 @@ class ExplainRobotNavigation:
 
             # plot footprint
             plt.scatter(self.footprint_x_list, self.footprint_y_list, c='green', marker='x')
+
+            '''
+            # plot footprints for first five points of local plan
+            # indices of local plan's poses in local costmap
+            self.footprint_local_plan_x_list = []
+            self.footprint_local_plan_y_list = []
+            self.footprint_local_plan_x_list_angle = []
+            self.footprint_local_plan_y_list_angle = []
+            for j in range(0, self.local_plans.shape[0]):
+                if self.local_plans.iloc[j, -1] == i:
+                    for k in range(6, 7):
+
+                        [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans.iloc[j + k, 2], self.local_plans.iloc[j + k, 3])
+                        sin_th = math.sin(yaw)
+                        cos_th = math.cos(yaw)
+
+                        for l in range(0, self.footprint_tmp.shape[0]):
+                            x_new = self.footprint_tmp.iloc[l, 0] + (self.local_plans.iloc[j + k, 0] - self.odom_x)
+                            y_new = self.footprint_tmp.iloc[l, 1] + (self.local_plans.iloc[j + k, 1] - self.odom_y)
+                            self.footprint_local_plan_x_list.append(int((x_new - self.localCostmapOriginX) / self.localCostmapResolution))
+                            self.footprint_local_plan_y_list.append(int((y_new - self.localCostmapOriginY) / self.localCostmapResolution))
+
+                            x_new = self.local_plans.iloc[j + k, 0] + (self.footprint_tmp.iloc[l, 0] - self.odom_x) * sin_th + (self.footprint_tmp.iloc[l, 1] - self.odom_y) * cos_th
+                            y_new = self.local_plans.iloc[j + k, 1] - (self.footprint_tmp.iloc[l, 0] - self.odom_x) * cos_th + (self.footprint_tmp.iloc[l, 1] - self.odom_y) * sin_th
+                            self.footprint_local_plan_x_list_angle.append(int((x_new - self.localCostmapOriginX) / self.localCostmapResolution))
+                            self.footprint_local_plan_y_list_angle.append(int((y_new - self.localCostmapOriginY) / self.localCostmapResolution))
+                    break
+            #print('self.footprint_local_plan_x_list: ', self.footprint_local_plan_x_list)
+            #print('self.footprint_local_plan_y_list: ', self.footprint_local_plan_y_list)
+            # plot footprints
+            plt.scatter(self.footprint_local_plan_x_list, self.footprint_local_plan_y_list, c='green', marker='x')
+            plt.scatter(self.footprint_local_plan_x_list_angle, self.footprint_local_plan_y_list_angle, c='white', marker='x')
+            '''
 
             # plot local plan
             plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
