@@ -789,7 +789,7 @@ class ExplainRobotNavigation:
 
         self.sampled_instance = sampled_instance
 
-        #self.classifier_fn_image_plot()
+        self.classifier_fn_image_plot()
 
         # classification
         conditions = [
@@ -875,8 +875,14 @@ class ExplainRobotNavigation:
             self.local_plan_y_list = []
             for j in range(0, self.local_plans.shape[0]):
                 if self.local_plans.iloc[j, -1] == i:
-                    self.local_plan_x_list.append(int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-                    self.local_plan_y_list.append(int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+                    index_x = int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                    index_y = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                    self.local_plan_x_list.append(index_x)
+                    self.local_plan_y_list.append(index_y)
+                    [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans.iloc[j, 2], self.local_plans.iloc[j, 3])
+                    yaw_x = math.cos(yaw)
+                    yaw_y = math.sin(yaw)
+                    plt.quiver(index_x, index_y, yaw_x, yaw_y, color='white')
             # print('i: ', i)
             # print('self.local_plan_x_list.size(): ', len(self.local_plan_x_list))
             # print('self.local_plan_y_list.size(): ', len(self.local_plan_y_list))
@@ -924,8 +930,8 @@ class ExplainRobotNavigation:
             plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
 
             # plot local plan last point
-            if len(self.local_plan_x_list) != 0:
-                plt.scatter([self.local_plan_x_list[-1]], [self.local_plan_y_list[-1]], c='black', marker='x')
+            #if len(self.local_plan_x_list) != 0:
+            #    plt.scatter([self.local_plan_x_list[-1]], [self.local_plan_y_list[-1]], c='black', marker='x')
 
             # plot robot's location and orientation
             plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
