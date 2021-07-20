@@ -186,11 +186,12 @@ if explanationMode == 'tabular':
 
 else:
     # optional selection - deterministic
-    expID = 81
+    expID = local_costmap_info.shape[0] - 20
 
     # Dataset1:
     # Dataset2:
-    # Dataset3: #48 #81 #92 #112
+    # Dataset3:
+    # Dataset4: #100
     # Dataset HARL Workshop 2021 paper: #71
     
     # random selection

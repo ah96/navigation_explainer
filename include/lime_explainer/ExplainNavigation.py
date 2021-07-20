@@ -65,7 +65,7 @@ class ExplainRobotNavigation:
         self.offset = numOfFirstRowsToDelete
         self.footprints = footprints
 
-        '''
+        #'''
         # print important information
         print('self.mode: ', self.mode)
         print('self.explanationMode: ', self.explanationMode)
@@ -73,7 +73,7 @@ class ExplainRobotNavigation:
         print('self.num_samples: ', self.num_samples)
         print('output_class_name: ', output_class_name)
         print('self.offset: ', self.offset)
-        '''
+        #'''
 
         # if mode is 'image' - LIME image
         if self.explanationMode == 'image':
@@ -321,10 +321,10 @@ class ExplainRobotNavigation:
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
 
-            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=128, segmentation_fn=segm_fn)
+            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=6, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
                                                                            min_weight=0.1)  # min_weight=0.1 - default
@@ -554,7 +554,7 @@ class ExplainRobotNavigation:
 
         # make a deepcopy of local costmap and flip it
         local_costmap = copy.deepcopy(self.image)
-        local_costmap_flipped = self.matrixflip(local_costmap, 'h')
+        local_costmap_flipped = self.matrixFlip(local_costmap, 'h')
 
         # plot flipped local costmap
         # plot robot odometry location
@@ -626,20 +626,20 @@ class ExplainRobotNavigation:
             for j in range(0, map_tmp.shape[1]):
                 if map_tmp.iloc[i, j] == -1:
                     map_tmp.iloc[i, j] = 100
-        map_tmp_flipped = self.matrixflip(map_tmp, 'h')
+        map_tmp_flipped = self.matrixFlip(map_tmp, 'h')
         plt.imshow(map_tmp_flipped)
         plt.savefig('flipped_map.png')
         plt.clf()
 
         # plot image_temp
-        temp_img_flipped = self.matrixflip(self.temp_img, 'h')
+        temp_img_flipped = self.matrixFlip(self.temp_img, 'h')
         plt.imshow(temp_img_flipped)
         plt.savefig('flipped_temp_img.png')
         plt.clf()
         #pd.DataFrame(self.temp_img_flipped[:,:,0]).to_csv('~/amar_ws/temp_img_flipped.csv', index=False, header=False)
 
         # plot mask
-        mask_flipped = self.matrixflip(self.mask, 'h')
+        mask_flipped = self.matrixFlip(self.mask, 'h')
         plt.imshow(mask_flipped)
         plt.savefig('flipped_mask.png')
         plt.clf()
@@ -666,30 +666,32 @@ class ExplainRobotNavigation:
         t = np.array(
             [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
         #print('t: ', t)
-        for i in range(0, self.plan_tmp.shape[0]):
-            p = np.array([self.plan_tmp.iloc[i, 0], self.plan_tmp.iloc[i, 1], self.plan_tmp.iloc[i, 2]])
+        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+        for i in range(0, self.global_plan_tmp.shape[0]):
+            p = np.array([self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
             # print('p: ', p)
             pnew = p.dot(r_array) + t
             # print('pnew: ', pnew)
-            self.plan_tmp.iloc[i, 0] = pnew[0]
-            self.plan_tmp.iloc[i, 1] = pnew[1]
-            self.plan_tmp.iloc[i, 2] = pnew[2]
+            plan_tmp_tmp.iloc[i, 0] = pnew[0]
+            plan_tmp_tmp.iloc[i, 1] = pnew[1]
+            plan_tmp_tmp.iloc[i, 2] = pnew[2]
         # Get coordinates of the global plan in the local costmap
+        '''
         self.plan_x_list = []
         self.plan_y_list = []
-        for i in range(0, self.plan_tmp.shape[0], 3):
-            x_temp = 160 - int((self.plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+        for i in range(0, plan_tmp_tmp.shape[0], 3):
+            x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             if 0 <= x_temp <= 159:
                 self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(
-                    int((self.plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        plt.scatter(self.plan_x_list, self.plan_y_list, c='purple', marker='o')
+                self.plan_y_list.append(int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+        plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        '''
         # plot explanation
         ax.set_axis_off()
         marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
-        marked_boundaries_flipped = self.matrixflip(marked_boundaries, 'h')
+        marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
         # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.imshow(marked_boundaries_flipped, aspect='auto')
+        ax.imshow(marked_boundaries_flipped) #, aspect='auto')
         plt.savefig('flipped_explanation.png', transparent=False)
         plt.close()
 
@@ -791,41 +793,108 @@ class ExplainRobotNavigation:
 
         self.classifier_fn_image_plot()
 
+        # new output - deviation of the local plan compared to the global plan
+        self.local_plan_deviation = d = pd.DataFrame(1.0, index=np.arange(self.sampled_instance.shape[0]), columns=['deviate'])
+        #print(self.local_plan_deviation)
+
+        transformed_plan_xs = []
+        transformed_plan_ys = []
+        for i in range(0, self.transformed_plan.shape[0]):
+            transformed_plan_xs.append(self.transformed_plan.iloc[i, 0])
+            transformed_plan_ys.append(self.transformed_plan.iloc[i, 1])
+        transformed_plan_xs = np.array(transformed_plan_xs)
+        transformed_plan_ys = np.array(transformed_plan_ys)
+
+        for i in range(0, self.sampled_instance.shape[0]):
+            local_plan_xs = []
+            local_plan_ys = []
+            local_plan_found = False
+            for j in range(0, self.local_plans.shape[0]):
+                if self.local_plans.iloc[j, -1] == i:
+                    local_plan_found = True
+                    local_plan_xs.append(self.local_plans.iloc[j, 0])
+                    local_plan_ys.append(self.local_plans.iloc[j, 1])
+            if local_plan_found == True:
+                local_plan_xs = np.array(local_plan_xs)
+                local_plan_ys = np.array(local_plan_ys)
+                sum_x = 0
+                sum_y = 0
+                if local_plan_xs.shape <= transformed_plan_xs.shape:
+                    for j in range(0, local_plan_xs.shape[0]):
+                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                else:
+                    for j in range(0, transformed_plan_xs.shape[0]):
+                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                import math
+                sum_final = math.sqrt(sum_x + sum_y)
+                #print('i: ', i)
+                #print('sum_final: ', sum_final)
+                if sum_final < 4.0:
+                    self.local_plan_deviation.iloc[i, 0] = 0.0
+
+        print(self.local_plan_deviation)
+
         # classification
-        conditions = [
-            ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-            (abs(self.cmd_vel['cmd_vel_lin_x']) < 0.01) # & (self.cmd_vel['cmd_vel_lin_x'] > -0.01))
-        ]
 
-        valuesLeftAhead = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['left_ahead'] = np.select(conditions, valuesLeftAhead)
+        stop_list = []
+        linear_positive_list = []
+        rotate_left_list = []
+        rotate_right_list = []
+        ahead_straight_list = []
+        ahead_left_list = []
+        ahead_right_list = []
+        for i in range(0, self.cmd_vel.shape[0]):
+            if abs(self.cmd_vel.iloc[i, 0]) < 0.01:
+                stop_list.append(1.0)
+            else:
+                stop_list.append(0.0)
 
-        valuesRightAhead = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['right_ahead'] = np.select(conditions, valuesRightAhead)
+            if self.cmd_vel.iloc[i, 0] > 0.01:
+                linear_positive_list.append(1.0)
+            else:
+                linear_positive_list.append(0.0)
 
-        valuesStraightAhead = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['straight_ahead'] = np.select(conditions, valuesStraightAhead)
+            if self.cmd_vel.iloc[i, 2] > 0.0:
+                rotate_left_list.append(1.0)
+            else:
+                rotate_left_list.append(0.0)
 
-        valuesLeftBack = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['left_back'] = np.select(conditions, valuesLeftBack)
+            if self.cmd_vel.iloc[i, 2] < 0.0:
+                rotate_right_list.append(1.0)
+            else:
+                rotate_right_list.append(0.0)
 
-        valuesRightBack = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-        self.cmd_vel['right_back'] = np.select(conditions, valuesRightBack)
+            if self.cmd_vel.iloc[i, 0] > 0.01 and abs(self.cmd_vel.iloc[i, 2]) < 0.01:
+                ahead_straight_list.append(1.0)
+            else:
+                ahead_straight_list.append(0.0)
 
-        valuesStraightBack = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        self.cmd_vel['straight_back'] = np.select(conditions, valuesStraightBack)
+            if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] > 0.0:
+                ahead_left_list.append(1.0)
+            else:
+                ahead_left_list.append(0.0)
 
-        valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-        self.cmd_vel['stop'] = np.select(conditions, valuesStop)
+            if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] < 0.0:
+                ahead_right_list.append(1.0)
+            else:
+                ahead_right_list.append(0.0)
+
+        self.cmd_vel['deviate'] = self.local_plan_deviation
+        self.cmd_vel['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel.shape[0]), columns=['stop'])
+        self.cmd_vel['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel.shape[0]), columns=['linear_positive'])
+        self.cmd_vel['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel.shape[0]), columns=['rotate_left'])
+        self.cmd_vel['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel.shape[0]), columns=['rotate_right'])
+        self.cmd_vel['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_straight'])
+        self.cmd_vel['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_left'])
+        self.cmd_vel['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_right'])
+
+        print('self.cmd_vel: ', self.cmd_vel)
 
         print('classifier_fn_image ended')
 
-        return np.array(self.cmd_vel.iloc[:, 9:10])
+        return np.array(self.cmd_vel.iloc[:, 3:])
 
     def classifier_fn_image_plot(self):
         '''
@@ -879,10 +948,12 @@ class ExplainRobotNavigation:
                     index_y = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
                     self.local_plan_x_list.append(index_x)
                     self.local_plan_y_list.append(index_y)
+                    '''
                     [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans.iloc[j, 2], self.local_plans.iloc[j, 3])
                     yaw_x = math.cos(yaw)
                     yaw_y = math.sin(yaw)
                     plt.quiver(index_x, index_y, yaw_x, yaw_y, color='white')
+                    '''
             # print('i: ', i)
             # print('self.local_plan_x_list.size(): ', len(self.local_plan_x_list))
             # print('self.local_plan_y_list.size(): ', len(self.local_plan_y_list))
@@ -1140,6 +1211,35 @@ class ExplainRobotNavigation:
         plt.savefig('testSegmentation_segments.png')
         plt.clf()
 
+        # plot segments with centroids and labels/weights
+        plt.imshow(self.matrixFlip(segments_1, 'h'))
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            plt.scatter(160 - centers[i][0], centers[i][1], c='white', marker='o')
+            # plt.text(centers[i][0], centers[i][1], str(v))
+            # '''
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == i:
+                    # print('i: ', i)
+                    # print('j: ', j)
+                    # print('self.exp[j][0]: ', self.exp[j][0])
+                    # print('self.exp[j][1]: ', self.exp[j][1])
+                    # print('v: ', v)
+                    # print('\n')
+                    plt.text(160 - centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                    break
+            # '''
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        plt.savefig('flipped_testSegmentation_segments.png')
+        plt.clf()
+
         # print explanation
         #print('self.exp: ', self.exp)
         #print('len(self.exp): ', len(self.exp))
@@ -1148,7 +1248,12 @@ class ExplainRobotNavigation:
 
         return segments_1
 
-
+    def matrixFlip(self, m, d):
+        myl = np.array(m)
+        if d == 'v':
+            return np.flip(myl, axis=0)
+        elif d == 'h':
+            return np.flip(myl, axis=1)
 
 
 
@@ -1270,13 +1375,6 @@ class ExplainRobotNavigation:
             labels = labels[0]
 
         return labels, centroids
-
-    def matrixflip(self, m, d):
-        myl = np.array(m)
-        if d == 'v':
-            return np.flip(myl, axis=0)
-        elif d == 'h':
-            return np.flip(myl, axis=1)
 
     def classifier_fn_tabular(self, sampled_instance):
 
@@ -1467,6 +1565,38 @@ def _supported_float_type(input_dtype, allow_complex=False):
         raise ValueError("complex valued input is not supported")
     return new_float_type.get(input_dtype.char, np.float64)
 
+'''
+conditions = [
+    ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+    (abs(self.cmd_vel['cmd_vel_lin_x']) < 0.01)
+]
+
+valuesLeftAhead = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+self.cmd_vel['left_ahead'] = np.select(conditions, valuesLeftAhead)
+
+valuesRightAhead = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+self.cmd_vel['right_ahead'] = np.select(conditions, valuesRightAhead)
+
+valuesStraightAhead = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+self.cmd_vel['straight_ahead'] = np.select(conditions, valuesStraightAhead)
+
+valuesLeftBack = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+self.cmd_vel['left_back'] = np.select(conditions, valuesLeftBack)
+
+valuesRightBack = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+self.cmd_vel['right_back'] = np.select(conditions, valuesRightBack)
+
+valuesStraightBack = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+self.cmd_vel['straight_back'] = np.select(conditions, valuesStraightBack)
+
+valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+self.cmd_vel['stop'] = np.select(conditions, valuesStop)
+'''
 
 '''
 # Other code for dealing with calling other ROS node from this one
