@@ -43,7 +43,7 @@ class ExplainRobotNavigation:
                  expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints):
         print('Constructor starting')
         # save variables as class variables
-        self.cmd_vel = cmd_vel
+        self.cmd_vel_original = cmd_vel
         self.odom = odom
         self.plan = plan
         self.global_plan = teb_global_plan
@@ -200,6 +200,11 @@ class ExplainRobotNavigation:
             self.odom_tmp = self.odom_tmp.iloc[:, 2:]
             self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
+            # Take original command speed
+            self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
+            #self.cmd_vel_original_tmp = pd.DataFrame(self.cmd_vel_original_tmp).transpose()
+            #self.cmd_vel_original_tmp = self.cmd_vel_original_tmp.iloc[:, 2:]
+
             # save costmap info to class variables
             self.localCostmapOriginX = self.costmap_info_tmp.iloc[0, 3]
             print('self.localCostmapOriginX: ', self.localCostmapOriginX)
@@ -307,7 +312,7 @@ class ExplainRobotNavigation:
         print('Constructor ending')
 
 
-    def explain_instance(self, expID):
+    def explain_instance(self, expID, step_):
         print('explain_instance function starting')
         # ordinal number of the instance
         self.expID = expID
@@ -321,10 +326,11 @@ class ExplainRobotNavigation:
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
 
-            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
+            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples,
+                                                               batch_size=1024, segmentation_fn=segm_fn, top_labels=10, step=step_)
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=6, positive_only=False,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
                                                                            min_weight=0.1)  # min_weight=0.1 - default
@@ -676,7 +682,7 @@ class ExplainRobotNavigation:
             plan_tmp_tmp.iloc[i, 1] = pnew[1]
             plan_tmp_tmp.iloc[i, 2] = pnew[2]
         # Get coordinates of the global plan in the local costmap
-        '''
+        #'''
         self.plan_x_list = []
         self.plan_y_list = []
         for i in range(0, plan_tmp_tmp.shape[0], 3):
@@ -685,8 +691,10 @@ class ExplainRobotNavigation:
                 self.plan_x_list.append(x_temp)
                 self.plan_y_list.append(int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
         plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        '''
+        #'''
         # plot explanation
+        #print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
+        ax.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_original_tmp.iloc[1], 2)))
         ax.set_axis_off()
         marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
         marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
@@ -791,7 +799,7 @@ class ExplainRobotNavigation:
 
         self.sampled_instance = sampled_instance
 
-        self.classifier_fn_image_plot()
+        #self.classifier_fn_image_plot()
 
         # new output - deviation of the local plan compared to the global plan
         self.local_plan_deviation = d = pd.DataFrame(1.0, index=np.arange(self.sampled_instance.shape[0]), columns=['deviate'])
@@ -890,7 +898,7 @@ class ExplainRobotNavigation:
         self.cmd_vel['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_left'])
         self.cmd_vel['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_right'])
 
-        print('self.cmd_vel: ', self.cmd_vel)
+        #print('self.cmd_vel: ', self.cmd_vel)
 
         print('classifier_fn_image ended')
 

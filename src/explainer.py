@@ -186,8 +186,9 @@ if explanationMode == 'tabular':
 
 else:
     # optional selection - deterministic
-    expID = local_costmap_info.shape[0] - 20
+    expID = 60
 
+    # Old datasets	
     # Dataset1:
     # Dataset2:
     # Dataset3:
@@ -206,7 +207,8 @@ from lime_explainer import ExplainNavigation
 expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, 
 amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, mode, explanationMode, expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints)
 
-expNav.explain_instance(expID)
+for i in range(0, 7):
+    expNav.explain_instance(expID, i)
 
 expNav.testSegmentation()
 

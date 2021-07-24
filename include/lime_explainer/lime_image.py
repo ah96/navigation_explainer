@@ -58,7 +58,7 @@ class ImageExplanation(object):
         #'''
         # testing
         import matplotlib.pyplot as plt
-        print('self.local_exp: ', self.local_exp)
+        #print('self.local_exp: ', self.local_exp)
         seg_unique = np.unique(self.segments)
         print('self.segments_unique: ', seg_unique)
         #'''
@@ -130,7 +130,7 @@ class ImageExplanation(object):
             return temp, mask, exp
         else:
             for f, w in exp[:num_features]:
-                print('(f, w): ', (f, w))
+                #print('(f, w): ', (f, w))
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
@@ -353,7 +353,8 @@ class LimeImageExplainer(object):
                          distance_metric='cosine',
                          model_regressor=None,
                          random_seed=None,
-                         progress_bar=True):
+                         progress_bar=True,
+                         step=0):
         """Generates explanations for a prediction.
 
         First, we generate neighborhood data by randomly perturbing features
@@ -430,7 +431,7 @@ class LimeImageExplainer(object):
 
         top = labels
 
-        data, labels = self.data_labels(image, fudged_image, segments,
+        data, labels = self.data_labels(step, image, fudged_image, segments,
                                         classifier_fn, num_samples,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
@@ -457,6 +458,7 @@ class LimeImageExplainer(object):
         return ret_exp
 
     def data_labels(self,
+                    step,
                     image,
                     fudged_image,
                     segments,
@@ -515,6 +517,14 @@ class LimeImageExplainer(object):
         #print("data after: ", data)
         #import pandas as pd
         #pd.DataFrame(data).to_csv('~/amar_ws/data.csv', index=False, header=False)
+
+        #'''
+        # evaluation part
+        import copy
+        data_copy = copy.deepcopy(data)
+        data = data_copy[np.random.choice(len(data_copy), 2**step, replace=False)]
+        print('DATA.SHAPE: ', data.shape)
+        #'''
 
         imgs = []
         rows = tqdm(data) if progress_bar else data
