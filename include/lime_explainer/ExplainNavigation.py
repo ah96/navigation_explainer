@@ -312,7 +312,7 @@ class ExplainRobotNavigation:
         print('Constructor ending')
 
 
-    def explain_instance(self, expID, step_):
+    def explain_instance(self, expID, step_, ID):
         print('explain_instance function starting')
         # ordinal number of the instance
         self.expID = expID
@@ -335,6 +335,21 @@ class ExplainRobotNavigation:
                                                                            hide_rest=False,
                                                                            min_weight=0.1)  # min_weight=0.1 - default
 
+            print('self.exp: ', self.exp)
+            with open("explanations.txt", "a") as myfile:
+                if step_ == len(self.exp):
+                    myfile.write(str(ID) + ' - ' + str(self.expID) + ' - ' + str(step_) + '* - ')
+                else:
+                    myfile.write(str(ID) + ' - ' + str(self.expID) + ' - ' + str(step_) + ' - ')
+                for i in range(0, len(self.exp)):
+                    for j in range(0, len(self.exp)):
+                        if self.exp[j][0] == i:
+                            if i == len(self.exp) - 1:
+                                myfile.write('(' + str(round(self.exp[j][0], 4)) + ',' + str(round(self.exp[j][1], 4)) + ') ')
+                            else:
+                                myfile.write('(' + str(round(self.exp[j][0], 4)) + ',' + str(round(self.exp[j][1], 4)) + '), ')
+                myfile.write('\n')
+
             '''
             print(self.temp_img.shape)
             print(self.mask.shape)
@@ -344,8 +359,8 @@ class ExplainRobotNavigation:
             pd.DataFrame(self.mask[:,:]).to_csv('~/amar_ws/mask.csv', index=False, header=False)
             '''
 
-            self.plotExplanation()
-            self.plotExplanationFlipped()
+            #self.plotExplanation()
+            #self.plotExplanationFlipped()
 
 
         elif self.explanationMode == 'tabular':
@@ -842,7 +857,7 @@ class ExplainRobotNavigation:
                 if sum_final < 4.0:
                     self.local_plan_deviation.iloc[i, 0] = 0.0
 
-        print(self.local_plan_deviation)
+        #print(self.local_plan_deviation)
 
         # classification
 

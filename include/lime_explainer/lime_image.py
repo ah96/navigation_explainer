@@ -216,10 +216,12 @@ class LimeImageExplainer(object):
 
         # show original image
         img = img_rgb[:, :, 0]
+        '''
         # Save segments_1 as a picture
         plt.imshow(img)
         plt.savefig('mySlic_img.png')
         plt.clf()
+        '''
 
         # segments_1 - good obstacles
         # Find segments_1
@@ -227,6 +229,7 @@ class LimeImageExplainer(object):
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
+        '''
         # plot segments_1 with centroids and labels
         regions = regionprops(segments_1)
         centers = []
@@ -242,17 +245,19 @@ class LimeImageExplainer(object):
         plt.imshow(segments_1)
         plt.savefig('mySlic_segments_1.png')
         plt.clf()
+        '''
         # find segments_unique_1
         segments_unique_1 = np.unique(segments_1)
         print('segments_unique_1: ', segments_unique_1)
         print('segments_unique_1.shape: ', segments_unique_1.shape)
+
 
         # Find segments_2
         segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
-        '''
+
         # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
         print('segments_unique_2: ', segments_unique_2)
@@ -278,11 +283,11 @@ class LimeImageExplainer(object):
         plt.imshow(segments_2)
         plt.savefig('mySlic_segments_2.png')
         plt.clf()
+        '''
         # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
         print('segments_unique_2: ', segments_unique_2)
         print('segments_unique_2.shape: ', segments_unique_2.shape)
-
         #'''
         # Add/Sum segments_1 and segments_2
         for i in range(0, segments_1.shape[0]):
@@ -292,6 +297,7 @@ class LimeImageExplainer(object):
                 else:
                     segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
         #'''
+        '''
         # plot segments with centroids and labels/weights
         plt.imshow(segments_1)
         regions = regionprops(segments_1)
@@ -307,6 +313,7 @@ class LimeImageExplainer(object):
         # Save segments_1 as a picture before nice segment numbering
         plt.savefig('mySlic_segments_beforeNiceNumbering.png')
         plt.clf()
+        '''
         # find segments_unique before nice segment numbering
         segments_unique = np.unique(segments_1)
         print('segments_unique: ', segments_unique)
@@ -319,9 +326,11 @@ class LimeImageExplainer(object):
                     if segments_1[i, j] == segments_unique[k]:
                         segments_1[i, j] = k + 1 # k+1 must be in order for regionprops() function to work correctly
         # find segments_unique after nice segment numbering
+
         segments_unique = np.unique(segments_1)
         print('segments_unique (with nice numbering): ', segments_unique)
         print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
+        '''
         # plot segments with centroids and labels/weights
         plt.imshow(segments_1)
         regions = regionprops(segments_1)
@@ -338,7 +347,7 @@ class LimeImageExplainer(object):
         # Save segments as a picture
         plt.savefig('mySlic_segments.png')
         plt.clf()
-
+        '''
         segments_1 = segments_1 - 1
 
         print('mySlic ends')
@@ -506,7 +515,7 @@ class LimeImageExplainer(object):
         #print('lst: ', lst)
         #print('len(lst): ', len(lst))
         #print('data: ', data)
-        #print('data.shape: ', data.shape)
+        print('data.shape: ', data.shape)
         #'''
 
         labels = []
@@ -518,12 +527,14 @@ class LimeImageExplainer(object):
         #import pandas as pd
         #pd.DataFrame(data).to_csv('~/amar_ws/data.csv', index=False, header=False)
 
-        #'''
         # evaluation part
-        import copy
-        data_copy = copy.deepcopy(data)
-        data = data_copy[np.random.choice(len(data_copy), 2**step, replace=False)]
-        print('DATA.SHAPE: ', data.shape)
+        # '''
+        if step != n_features and data.shape[0] > 2**step:
+            data_copy = copy.deepcopy(data)
+            data = data_copy[np.random.choice(len(data_copy), 2**step, replace=False)]
+            data[0, :] = 1
+            print('NEW_DATA.SHAPE: ', data.shape)
+            print('STEP: ', step)
         #'''
 
         imgs = []
