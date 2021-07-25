@@ -43,7 +43,7 @@ class ExplainRobotNavigation:
                  expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints):
         print('Constructor starting')
         # save variables as class variables
-        self.cmd_vel = cmd_vel
+        self.cmd_vel_original = cmd_vel
         self.odom = odom
         self.plan = plan
         self.global_plan = teb_global_plan
@@ -65,7 +65,7 @@ class ExplainRobotNavigation:
         self.offset = numOfFirstRowsToDelete
         self.footprints = footprints
 
-        '''
+        #'''
         # print important information
         print('self.mode: ', self.mode)
         print('self.explanationMode: ', self.explanationMode)
@@ -73,7 +73,7 @@ class ExplainRobotNavigation:
         print('self.num_samples: ', self.num_samples)
         print('output_class_name: ', output_class_name)
         print('self.offset: ', self.offset)
-        '''
+        #'''
 
         # if mode is 'image' - LIME image
         if self.explanationMode == 'image':
@@ -200,17 +200,22 @@ class ExplainRobotNavigation:
             self.odom_tmp = self.odom_tmp.iloc[:, 2:]
             self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
+            # Take original command speed
+            self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
+            #self.cmd_vel_original_tmp = pd.DataFrame(self.cmd_vel_original_tmp).transpose()
+            #self.cmd_vel_original_tmp = self.cmd_vel_original_tmp.iloc[:, 2:]
+
             # save costmap info to class variables
             self.localCostmapOriginX = self.costmap_info_tmp.iloc[0, 3]
-            #print('self.localCostmapOriginX: ', self.localCostmapOriginX)
+            print('self.localCostmapOriginX: ', self.localCostmapOriginX)
             self.localCostmapOriginY = self.costmap_info_tmp.iloc[0, 4]
-            #print('self.localCostmapOriginY: ', self.localCostmapOriginY)
+            print('self.localCostmapOriginY: ', self.localCostmapOriginY)
             self.localCostmapResolution = self.costmap_info_tmp.iloc[0, 0]
-            #print('self.localCostmapResolution: ', self.localCostmapResolution)
+            print('self.localCostmapResolution: ', self.localCostmapResolution)
             self.localCostmapHeight = self.costmap_info_tmp.iloc[0, 2]
-            #print('self.localCostmapHeight: ', self.localCostmapHeight)
+            print('self.localCostmapHeight: ', self.localCostmapHeight)
             self.localCostmapWidth = self.costmap_info_tmp.iloc[0, 1]
-            #print('self.localCostmapWidth: ', self.localCostmapWidth)
+            print('self.localCostmapWidth: ', self.localCostmapWidth)
 
             # save robot odometry location to class variables
             self.odom_x = self.odom_tmp.iloc[0, 0]
@@ -242,14 +247,40 @@ class ExplainRobotNavigation:
             self.yaw_odom_x = math.cos(self.yaw_odom)
             self.yaw_odom_y = math.sin(self.yaw_odom)
 
-
             # save indices of footprint's poses in local costmap to class variables
             self.footprint_x_list = []
             self.footprint_y_list = []
             for j in range(0, self.footprint_tmp.shape[0]):
+                #print(str(self.footprint_tmp.iloc[j, 0]) + '  ' + str(self.footprint_tmp.iloc[j, 1]))
                 self.footprint_x_list.append(int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
                 self.footprint_y_list.append(int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
 
+            # map info
+            self.mapOriginX = self.map_info.iloc[0, 4]
+            # print('self.mapOriginX: ', self.mapOriginX)
+            self.mapOriginY = self.map_info.iloc[0, 5]
+            # print('self.mapOriginY: ', self.mapOriginY)
+            self.mapResolution = self.map_info.iloc[0, 1]
+            # print('self.mapResolution: ', self.mapResolution)
+            self.mapHeight = self.map_info.iloc[0, 3]
+            # print('self.mapHeight: ', self.mapHeight)
+            self.mapWidth = self.map_info.iloc[0, 2]
+            # print('self.mapWidth: ', self.mapWidth)
+
+            # robot amcl location
+            self.amcl_x = self.amcl_pose_tmp.iloc[0, 0]
+            # print('self.amcl_x: ', self.amcl_x)
+            self.amcl_y = self.amcl_pose_tmp.iloc[0, 1]
+            # print('self.amcl_y: ', self.amcl_y)
+
+            # robot amcl orientation
+            self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
+            self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
+            # calculate Euler angles based on orientation quaternion
+            [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
+            # print('roll_amcl: ', roll_amcl)
+            # print('pitch_amcl: ', pitch_amcl)
+            # print('yaw_amcl: ', self.yaw_amcl)
 
 
 
@@ -281,7 +312,7 @@ class ExplainRobotNavigation:
         print('Constructor ending')
 
 
-    def explain_instance(self, expID):
+    def explain_instance(self, expID, step_, ID):
         print('explain_instance function starting')
         # ordinal number of the instance
         self.expID = expID
@@ -295,22 +326,46 @@ class ExplainRobotNavigation:
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
 
-            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples, batch_size=64, segmentation_fn=segm_fn)
-
+            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples,
+                                                               batch_size=1024, segmentation_fn=segm_fn, top_labels=10, step=step_)
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=True,
-                                                                           negative_only=False, num_features=5,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
+                                                                           negative_only=False, num_features=100,
                                                                            hide_rest=False,
-                                                                           min_weight=0.0)  # min_weight=0.1 - default
+                                                                           min_weight=0.1)  # min_weight=0.1 - default
 
-            self.plotExplanation()
-            self.plotExplanationFlipped()
+            print('self.exp: ', self.exp)
+            with open("explanations.txt", "a") as myfile:
+                if step_ == len(self.exp):
+                    myfile.write(str(ID) + ' - ' + str(self.expID) + ' - ' + str(step_) + '* - ')
+                else:
+                    myfile.write(str(ID) + ' - ' + str(self.expID) + ' - ' + str(step_) + ' - ')
+                for i in range(0, len(self.exp)):
+                    for j in range(0, len(self.exp)):
+                        if self.exp[j][0] == i:
+                            if i == len(self.exp) - 1:
+                                myfile.write('(' + str(round(self.exp[j][0], 4)) + ',' + str(round(self.exp[j][1], 4)) + ') ')
+                            else:
+                                myfile.write('(' + str(round(self.exp[j][0], 4)) + ',' + str(round(self.exp[j][1], 4)) + '), ')
+                myfile.write('\n')
+
+            '''
+            print(self.temp_img.shape)
+            print(self.mask.shape)
+            pd.DataFrame(self.temp_img[:,:,0]).to_csv('~/amar_ws/temp_img_0.csv', index=False, header=False)
+            pd.DataFrame(self.temp_img[:, :, 1]).to_csv('~/amar_ws/temp_img_1.csv', index=False, header=False)
+            pd.DataFrame(self.temp_img[:, :, 2]).to_csv('~/amar_ws/temp_img_2.csv', index=False, header=False)
+            pd.DataFrame(self.mask[:,:]).to_csv('~/amar_ws/mask.csv', index=False, header=False)
+            '''
+
+            #self.plotExplanation()
+            #self.plotExplanationFlipped()
 
 
         elif self.explanationMode == 'tabular':
             # search for instance queue index (original instance queue name in almost (haman) input data frames)
-            self.index = self.X_train.index.values[self.expID];
+            self.index = self.X_train.index.values[self.expID]
             print('self.index: ', self.index)
 
             self.explanation = self.explainer.explain_instance(data_row=np.array(self.X_train.iloc[self.expID]),
@@ -331,7 +386,67 @@ class ExplainRobotNavigation:
             # print(self.explanation.as_list())
             fig = self.explanation.as_pyplot_figure()
             plt.savefig('explanation.png')
+
         print('explain_instance function ending')
+
+    def testLocalCostmap(self):
+        img = np.array(self.local_costmap_original)
+
+        plt.imshow(img)
+        plt.savefig('local_costmap_original.png')
+        plt.clf()
+
+        # fill -1 with 100
+        map_tmp = copy.deepcopy(self.map_data)
+        for i in range(0, map_tmp.shape[0]):
+            for j in range(0, map_tmp.shape[1]):
+                if map_tmp.iloc[i, j] == -1:
+                    map_tmp.iloc[i, j] = 100
+
+        # transform 99s from local costmap to /odom location and then from /odom to /map frame
+        for i in range(self.local_costmap_original.shape[0]):
+            print(i)
+            for j in range(self.local_costmap_original.shape[1]):
+                if self.local_costmap_original.iloc[i, j] == 99:
+                    # convert point obstacle to /odom location
+                    x_odom_temp = i * self.localCostmapResolution + self.localCostmapOriginX
+                    y_odom_temp = j * self.localCostmapResolution + self.localCostmapOriginY
+
+                    # convert point obstacle location from /odom to /map
+                    # rotation matrix
+                    from scipy.spatial.transform import Rotation as R
+                    r = R.from_quat(
+                        [self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4],
+                         self.tf_odom_map_tmp.iloc[0, 5], self.tf_odom_map_tmp.iloc[0, 6]])
+                    #print('r: ', r.as_matrix())
+                    r_array = np.asarray(r.as_matrix())
+                    #print('r_array: ', r_array)
+                    #print('r_array.shape: ', r_array.shape)
+                    # translation vector
+                    t = np.array([self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
+                    #print('t: ', t)
+                    # point in /odom frame
+                    p_odom = np.array([x_odom_temp, y_odom_temp, 0.0])
+                    #print('p_odom: ', p_odom)
+                    # point in /map frame
+                    p_map = p_odom.dot(r_array) + t
+                    #print('p_map: ', p_map)
+
+                    # get map indices
+                    x_map_index = int((p_map[0] - self.mapOriginX) / self.mapResolution)
+                    y_map_index = int((p_map[1] - self.mapOriginY) / self.mapResolution)
+                    if map_tmp.iloc[x_map_index, y_map_index] != 100:
+                        img[i, j] = 0
+
+                    plt.scatter(x_map_index, y_map_index, c='blue', marker='o')
+
+        plt.imshow(map_tmp)
+        plt.savefig('map.png')
+        plt.clf()
+
+        plt.imshow(img)
+        plt.savefig('local_costmap_changed.png')
+        plt.clf()
 
     def plotExplanation(self):
                 print('plotExplanation starts')
@@ -359,33 +474,20 @@ class ExplainRobotNavigation:
                         int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
                 plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
 
+                '''
+                # find yaw angles projections on x and y axes and save them to class variables - implemented in constructor
+                self.yaw_odom_x = math.cos(self.yaw_odom)
+                self.yaw_odom_y = math.sin(self.yaw_odom)
+                '''
                 # robot's odometry orientation
                 plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
 
-                # plot costmap
+                # plot local costmap
                 plt.imshow(self.image)
-                plt.savefig('LIME_image_local_costmap.png')
+                plt.savefig('straight_local_costmap.png')
                 plt.clf()
 
                 # plot global map
-                # map info
-                self.mapOriginX = self.map_info.iloc[0, 4]
-                # print('self.mapOriginX: ', self.mapOriginX)
-                self.mapOriginY = self.map_info.iloc[0, 5]
-                # print('self.mapOriginY: ', self.mapOriginY)
-                self.mapResolution = self.map_info.iloc[0, 1]
-                # print('self.mapResolution: ', self.mapResolution)
-                self.mapHeight = self.map_info.iloc[0, 3]
-                # print('self.mapHeight: ', self.mapHeight)
-                self.mapWidth = self.map_info.iloc[0, 2]
-                # print('self.mapWidth: ', self.mapWidth)
-
-                # robot amcl location
-                self.amcl_x = self.amcl_pose_tmp.iloc[0, 0]
-                # print('self.amcl_x: ', self.amcl_x)
-                self.amcl_y = self.amcl_pose_tmp.iloc[0, 1]
-                # print('self.amcl_y: ', self.amcl_y)
-
                 # indices of robot's odometry location in map
                 self.mapIndex_x_amcl = int((self.amcl_x - self.mapOriginX) / self.mapResolution)
                 # print('self.mapIndex_x_amcl: ', self.mapIndex_x_amcl)
@@ -397,13 +499,6 @@ class ExplainRobotNavigation:
                 self.y_amcl_index = [self.mapIndex_y_amcl]
                 plt.scatter(self.x_amcl_index, self.y_amcl_index, c='yellow', marker='o')
 
-                # robot amcl orientation
-                self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
-                self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
-                [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
-                # print('roll_amcl: ', roll_amcl)
-                # print('pitch_amcl: ', pitch_amcl)
-                # print('yaw_amcl: ', self.yaw_amcl)
                 self.yaw_amcl_x = math.cos(self.yaw_amcl)
                 self.yaw_amcl_y = math.sin(self.yaw_amcl)
                 plt.quiver(self.x_amcl_index, self.y_amcl_index, self.yaw_amcl_x, self.yaw_amcl_y, color='white')
@@ -438,49 +533,51 @@ class ExplainRobotNavigation:
                         if map_tmp.iloc[i, j] == -1:
                             map_tmp.iloc[i, j] = 100
                 plt.imshow(map_tmp)
-                plt.savefig('LIME_image_map.png')
+                plt.savefig('straight_map.png')
                 plt.clf()
 
                 # plot image_temp
                 plt.imshow(self.temp_img)
-                plt.savefig('LIME_image_temp_img.png')
+                plt.savefig('straight_temp_img.png')
                 plt.clf()
 
                 # plot mask
                 plt.imshow(self.mask)
-                plt.savefig('LIME_image_mask.png')
+                plt.savefig('straight_mask.png')
                 plt.clf()
 
                 '''
                 # plot last 100 perturbations
                 plt.imshow(self.perturbations_visualization_final)
-                plt.savefig('LIME_perturbations.png')
+                plt.savefig('straight_perturbations_last_100.png')
                 plt.clf()
                 '''
 
                 '''
                 # plot last 10 perturbations
                 plt.imshow(self.perturbations_visualization)
-                plt.savefig('LIME_perturbations_last_row.png')
+                plt.savefig('straight_perturbations_last_10.png')
                 plt.clf()
                 '''
 
-                # plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
                 # plot explanation
                 plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
                 plt.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
                 plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
                 plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
-                plt.savefig('LIME_image_explanation.png')
+                plt.savefig('straight_explanation.png')
                 plt.close()
 
                 print('plotExplanation ends')
 
     def plotExplanationFlipped(self):
-        local_costmap = copy.deepcopy(self.image)
-        local_costmap_flipped = self.matrixflip(local_costmap, 'h')
+        print('plotExplanationFlipped starts')
 
-        # plot local costmap
+        # make a deepcopy of local costmap and flip it
+        local_costmap = copy.deepcopy(self.image)
+        local_costmap_flipped = self.matrixFlip(local_costmap, 'h')
+
+        # plot flipped local costmap
         # plot robot odometry location
         self.x_odom_index = [160 - self.localCostmapIndex_x_odom]
         plt.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
@@ -488,7 +585,6 @@ class ExplainRobotNavigation:
         # indices of local plan's poses in local costmap
         self.local_plan_x_list = []
         self.local_plan_y_list = []
-        # print('self.local_plan_tmp.shape: ', self.local_plan_tmp.shape)
         for i in range(1, self.local_plan_tmp.shape[0]):
             self.local_plan_x_list.append(
                 160 - int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
@@ -496,10 +592,11 @@ class ExplainRobotNavigation:
                 int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
         plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
 
-        # self.yaw_odom_x = math.cos(math.pi - self.yaw_odom)
-        # self.yaw_odom_y = math.sin(math.pi - self.yaw_odom)
+        # find yaw angles projections on x and y axes and save them to class variables
+        self.yaw_odom_x = math.cos(math.pi - self.yaw_odom)
+        self.yaw_odom_y = math.sin(math.pi - self.yaw_odom)
         # robot's odometry orientation
-        # plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
+        plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
 
         plt.imshow(local_costmap_flipped)
         plt.savefig('flipped_local_costmap.png')
@@ -516,13 +613,7 @@ class ExplainRobotNavigation:
         self.y_amcl_index = [self.mapIndex_y_amcl]
         plt.scatter(self.x_amcl_index, self.y_amcl_index, c='yellow', marker='o')
 
-        # robot amcl orientation
-        self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
-        self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
-        [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
-        # print('roll_amcl: ', roll_amcl)
-        # print('pitch_amcl: ', pitch_amcl)
-        # print('yaw_amcl: ', self.yaw_amcl)
+        # find yaw angles projections on x and y axes and save them to class variables
         self.yaw_amcl_x = math.cos(math.pi - self.yaw_amcl)
         self.yaw_amcl_y = math.sin(math.pi - self.yaw_amcl)
         plt.quiver(self.x_amcl_index, self.y_amcl_index, self.yaw_amcl_x, self.yaw_amcl_y, color='white')
@@ -556,37 +647,82 @@ class ExplainRobotNavigation:
             for j in range(0, map_tmp.shape[1]):
                 if map_tmp.iloc[i, j] == -1:
                     map_tmp.iloc[i, j] = 100
-        map_tmp_flipped = self.matrixflip(map_tmp, 'h')
+        map_tmp_flipped = self.matrixFlip(map_tmp, 'h')
         plt.imshow(map_tmp_flipped)
         plt.savefig('flipped_map.png')
         plt.clf()
 
         # plot image_temp
-        # print(self.temp_img[:,:,0])
-        # print(pd.DataFrame(self.temp_img[:,:,0]).shape)
-        # df = pd.DataFrame(self.temp_img[:,:,0])
-        # df.to_csv('~/amar_ws/temp_img.csv', index=False, header=False)
-        temp_img_flipped = self.matrixflip(self.temp_img, 'h')
+        temp_img_flipped = self.matrixFlip(self.temp_img, 'h')
         plt.imshow(temp_img_flipped)
         plt.savefig('flipped_temp_img.png')
         plt.clf()
+        #pd.DataFrame(self.temp_img_flipped[:,:,0]).to_csv('~/amar_ws/temp_img_flipped.csv', index=False, header=False)
 
         # plot mask
-        # pd.DataFrame(self.mask[:,:,0]).to_csv('~/amar_ws/mask.csv', index=False, header=False)
-        mask_flipped = self.matrixflip(self.mask, 'h')
+        mask_flipped = self.matrixFlip(self.mask, 'h')
         plt.imshow(mask_flipped)
         plt.savefig('flipped_mask.png')
         plt.clf()
+        #pd.DataFrame(self.mask_flipped[:,:,0]).to_csv('~/amar_ws/mask_flipped.csv', index=False, header=False)
 
-        # plt.imshow(mark_boundaries(self.temp_img / 2 + 0.5, self.mask))
         # plot explanation
-        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
-        marked_boundaries_flipped = self.matrixflip(marked_boundaries, 'h')
         plt.figure()
         ax = plt.gca()
-        # ax.scatter(self.x_odom_index, self.y_odom_index, c='blue', marker='o')
+        # plot robots' location, orientation and local plan
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
+        ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-        # ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
+        # transform global plan from /map to /odom frame
+        # rotation matrix
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat(
+            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
+             self.tf_map_odom_tmp.iloc[0, 6]])
+        #print('r: ', r.as_matrix())
+        r_array = np.asarray(r.as_matrix())
+        #print('r_array: ', r_array)
+        #print('r_array.shape: ', r_array.shape)
+        # translation vector
+        t = np.array(
+            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
+        #print('t: ', t)
+        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+        for i in range(0, self.global_plan_tmp.shape[0]):
+            p = np.array([self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
+            # print('p: ', p)
+            pnew = p.dot(r_array) + t
+            # print('pnew: ', pnew)
+            plan_tmp_tmp.iloc[i, 0] = pnew[0]
+            plan_tmp_tmp.iloc[i, 1] = pnew[1]
+            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+        # Get coordinates of the global plan in the local costmap
+        #'''
+        self.plan_x_list = []
+        self.plan_y_list = []
+        for i in range(0, plan_tmp_tmp.shape[0], 3):
+            x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159:
+                self.plan_x_list.append(x_temp)
+                self.plan_y_list.append(int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+        plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        #'''
+        # plot explanation
+        #print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
+        ax.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_original_tmp.iloc[1], 2)))
+        ax.set_axis_off()
+        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
+        marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
+        # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
+        ax.imshow(marked_boundaries_flipped) #, aspect='auto')
+        plt.savefig('flipped_explanation.png', transparent=False)
+        plt.close()
+
+        print('plotExplanationFlipped ends')
+
+
+        '''
+        # plot for the HARL Workshop 2021 paper
         from matplotlib.patches import Ellipse
         ellipse = Ellipse(xy=(37.00, 52.00), width=30, height=70, edgecolor='orange', fc='None', lw=2, alpha=80.0)
         ax.add_patch(ellipse)
@@ -600,54 +736,8 @@ class ExplainRobotNavigation:
         ax.text(34, 10, 'FV', fontsize=12, fontweight=700)
         ax.text(160 - self.localCostmapIndex_x_odom - 1, self.localCostmapIndex_y_odom + 2, 'R', fontsize=12,
                 fontweight=700)
-
-        # plan from global planner
-        # Save plan (from global planner) instance to a file
-        # Save tf_map_odom to file
-        self.tf_map_odom_tmp = self.tf_map_odom.iloc[1, :]
-        self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-        self.plan_tmp = self.plan.loc[self.plan['ID'] == 1]
-        self.plan_tmp = self.plan_tmp.iloc[:, 1:]
-
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(
-            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
-             self.tf_map_odom_tmp.iloc[0, 6]])
-        print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        print('r_array: ', r_array)
-        print('r_array.shape: ', r_array.shape)
-        t = np.array(
-            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
-        print('t: ', t)
-        for i in range(0, self.plan_tmp.shape[0]):
-            p = np.array([self.plan_tmp.iloc[i, 0], self.plan_tmp.iloc[i, 1], self.plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            self.plan_tmp.iloc[i, 0] = pnew[0]
-            self.plan_tmp.iloc[i, 1] = pnew[1]
-            self.plan_tmp.iloc[i, 2] = pnew[2]
-
-        self.plan_x_list = []
-        self.plan_y_list = []
-        for i in range(0, self.plan_tmp.shape[0], 5):
-            x_temp = 160 - int((self.plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            if 5 <= x_temp <= 80:
-                self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(
-                    int((self.plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        # print('self.plan_x_list: ', self.plan_x_list)
-        # print('self.plan_y_list: ', self.plan_y_list)
-        plt.scatter(self.plan_x_list, self.plan_y_list, c='purple', marker='o')
-        import matplotlib
-        # print('marked_boundaries_flipped: ', marked_boundaries_flipped)
-        marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.set_axis_off()
-        ax.imshow(marked_boundaries_flipped, aspect='auto')
-        plt.savefig('flipped_explanation.png', transparent=False)
-        plt.close()
-        # https://stackoverflow.com/questions/8218608/scipy-savefig-without-frames-axes-only-content
+        # https://stackoverflow.com/questions/8218608/scipy-savefig-without-frames-axes-only-content        
+        '''
 
     def quaternion_to_euler(self, x, y, z, w):
         t0 = +2.0 * (w * x + y * z)
@@ -687,7 +777,7 @@ class ExplainRobotNavigation:
         #'''
 
         #'''
-        # Save perturbed costmap_data to file
+        # Save perturbed costmap_data to file got c++ node
         #sampled_instance = sampled_instance.astype(int)
         self.costmap_tmp = pd.DataFrame(sampled_instance[0][:, :, 0])
         for i in range(1, sampled_instance.shape[0]):
@@ -724,43 +814,110 @@ class ExplainRobotNavigation:
 
         self.sampled_instance = sampled_instance
 
-        self.classifier_fn_image_plot()
+        #self.classifier_fn_image_plot()
+
+        # new output - deviation of the local plan compared to the global plan
+        self.local_plan_deviation = d = pd.DataFrame(1.0, index=np.arange(self.sampled_instance.shape[0]), columns=['deviate'])
+        #print(self.local_plan_deviation)
+
+        transformed_plan_xs = []
+        transformed_plan_ys = []
+        for i in range(0, self.transformed_plan.shape[0]):
+            transformed_plan_xs.append(self.transformed_plan.iloc[i, 0])
+            transformed_plan_ys.append(self.transformed_plan.iloc[i, 1])
+        transformed_plan_xs = np.array(transformed_plan_xs)
+        transformed_plan_ys = np.array(transformed_plan_ys)
+
+        for i in range(0, self.sampled_instance.shape[0]):
+            local_plan_xs = []
+            local_plan_ys = []
+            local_plan_found = False
+            for j in range(0, self.local_plans.shape[0]):
+                if self.local_plans.iloc[j, -1] == i:
+                    local_plan_found = True
+                    local_plan_xs.append(self.local_plans.iloc[j, 0])
+                    local_plan_ys.append(self.local_plans.iloc[j, 1])
+            if local_plan_found == True:
+                local_plan_xs = np.array(local_plan_xs)
+                local_plan_ys = np.array(local_plan_ys)
+                sum_x = 0
+                sum_y = 0
+                if local_plan_xs.shape <= transformed_plan_xs.shape:
+                    for j in range(0, local_plan_xs.shape[0]):
+                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                else:
+                    for j in range(0, transformed_plan_xs.shape[0]):
+                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                import math
+                sum_final = math.sqrt(sum_x + sum_y)
+                #print('i: ', i)
+                #print('sum_final: ', sum_final)
+                if sum_final < 4.0:
+                    self.local_plan_deviation.iloc[i, 0] = 0.0
+
+        #print(self.local_plan_deviation)
 
         # classification
-        conditions = [
-            ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-            ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-            (abs(self.cmd_vel['cmd_vel_lin_x']) < 0.01) # & (self.cmd_vel['cmd_vel_lin_x'] > -0.01))
-        ]
 
-        valuesLeftAhead = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['left_ahead'] = np.select(conditions, valuesLeftAhead)
+        stop_list = []
+        linear_positive_list = []
+        rotate_left_list = []
+        rotate_right_list = []
+        ahead_straight_list = []
+        ahead_left_list = []
+        ahead_right_list = []
+        for i in range(0, self.cmd_vel.shape[0]):
+            if abs(self.cmd_vel.iloc[i, 0]) < 0.01:
+                stop_list.append(1.0)
+            else:
+                stop_list.append(0.0)
 
-        valuesRightAhead = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['right_ahead'] = np.select(conditions, valuesRightAhead)
+            if self.cmd_vel.iloc[i, 0] > 0.01:
+                linear_positive_list.append(1.0)
+            else:
+                linear_positive_list.append(0.0)
 
-        valuesStraightAhead = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['straight_ahead'] = np.select(conditions, valuesStraightAhead)
+            if self.cmd_vel.iloc[i, 2] > 0.0:
+                rotate_left_list.append(1.0)
+            else:
+                rotate_left_list.append(0.0)
 
-        valuesLeftBack = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
-        self.cmd_vel['left_back'] = np.select(conditions, valuesLeftBack)
+            if self.cmd_vel.iloc[i, 2] < 0.0:
+                rotate_right_list.append(1.0)
+            else:
+                rotate_right_list.append(0.0)
 
-        valuesRightBack = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-        self.cmd_vel['right_back'] = np.select(conditions, valuesRightBack)
+            if self.cmd_vel.iloc[i, 0] > 0.01 and abs(self.cmd_vel.iloc[i, 2]) < 0.01:
+                ahead_straight_list.append(1.0)
+            else:
+                ahead_straight_list.append(0.0)
 
-        valuesStraightBack = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        self.cmd_vel['straight_back'] = np.select(conditions, valuesStraightBack)
+            if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] > 0.0:
+                ahead_left_list.append(1.0)
+            else:
+                ahead_left_list.append(0.0)
 
-        valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-        self.cmd_vel['stop'] = np.select(conditions, valuesStop)
+            if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] < 0.0:
+                ahead_right_list.append(1.0)
+            else:
+                ahead_right_list.append(0.0)
+
+        self.cmd_vel['deviate'] = self.local_plan_deviation
+        self.cmd_vel['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel.shape[0]), columns=['stop'])
+        self.cmd_vel['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel.shape[0]), columns=['linear_positive'])
+        self.cmd_vel['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel.shape[0]), columns=['rotate_left'])
+        self.cmd_vel['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel.shape[0]), columns=['rotate_right'])
+        self.cmd_vel['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_straight'])
+        self.cmd_vel['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_left'])
+        self.cmd_vel['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_right'])
+
+        #print('self.cmd_vel: ', self.cmd_vel)
 
         print('classifier_fn_image ended')
 
-        return np.array(self.cmd_vel.iloc[:, 3:4])
+        return np.array(self.cmd_vel.iloc[:, 3:])
 
     def classifier_fn_image_plot(self):
         '''
@@ -777,6 +934,7 @@ class ExplainRobotNavigation:
                 self.perturbations_visualization = np.concatenate((self.perturbations_visualization, self.sampled_instance[i][:, :, 0]), axis=1)
         self.perturbations_visualization_final = np.concatenate((self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
         '''
+
         '''
         # Save perturbations as .csv file
         for i in range(0, self.sampled_instance.shape[0]):
@@ -798,6 +956,9 @@ class ExplainRobotNavigation:
         # plot every perturbation
         for i in range(0, self.sampled_instance.shape[0]):
 
+            # save current perturbation as .csv file
+            #pd.DataFrame(self.sampled_instance[i][:, :, 0]).to_csv('perturbation_' + str(i) + '.csv', index=False, header=False)
+
             # plot perturbed local costmap
             plt.imshow(self.sampled_instance[i][:, :, 0])
 
@@ -806,8 +967,16 @@ class ExplainRobotNavigation:
             self.local_plan_y_list = []
             for j in range(0, self.local_plans.shape[0]):
                 if self.local_plans.iloc[j, -1] == i:
-                    self.local_plan_x_list.append(int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-                    self.local_plan_y_list.append(int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+                    index_x = int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                    index_y = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                    self.local_plan_x_list.append(index_x)
+                    self.local_plan_y_list.append(index_y)
+                    '''
+                    [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans.iloc[j, 2], self.local_plans.iloc[j, 3])
+                    yaw_x = math.cos(yaw)
+                    yaw_y = math.sin(yaw)
+                    plt.quiver(index_x, index_y, yaw_x, yaw_y, color='white')
+                    '''
             # print('i: ', i)
             # print('self.local_plan_x_list.size(): ', len(self.local_plan_x_list))
             # print('self.local_plan_y_list.size(): ', len(self.local_plan_y_list))
@@ -818,12 +987,45 @@ class ExplainRobotNavigation:
             # plot footprint
             plt.scatter(self.footprint_x_list, self.footprint_y_list, c='green', marker='x')
 
+            '''
+            # plot footprints for first five points of local plan
+            # indices of local plan's poses in local costmap
+            self.footprint_local_plan_x_list = []
+            self.footprint_local_plan_y_list = []
+            self.footprint_local_plan_x_list_angle = []
+            self.footprint_local_plan_y_list_angle = []
+            for j in range(0, self.local_plans.shape[0]):
+                if self.local_plans.iloc[j, -1] == i:
+                    for k in range(6, 7):
+
+                        [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans.iloc[j + k, 2], self.local_plans.iloc[j + k, 3])
+                        sin_th = math.sin(yaw)
+                        cos_th = math.cos(yaw)
+
+                        for l in range(0, self.footprint_tmp.shape[0]):
+                            x_new = self.footprint_tmp.iloc[l, 0] + (self.local_plans.iloc[j + k, 0] - self.odom_x)
+                            y_new = self.footprint_tmp.iloc[l, 1] + (self.local_plans.iloc[j + k, 1] - self.odom_y)
+                            self.footprint_local_plan_x_list.append(int((x_new - self.localCostmapOriginX) / self.localCostmapResolution))
+                            self.footprint_local_plan_y_list.append(int((y_new - self.localCostmapOriginY) / self.localCostmapResolution))
+
+                            x_new = self.local_plans.iloc[j + k, 0] + (self.footprint_tmp.iloc[l, 0] - self.odom_x) * sin_th + (self.footprint_tmp.iloc[l, 1] - self.odom_y) * cos_th
+                            y_new = self.local_plans.iloc[j + k, 1] - (self.footprint_tmp.iloc[l, 0] - self.odom_x) * cos_th + (self.footprint_tmp.iloc[l, 1] - self.odom_y) * sin_th
+                            self.footprint_local_plan_x_list_angle.append(int((x_new - self.localCostmapOriginX) / self.localCostmapResolution))
+                            self.footprint_local_plan_y_list_angle.append(int((y_new - self.localCostmapOriginY) / self.localCostmapResolution))
+                    break
+            #print('self.footprint_local_plan_x_list: ', self.footprint_local_plan_x_list)
+            #print('self.footprint_local_plan_y_list: ', self.footprint_local_plan_y_list)
+            # plot footprints
+            plt.scatter(self.footprint_local_plan_x_list, self.footprint_local_plan_y_list, c='green', marker='x')
+            plt.scatter(self.footprint_local_plan_x_list_angle, self.footprint_local_plan_y_list_angle, c='white', marker='x')
+            '''
+
             # plot local plan
             plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
 
             # plot local plan last point
-            if len(self.local_plan_x_list) != 0:
-                plt.scatter([self.local_plan_x_list[-1]], [self.local_plan_y_list[-1]], c='black', marker='x')
+            #if len(self.local_plan_x_list) != 0:
+            #    plt.scatter([self.local_plan_x_list[-1]], [self.local_plan_y_list[-1]], c='black', marker='x')
 
             # plot robot's location and orientation
             plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
@@ -1013,22 +1215,52 @@ class ExplainRobotNavigation:
             cx, cy = props.centroid  # centroid coordinates
             centers.append([cy, cx])
             plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            plt.text(centers[i][0], centers[i][1], str(v))
-            '''
+            #plt.text(centers[i][0], centers[i][1], str(v))
+            #'''
+            # printing/plotting explanation weights
             for j in range(0, len(self.exp)):
                 if self.exp[j][0] == i:
-                    print('i: ', i)
-                    print('j: ', j)
-                    print('self.exp[j][0]: ', self.exp[j][0])
-                    print('self.exp[j][1]: ', self.exp[j][1])
-                    print('v: ', v)
-                    print('\n')
+                    #print('i: ', i)
+                    #print('j: ', j)
+                    #print('self.exp[j][0]: ', self.exp[j][0])
+                    #print('self.exp[j][1]: ', self.exp[j][1])
+                    #print('v: ', v)
+                    #print('\n')
                     plt.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))  #str(round(self.exp[j][1],4)) #str(v))
                     break
-            '''
+            #'''
             i = i + 1
         # Save segments with nice numbering as a picture
         plt.savefig('testSegmentation_segments.png')
+        plt.clf()
+
+        # plot segments with centroids and labels/weights
+        plt.imshow(self.matrixFlip(segments_1, 'h'))
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            plt.scatter(160 - centers[i][0], centers[i][1], c='white', marker='o')
+            # plt.text(centers[i][0], centers[i][1], str(v))
+            # '''
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == i:
+                    # print('i: ', i)
+                    # print('j: ', j)
+                    # print('self.exp[j][0]: ', self.exp[j][0])
+                    # print('self.exp[j][1]: ', self.exp[j][1])
+                    # print('v: ', v)
+                    # print('\n')
+                    plt.text(160 - centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                    break
+            # '''
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        plt.savefig('flipped_testSegmentation_segments.png')
         plt.clf()
 
         # print explanation
@@ -1039,7 +1271,12 @@ class ExplainRobotNavigation:
 
         return segments_1
 
-
+    def matrixFlip(self, m, d):
+        myl = np.array(m)
+        if d == 'v':
+            return np.flip(myl, axis=0)
+        elif d == 'h':
+            return np.flip(myl, axis=1)
 
 
 
@@ -1161,13 +1398,6 @@ class ExplainRobotNavigation:
             labels = labels[0]
 
         return labels, centroids
-
-    def matrixflip(self, m, d):
-        myl = np.array(m)
-        if d == 'v':
-            return np.flip(myl, axis=0)
-        elif d == 'h':
-            return np.flip(myl, axis=1)
 
     def classifier_fn_tabular(self, sampled_instance):
 
@@ -1358,6 +1588,38 @@ def _supported_float_type(input_dtype, allow_complex=False):
         raise ValueError("complex valued input is not supported")
     return new_float_type.get(input_dtype.char, np.float64)
 
+'''
+conditions = [
+    ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+    ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
+    (abs(self.cmd_vel['cmd_vel_lin_x']) < 0.01)
+]
+
+valuesLeftAhead = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+self.cmd_vel['left_ahead'] = np.select(conditions, valuesLeftAhead)
+
+valuesRightAhead = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+self.cmd_vel['right_ahead'] = np.select(conditions, valuesRightAhead)
+
+valuesStraightAhead = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+self.cmd_vel['straight_ahead'] = np.select(conditions, valuesStraightAhead)
+
+valuesLeftBack = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+self.cmd_vel['left_back'] = np.select(conditions, valuesLeftBack)
+
+valuesRightBack = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+self.cmd_vel['right_back'] = np.select(conditions, valuesRightBack)
+
+valuesStraightBack = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+self.cmd_vel['straight_back'] = np.select(conditions, valuesStraightBack)
+
+valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+self.cmd_vel['stop'] = np.select(conditions, valuesStop)
+'''
 
 '''
 # Other code for dealing with calling other ROS node from this one
@@ -1380,7 +1642,6 @@ launch.start()
 
 #node_process = Popen(shlex.split('rosnode kill /perturb_node_image'))
 '''
-
 
 ''' 
     
