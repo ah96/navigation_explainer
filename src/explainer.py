@@ -207,7 +207,7 @@ from lime_explainer import ExplainNavigation
 expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, 
 amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, mode, explanationMode, expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints)
 
-for i in range(0, 2):
+for i in range(0, 50):
     expID = random.randint(0, local_costmap_info.shape[0])
     for j in range(0, 9):
         expNav.explain_instance(expID, j, i)
