@@ -186,7 +186,7 @@ if explanationMode == 'tabular':
 
 else:
     # optional selection - deterministic
-    #expID = 60
+    expID = 60
 
     # Old datasets	
     # Dataset1:
@@ -196,8 +196,8 @@ else:
     # Dataset HARL Workshop 2021 paper: #71
     
     # random selection
-    import random
-    expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+    #import random
+    #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
     
     output_class_name = cmd_vel.columns.values[0] # [0] - 'cmd_vel_lin_x'  or [1] - ' cmd_vel_ang_z'
 
@@ -207,6 +207,9 @@ from lime_explainer import ExplainNavigation
 expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, 
 amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, mode, explanationMode, expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints)
 
+expNav.explain_instance(expID, -10, -10)
+
+'''
 import time
 
 for i in range(0, 50):
@@ -219,6 +222,7 @@ for i in range(0, 50):
             myfile.write('- ' + str(round(end - start, 4)) + '\n')
     with open("explanations.txt", "a") as myfile:
             myfile.write('\n')
+'''
 
 #expNav.testSegmentation()
 

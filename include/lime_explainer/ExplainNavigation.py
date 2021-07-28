@@ -330,11 +330,11 @@ class ExplainRobotNavigation:
                                                                batch_size=1024, segmentation_fn=segm_fn, top_labels=10, step=step_)
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=6, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
                                                                            min_weight=0.1)  # min_weight=0.1 - default
-
+            '''
             print('self.exp: ', self.exp)
             with open("explanations.txt", "a") as myfile:
                 if step_ == len(self.exp):
@@ -349,6 +349,7 @@ class ExplainRobotNavigation:
                             else:
                                 myfile.write('(' + str(round(self.exp[j][0], 4)) + ',' + str(round(self.exp[j][1], 4)) + '), ')
                 #myfile.write('\n')
+            '''
 
             '''
             print(self.temp_img.shape)

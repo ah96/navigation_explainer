@@ -528,14 +528,14 @@ class LimeImageExplainer(object):
         #pd.DataFrame(data).to_csv('~/amar_ws/data.csv', index=False, header=False)
 
         # evaluation part
-        # '''
+        '''
         if step != n_features and data.shape[0] > 2**step:
             data_copy = copy.deepcopy(data)
             data = data_copy[np.random.choice(len(data_copy), 2**step, replace=False)]
             data[0, :] = 1
             print('NEW_DATA.SHAPE: ', data.shape)
             print('STEP: ', step)
-        #'''
+        '''
 
         imgs = []
         rows = tqdm(data) if progress_bar else data
