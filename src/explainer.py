@@ -3,7 +3,10 @@
 
 # Defining parameters
 
-# possible explanation modes: 'tabular', 'image', 'tabular_costmap'
+# testing type: 'single', 'evaluation'
+testType = 'single'
+
+# possible explanation LIME modes: 'tabular', 'image', 'tabular_costmap'
 explanationMode = 'image'
 
 # possible (tabular explanation) modes: 'regression', 'classification'
