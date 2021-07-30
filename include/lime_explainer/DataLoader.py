@@ -6,7 +6,7 @@ import pandas as pd
 
 # Load output data
 def load_output_data():
-    cmd_vel = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Output/cmd_vel.csv')
+    cmd_vel = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Output/cmd_vel.csv') # consider changing this
     #cmd_vel.head()
     #print(cmd_vel)
 
@@ -63,6 +63,7 @@ def load_input_data():
     map_data = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/map_data.csv', header=None)
     #map_data.head()
     #print(map_data)
+    # drop last column in the map_data - NaN data (',')
     map_data = map_data.iloc[:, :-1]
     #print(map_data)
 

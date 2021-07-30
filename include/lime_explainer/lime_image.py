@@ -53,14 +53,14 @@ class ImageExplanation(object):
             skimage.segmentation.mark_boundaries
         """
 
-        print('get_image_and_mask starting')
+        #print('get_image_and_mask starting')
 
         #'''
         # testing
         import matplotlib.pyplot as plt
         #print('self.local_exp: ', self.local_exp)
         seg_unique = np.unique(self.segments)
-        print('self.segments_unique: ', seg_unique)
+        #print('self.segments_unique: ', seg_unique)
         #'''
 
         if label not in self.local_exp:
@@ -110,7 +110,7 @@ class ImageExplanation(object):
                         temp[segments == f, 0] = 0.0
                         # temp[segments == f, 2] = 0.0
                 mask[segments == f] = 1
-            print('get_image_and_mask ending')
+            #print('get_image_and_mask ending')
             return temp, mask, exp
         if positive_only == False and negative_only == True:
             for f in fs:
@@ -126,7 +126,7 @@ class ImageExplanation(object):
                         temp[segments == f, 1] = 0.0
                         #temp[segments == f, 2] = 0.0
                 mask[segments == f] = 1
-            print('get_image_and_mask ending')
+            #print('get_image_and_mask ending')
             return temp, mask, exp
         else:
             for f, w in exp[:num_features]:
@@ -161,7 +161,7 @@ class ImageExplanation(object):
                         temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
                         temp[segments == f, 2] = 1.0
 
-            print('get_image_and_mask ending')
+            #print('get_image_and_mask ending')
             return temp, mask, exp
 
 
@@ -207,7 +207,7 @@ class LimeImageExplainer(object):
 
     def mySlic(self, img_rgb):
 
-        print('mySlic starts')
+        #print('mySlic starts')
 
         # import needed libraries
         from skimage.segmentation import slic
@@ -248,8 +248,8 @@ class LimeImageExplainer(object):
         '''
         # find segments_unique_1
         segments_unique_1 = np.unique(segments_1)
-        print('segments_unique_1: ', segments_unique_1)
-        print('segments_unique_1.shape: ', segments_unique_1.shape)
+        #print('segments_unique_1: ', segments_unique_1)
+        #print('segments_unique_1.shape: ', segments_unique_1.shape)
 
 
         # Find segments_2
@@ -260,8 +260,8 @@ class LimeImageExplainer(object):
 
         # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
-        print('segments_unique_2: ', segments_unique_2)
-        print('segments_unique_2.shape: ', segments_unique_2.shape)
+        #print('segments_unique_2: ', segments_unique_2)
+        #print('segments_unique_2.shape: ', segments_unique_2.shape)
         # make obstacles on segments_2 nice - not needed
         for i in range(0, segments_1.shape[0]):
             for j in range(0, segments_1.shape[1]):
@@ -286,8 +286,8 @@ class LimeImageExplainer(object):
         '''
         # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
-        print('segments_unique_2: ', segments_unique_2)
-        print('segments_unique_2.shape: ', segments_unique_2.shape)
+        #print('segments_unique_2: ', segments_unique_2)
+        #print('segments_unique_2.shape: ', segments_unique_2.shape)
         #'''
         # Add/Sum segments_1 and segments_2
         for i in range(0, segments_1.shape[0]):
@@ -316,8 +316,8 @@ class LimeImageExplainer(object):
         '''
         # find segments_unique before nice segment numbering
         segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
+        #print('segments_unique: ', segments_unique)
+        #print('segments_unique.shape: ', segments_unique.shape)
 
         # Get nice segments' numbering
         for i in range(0, segments_1.shape[0]):
@@ -328,8 +328,8 @@ class LimeImageExplainer(object):
         # find segments_unique after nice segment numbering
 
         segments_unique = np.unique(segments_1)
-        print('segments_unique (with nice numbering): ', segments_unique)
-        print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
+        #print('segments_unique (with nice numbering): ', segments_unique)
+        #print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
         '''
         # plot segments with centroids and labels/weights
         plt.imshow(segments_1)
@@ -350,7 +350,7 @@ class LimeImageExplainer(object):
         '''
         segments_1 = segments_1 - 1
 
-        print('mySlic ends')
+        #print('mySlic ends')
 
         return segments_1
 
@@ -494,7 +494,7 @@ class LimeImageExplainer(object):
                 labels: prediction probabilities matrix
         """
 
-        print('data_labels starts')
+        #print('data_labels starts')
 
         n_features = np.unique(segments).shape[0]
 
@@ -515,7 +515,7 @@ class LimeImageExplainer(object):
         #print('lst: ', lst)
         #print('len(lst): ', len(lst))
         #print('data: ', data)
-        print('data.shape: ', data.shape)
+        #print('data.shape: ', data.shape)
         #'''
 
         labels = []
@@ -555,6 +555,6 @@ class LimeImageExplainer(object):
             preds = classifier_fn(np.array(imgs))
             labels.extend(preds)
 
-        print('data_labels ends')
+        #print('data_labels ends')
 
         return data, np.array(labels)
