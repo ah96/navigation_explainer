@@ -129,6 +129,7 @@ class ImageExplanation(object):
             #print('get_image_and_mask ending')
             return temp, mask, exp
         else:
+            counter_local = 0
             for f, w in exp[:num_features]:
                 #print('(f, w): ', (f, w))
                 if np.abs(w) < min_weight:
@@ -140,26 +141,28 @@ class ImageExplanation(object):
                 if image[segments == f].all() == 0.0:
                     # if positive weight
                     if c == 1:
-                        temp[segments == f, 1] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 1] = float(np.max(image)) / 2**counter_local # c is channel, RGB - 012
                         temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
                         temp[segments == f, 2] = 0.0
                     # if negative weight
                     else:
-                        temp[segments == f, 0] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
                         temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
                         temp[segments == f, 2] = 0.0
                 # if obstacle
                 else:
                     # if positive weight
                     if c == 1:
-                        temp[segments == f, 1] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 1] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
                         temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
-                        temp[segments == f, 2] = 1.0
+                        temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
                     # if negative weight
                     else:
-                        temp[segments == f, 0] = np.max(image)  # c is channel, RGB - 012
+                        temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
                         temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
-                        temp[segments == f, 2] = 1.0
+                        temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
+
+                counter_local += 1
 
             #print('get_image_and_mask ending')
             return temp, mask, exp
@@ -362,8 +365,7 @@ class LimeImageExplainer(object):
                          distance_metric='cosine',
                          model_regressor=None,
                          random_seed=None,
-                         progress_bar=True,
-                         step=0):
+                         progress_bar=True):
         """Generates explanations for a prediction.
 
         First, we generate neighborhood data by randomly perturbing features
@@ -440,7 +442,7 @@ class LimeImageExplainer(object):
 
         top = labels
 
-        data, labels = self.data_labels(step, image, fudged_image, segments,
+        data, labels = self.data_labels(image, fudged_image, segments,
                                         classifier_fn, num_samples,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
@@ -467,7 +469,6 @@ class LimeImageExplainer(object):
         return ret_exp
 
     def data_labels(self,
-                    step,
                     image,
                     fudged_image,
                     segments,
@@ -527,15 +528,118 @@ class LimeImageExplainer(object):
         #import pandas as pd
         #pd.DataFrame(data).to_csv('~/amar_ws/data.csv', index=False, header=False)
 
-        # evaluation part
-        '''
-        if step != n_features and data.shape[0] > 2**step:
+        imgs = []
+        rows = tqdm(data) if progress_bar else data
+        for row in rows:
+            temp = copy.deepcopy(image)
+            zeros = np.where(row == 0)[0]
+            mask = np.zeros(segments.shape).astype(bool)
+            for z in zeros:
+                mask[segments == z] = True
+            temp[mask] = fudged_image[mask]
+            imgs.append(temp)
+            if len(imgs) == batch_size:
+                preds = classifier_fn(np.array(imgs))
+                labels.extend(preds)
+                imgs = []
+        if len(imgs) > 0:
+            preds = classifier_fn(np.array(imgs))
+            labels.extend(preds)
+
+        #print('data_labels ends')
+
+        return data, np.array(labels)
+
+    def explain_instance_evaluation(self, image, classifier_fn, labels=(1,),
+                         hide_color=None,
+                         top_labels=5, num_features=100000, num_segments=1,
+                         num_segments_current=1,
+                         batch_size=10,
+                         segmentation_fn=None,
+                         distance_metric='cosine',
+                         model_regressor=None,
+                         random_seed=None,
+                         progress_bar=True):
+
+        if len(image.shape) == 2:
+            image = gray2rgb(image)
+        if random_seed is None:
+            random_seed = self.random_state.randint(0, high=1000)
+
+        # my change
+        if segmentation_fn is None:
+            segmentation_fn = SegmentationAlgorithm('quickshift', kernel_size=4,
+                                                    max_dist=200, ratio=0.2,
+                                                    random_seed=random_seed)
+            segments = segmentation_fn(image)
+        elif segmentation_fn == 'custom_segmentation':
+            segments = self.mySlic(image)
+        else:
+            segments = segmentation_fn(image)
+
+        fudged_image = image.copy()
+        if hide_color is None:
+            for x in np.unique(segments):
+                fudged_image[segments == x] = (
+                    np.mean(image[segments == x][:, 0]),
+                    np.mean(image[segments == x][:, 1]),
+                    np.mean(image[segments == x][:, 2]))
+        else:
+            fudged_image[:] = hide_color
+
+        top = labels
+
+        data, labels = self.data_labels_evaluation(image, fudged_image, segments,
+                                        classifier_fn, num_segments, num_segments_current,
+                                        batch_size=batch_size,
+                                        progress_bar=progress_bar)
+
+        distances = sklearn.metrics.pairwise_distances(
+            data,
+            data[0].reshape(1, -1),
+            metric=distance_metric
+        ).ravel()
+
+        ret_exp = ImageExplanation(image, segments)
+        if top_labels:
+            top = np.argsort(labels[0])[-top_labels:]
+            ret_exp.top_labels = list(top)
+            ret_exp.top_labels.reverse()
+        for label in top:
+            (ret_exp.intercept[label],
+             ret_exp.local_exp[label],
+             ret_exp.score[label],
+             ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
+                data, labels, distances, label, num_features,
+                model_regressor=model_regressor,
+                feature_selection=self.feature_selection)
+        return ret_exp
+
+    def data_labels_evaluation(self,
+                    image,
+                    fudged_image,
+                    segments,
+                    classifier_fn,
+                    num_segments,
+                    num_segments_current,
+                    batch_size=10,
+                    progress_bar=True):
+
+        #print('num_segments: ', num_segments)
+        #print('num_segments_current: ', num_segments_current)
+
+        import itertools
+        lst = list(map(list, itertools.product([0, 1], repeat=num_segments)))
+        data = np.array(lst).reshape((2**num_segments, num_segments))
+        data[0, :] = 1
+        data[-1, :] = 0
+
+        labels = []
+
+        if num_segments != num_segments_current:
             data_copy = copy.deepcopy(data)
-            data = data_copy[np.random.choice(len(data_copy), 2**step, replace=False)]
+            data = data_copy[np.random.choice(len(data_copy), 2**num_segments_current, replace=False)]
             data[0, :] = 1
-            print('NEW_DATA.SHAPE: ', data.shape)
-            print('STEP: ', step)
-        '''
 
         imgs = []
         rows = tqdm(data) if progress_bar else data

@@ -134,8 +134,253 @@ class ExplainRobotNavigation:
 
         print('Constructor ending')
 
+    def explain_instance_evaluation(self, expID):
 
-    def explain_instance(self, expID, step_, ID):
+        # Use new variable in the algorithm
+        img = copy.deepcopy(self.image)
+
+        samples_num, segments_num = self.calculateNumOfSamples(img)
+        #print(samples_num)
+
+        # my custom segmentation func
+        segm_fn = 'custom_segmentation'
+
+        import time
+
+        with open("explanations.txt", "a") as myfile:
+            for i in range(segments_num, segments_num + 1):
+                for j in range(0, 1):
+                    start = time.time()
+                    self.explanation = self.explainer.explain_instance_evaluation(img, self.classifier_fn_image,
+                                                                       hide_color=perturb_hide_color,
+                                                                       num_segments=segments_num,
+                                                                       num_segments_current=i,
+                                                                       batch_size=1024, segmentation_fn=segm_fn,
+                                                                       top_labels=10)
+                    end = time.time()
+                    explanation_time = round(end - start, 3)
+                    print('Explanation time: ', explanation_time)
+
+                    start = time.time()
+                    self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
+                                                                                             negative_only=False, num_features=100,
+                                                                                             hide_rest=False,
+                                                                                             min_weight=0.1)  # min_weight=0.1 - default
+                    end = time.time()
+                    explanation_pics_time = round(end - start, 3)
+                    print('Getting explanation pics time: ', explanation_pics_time)
+
+                    start = time.time()
+                    self.plotMinimalEvaluation(2**i)
+                    end = time.time()
+                    plotting_time = round(end - start, 3)
+                    print('Plotting time: ', round(plotting_time, 3))
+
+                    #print(self.exp)
+
+                    myfile.write(str(2**i) + ',' + str(explanation_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
+                    for k in range(0, len(self.exp)):
+                        for l in range(0, len(self.exp)):
+                            if k == self.exp[l][0]:
+                                if k != len(self.exp) - 1:
+                                    myfile.write(str(self.exp[l][1]) + ',')
+                                else:
+                                    myfile.write(str(self.exp[l][1]))
+                                break
+                    myfile.write('\n')
+                myfile.write('\n')
+
+
+        # self.plotExplanation()
+        # self.plotExplanationFlipped()
+
+    def plotMinimalEvaluation(self, num_samples):
+        # make a deepcopy of an image
+        img_ = copy.deepcopy(self.image)
+
+        # Turn gray image to rgb image
+        rgb = gray2rgb(img_)
+
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+
+        # show original image
+        img = rgb[:, :, 0]
+
+        # segments_1 - good obstacles
+        # Find segments_1
+        segments_1 = slic(rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+
+        # Find segments_2
+        segments_2 = slic(rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+
+        segments_unique_2 = np.unique(segments_2)
+        # Creating segments using segments_1 and segments_2
+        #'''
+        # Add/Sum segments_1 and segments_2
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
+                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
+                else:
+                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
+        #'''
+        segments_unique = np.unique(segments_1)
+        # Get nice segments' numbering
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                for k in range(0, segments_unique.shape[0]):
+                    if segments_1[i, j] == segments_unique[k]:
+                        segments_1[i, j] = k + 1
+
+        # plot segments with centroids and labels/weights
+        plt.imshow(self.matrixFlip(segments_1, 'h').astype('uint8'))
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            plt.scatter(160 - centers[i][0], centers[i][1], c='white', marker='o')
+            # plt.text(centers[i][0], centers[i][1], str(v))
+            # '''
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == i:
+                    # print('i: ', i)
+                    # print('j: ', j)
+                    # print('self.exp[j][0]: ', self.exp[j][0])
+                    # print('self.exp[j][1]: ', self.exp[j][1])
+                    # print('v: ', v)
+                    # print('\n')
+                    plt.text(160 - centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                    break
+            # '''
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        plt.savefig('flipped_segments_' + str(num_samples) + '.png')
+        plt.clf()
+
+        # indices of local plan's poses in local costmap
+        self.local_plan_x_list = []
+        self.local_plan_y_list = []
+        for i in range(1, self.local_plan_tmp.shape[0]):
+            self.local_plan_x_list.append(160 - int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+
+        # plot explanation
+        plt.figure()
+        ax = plt.gca()
+        # plot robots' location, orientation and local plan
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
+        ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
+        # transform global plan from /map to /odom frame
+        # rotation matrix
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat(
+            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
+             self.tf_map_odom_tmp.iloc[0, 6]])
+        # print('r: ', r.as_matrix())
+        r_array = np.asarray(r.as_matrix())
+        # print('r_array: ', r_array)
+        # print('r_array.shape: ', r_array.shape)
+        # translation vector
+        t = np.array(
+            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
+        # print('t: ', t)
+        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+        for i in range(0, self.global_plan_tmp.shape[0]):
+            p = np.array(
+                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
+            # print('p: ', p)
+            pnew = p.dot(r_array) + t
+            # print('pnew: ', pnew)
+            plan_tmp_tmp.iloc[i, 0] = pnew[0]
+            plan_tmp_tmp.iloc[i, 1] = pnew[1]
+            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+        # Get coordinates of the global plan in the local costmap
+        # '''
+        self.plan_x_list = []
+        self.plan_y_list = []
+        for i in range(0, plan_tmp_tmp.shape[0], 3):
+            x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159:
+                self.plan_x_list.append(x_temp)
+                self.plan_y_list.append(
+                    int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+        plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        # '''
+        # plot explanation
+        # print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
+        ax.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(
+            round(self.cmd_vel_original_tmp.iloc[1], 2)))
+        ax.set_axis_off()
+        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
+        marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
+        # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
+        ax.imshow(marked_boundaries_flipped.astype('float64'))  # , aspect='auto')
+        plt.savefig('flipped_explanation_' + str(num_samples) + '.png', transparent=False)
+        plt.close()
+
+        '''
+        print('marked_boundaries_flipped.shape: ', marked_boundaries_flipped.shape)
+        #print(type(marked_boundaries_flipped[0, 0, 0]))
+        pd.DataFrame(marked_boundaries_flipped[:, :, 0]).to_csv('~/amar_ws/marked_boundaries_flipped_R.csv', index=False, header=False)
+        pd.DataFrame(marked_boundaries_flipped[:, :, 1]).to_csv('~/amar_ws/marked_boundaries_flipped_G.csv', index=False, header=False)
+        pd.DataFrame(marked_boundaries_flipped[:, :, 2]).to_csv('~/amar_ws/marked_boundaries_flipped_B.csv', index=False, header=False)
+        '''
+
+    def calculateNumOfSamples(self, img):
+
+        # Turn gray image to rgb image
+        img_rgb = gray2rgb(img)
+
+        # segments_1 - good obstacles
+        # Find segments_1
+        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        # find segments_unique_1
+        #segments_unique_1 = np.unique(segments_1)
+        #print('segments_unique_1: ', segments_unique_1)
+        #print('segments_unique_1.shape: ', segments_unique_1.shape)
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        #print('segments_unique_2: ', segments_unique_2)
+        #print('segments_unique_2.shape: ', segments_unique_2.shape)
+
+        # Creating segments using segments_1 and segments_2
+        # '''
+        # Add/Sum segments_1 and segments_2
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
+                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
+                else:
+                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
+        # '''
+        # find segments_unique before nice segment numbering
+        segments_unique = np.unique(segments_1)
+        return 2 ** segments_unique.shape[0], segments_unique.shape[0]
+
+    def explain_instance(self, expID):
         print('explain_instance function starting')
 
         # ordinal number of the instance
@@ -151,36 +396,38 @@ class ExplainRobotNavigation:
             segm_fn = 'custom_segmentation'
 
             self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples,
-                                                               batch_size=1024, segmentation_fn=segm_fn, top_labels=10, step=step_)
+                                                               batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
             #print('self.explanation: ', self.explanation)
 
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=2, positive_only=False,
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
                                                                            min_weight=0.1)  # min_weight=0.1 - default
 
-            # evualuation part
-            if ID >= 0:
-                #'''
-                print('self.exp: ', self.exp)
-                with open("explanations.txt", "a") as myfile:
-                    if step_ == len(self.exp):
-                        myfile.write(str(ID) + ' - ' + str(self.expID) + ' - ' + str(step_) + '* - ')
-                    else:
-                        myfile.write(str(ID) + ' - ' + str(self.expID) + ' - ' + str(step_) + ' - ')
-                    for i in range(0, len(self.exp)):
-                        for j in range(0, len(self.exp)):
-                            if self.exp[j][0] == i:
-                                if i == len(self.exp) - 1:
-                                    myfile.write('(' + str(round(self.exp[j][0], 4)) + ',' + str(round(self.exp[j][1], 4)) + ') ')
-                                else:
-                                    myfile.write('(' + str(round(self.exp[j][0], 4)) + ',' + str(round(self.exp[j][1], 4)) + '), ')
-                    #myfile.write('\n')
-                #'''
-
             self.plotMinimal()
             #self.plotExplanation()
             #self.plotExplanationFlipped()
+
+            '''
+            print('self.temp_img.shape: ', self.temp_img.shape)
+            pd.DataFrame(self.temp_img[:, :, 0]).to_csv('~/amar_ws/temp_img_R.csv', index=False, header=False)
+            pd.DataFrame(self.temp_img[:, :, 1]).to_csv('~/amar_ws/temp_img_G.csv', index=False, header=False)
+            pd.DataFrame(self.temp_img[:, :, 2]).to_csv('~/amar_ws/temp_img_B.csv', index=False, header=False)
+            print('self.mask.shape: ', self.mask.shape)
+            pd.DataFrame(self.mask).to_csv('~/amar_ws/mask.csv', index=False, header=False)
+            '''
+
+            '''
+            # plot image_temp
+            plt.imshow(self.temp_img)
+            plt.savefig('straight_temp_img.png')
+            plt.clf()
+
+            # plot mask
+            plt.imshow(self.mask)
+            plt.savefig('straight_mask.png')
+            plt.clf()
+            '''
 
 
         elif self.explanationMode == 'tabular':
@@ -592,12 +839,20 @@ class ExplainRobotNavigation:
         ax.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(
             round(self.cmd_vel_original_tmp.iloc[1], 2)))
         ax.set_axis_off()
-        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
+        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
         marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
         # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.imshow(marked_boundaries_flipped.astype('uint8'))  # , aspect='auto')
+        ax.imshow(marked_boundaries_flipped.astype('float64'))  # , aspect='auto')
         plt.savefig('flipped_explanation.png', transparent=False)
         plt.close()
+
+        '''
+        print('marked_boundaries_flipped.shape: ', marked_boundaries_flipped.shape)
+        #print(type(marked_boundaries_flipped[0, 0, 0]))
+        pd.DataFrame(marked_boundaries_flipped[:, :, 0]).to_csv('~/amar_ws/marked_boundaries_flipped_R.csv', index=False, header=False)
+        pd.DataFrame(marked_boundaries_flipped[:, :, 1]).to_csv('~/amar_ws/marked_boundaries_flipped_G.csv', index=False, header=False)
+        pd.DataFrame(marked_boundaries_flipped[:, :, 2]).to_csv('~/amar_ws/marked_boundaries_flipped_B.csv', index=False, header=False)
+        '''
 
     def plotExplanation(self):
                 print('plotExplanation starts')

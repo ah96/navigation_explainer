@@ -4,7 +4,7 @@
 # Defining parameters
 
 # testing type: 'single', 'evaluation'
-testType = 'single'
+testType = 'evaluation'
 
 # possible LIME  explanation modes: 'tabular', 'image', 'tabular_costmap'
 explanationMode = 'image'
@@ -214,11 +214,14 @@ expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_globa
 amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, mode, explanationMode, expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints)
 
 if testType == 'single':
-    expNav.explain_instance(expID, -10, -10)
+    expNav.explain_instance(expID)
     #expNav.testSegmentation()
     #expNav.testLocalCostmap()
 
 elif testType == 'evaluation':
+    expNav.explain_instance_evaluation(expID)
+
+    '''
     import time
     for i in range(0, 50):
         expID = random.randint(0, local_costmap_info.shape[0])
@@ -230,6 +233,6 @@ elif testType == 'evaluation':
                 myfile.write('- ' + str(round(end - start, 4)) + '\n')
         with open("explanations.txt", "a") as myfile:
                 myfile.write('\n')
-
+    '''
 
 
