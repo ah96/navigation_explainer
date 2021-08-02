@@ -509,7 +509,7 @@ class ExplainRobotNavigation:
                         segments_1[i, j] = k + 1
 
         # plot segments with centroids and labels/weights
-        plt.imshow(self.matrixFlip(segments_1, 'h'))
+        plt.imshow(self.matrixFlip(segments_1, 'h').astype('uint8'))
         regions = regionprops(segments_1)
         centers = []
         i = 0
@@ -595,7 +595,7 @@ class ExplainRobotNavigation:
         marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
         marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
         # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.imshow(marked_boundaries_flipped)  # , aspect='auto')
+        ax.imshow(marked_boundaries_flipped.astype('uint8'))  # , aspect='auto')
         plt.savefig('flipped_explanation.png', transparent=False)
         plt.close()
 
