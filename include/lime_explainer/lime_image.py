@@ -10,6 +10,7 @@ from sklearn.utils import check_random_state
 from skimage.color import gray2rgb
 from tqdm.auto import tqdm
 
+import time
 
 from . import lime_base
 from .wrappers.scikit_image import SegmentationAlgorithm
@@ -573,7 +574,11 @@ class LimeImageExplainer(object):
                                                     random_seed=random_seed)
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
+            start = time.time()
             segments = self.mySlic(image)
+            end = time.time()
+            segmentation_time = end - start
+            #segmentation_time = round(end - start, 3)
         else:
             segments = segmentation_fn(image)
 
@@ -589,7 +594,7 @@ class LimeImageExplainer(object):
 
         top = labels
 
-        data, labels = self.data_labels_evaluation(image, fudged_image, segments,
+        data, labels, classifier_fn_time, planner_time = self.data_labels_evaluation(image, fudged_image, segments,
                                         classifier_fn, num_segments, num_segments_current,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
@@ -613,7 +618,7 @@ class LimeImageExplainer(object):
                 data, labels, distances, label, num_features,
                 model_regressor=model_regressor,
                 feature_selection=self.feature_selection)
-        return ret_exp
+        return ret_exp, segmentation_time, classifier_fn_time, planner_time
 
     def data_labels_evaluation(self,
                     image,
@@ -652,13 +657,20 @@ class LimeImageExplainer(object):
             temp[mask] = fudged_image[mask]
             imgs.append(temp)
             if len(imgs) == batch_size:
+                #start = time.time()
                 preds = classifier_fn(np.array(imgs))
+                #end = time.time()
+                #classifier_fn_time = round(end - start, 3)
                 labels.extend(preds)
                 imgs = []
         if len(imgs) > 0:
-            preds = classifier_fn(np.array(imgs))
+            start = time.time()
+            preds, planner_time = classifier_fn(np.array(imgs))
+            end = time.time()
+            classifier_fn_time = end - start
+            #classifier_fn_time = round(end - start, 3)
             labels.extend(preds)
 
         #print('data_labels ends')
 
-        return data, np.array(labels)
+        return data, np.array(labels), classifier_fn_time, planner_time

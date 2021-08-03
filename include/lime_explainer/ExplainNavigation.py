@@ -4,6 +4,8 @@
 import lime
 import lime.lime_tabular
 
+import time
+
 # lime image - my implementation
 from lime_explainer import lime_image
 
@@ -147,11 +149,12 @@ class ExplainRobotNavigation:
 
         import time
 
-        with open("explanations.txt", "a") as myfile:
-            for i in range(segments_num, segments_num + 1):
-                for j in range(0, 1):
+        with open("explanations.csv", "w") as myfile:
+            myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
+            for i in range(0, segments_num + 1):
+                for j in range(0, 30):
                     start = time.time()
-                    self.explanation = self.explainer.explain_instance_evaluation(img, self.classifier_fn_image,
+                    self.explanation, segmentation_time, classifier_fn_time, planner_time = self.explainer.explain_instance_evaluation(img, self.classifier_fn_image_evaluation,
                                                                        hide_color=perturb_hide_color,
                                                                        num_segments=segments_num,
                                                                        num_segments_current=i,
@@ -159,7 +162,7 @@ class ExplainRobotNavigation:
                                                                        top_labels=10)
                     end = time.time()
                     explanation_time = round(end - start, 3)
-                    print('Explanation time: ', explanation_time)
+                    #print('Explanation time: ', explanation_time)
 
                     start = time.time()
                     self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
@@ -168,17 +171,21 @@ class ExplainRobotNavigation:
                                                                                              min_weight=0.1)  # min_weight=0.1 - default
                     end = time.time()
                     explanation_pics_time = round(end - start, 3)
-                    print('Getting explanation pics time: ', explanation_pics_time)
+                    #print('Getting explanation pics time: ', explanation_pics_time)
 
                     start = time.time()
                     self.plotMinimalEvaluation(2**i)
                     end = time.time()
                     plotting_time = round(end - start, 3)
-                    print('Plotting time: ', round(plotting_time, 3))
+                    #print('Plotting time: ', round(plotting_time, 3))
 
                     #print(self.exp)
 
-                    myfile.write(str(2**i) + ',' + str(explanation_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
+                    segmentation_time = round(segmentation_time, 3)
+                    classifier_fn_time = round(classifier_fn_time, 3)
+                    planner_time = round(planner_time, 3)
+
+                    myfile.write(str(2**i) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(planner_time) + ',' + str(explanation_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
                     for k in range(0, len(self.exp)):
                         for l in range(0, len(self.exp)):
                             if k == self.exp[l][0]:
@@ -193,6 +200,191 @@ class ExplainRobotNavigation:
 
         # self.plotExplanation()
         # self.plotExplanationFlipped()
+
+    def classifier_fn_image_evaluation(self, sampled_instance):
+
+            print('classifier_fn_image started')
+
+            # sampled_instance info
+            # print('sampled_instance: ', sampled_instance)
+            # print('sampled_instance.shape: ', sampled_instance.shape)
+
+            # '''
+            # I will use channel 0 from sampled_instance as actual perturbed data
+            # Perturbed pixel intensity is perturb_hide_color
+            # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
+            for i in range(0, sampled_instance.shape[0]):
+                for j in range(0, sampled_instance[i].shape[0]):
+                    for k in range(0, sampled_instance[i].shape[1]):
+                        if sampled_instance[i][j, k, 0] == perturb_hide_color:
+                            if self.image[j, k] == 0:
+                                sampled_instance[i][j, k, 0] = 99
+                                # print('free space')
+                            elif self.image[j, k] == 99:
+                                sampled_instance[i][j, k, 0] = 0
+                                # print('obstacle')
+            # '''
+
+            # '''
+            # Save perturbed costmap_data to file got c++ node
+            # sampled_instance = sampled_instance.astype(int)
+            self.costmap_tmp = pd.DataFrame(sampled_instance[0][:, :, 0])
+            for i in range(1, sampled_instance.shape[0]):
+                self.costmap_tmp = pd.concat([self.costmap_tmp, pd.DataFrame(sampled_instance[i][:, :, 0])],
+                                             join='outer', axis=0, sort=False)
+            self.costmap_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', index=False,
+                                    header=False)
+            # print('self.costmap_tmp.shape: ', self.costmap_tmp.shape)
+            # self.costmap_tmp.to_csv('~/amar_ws/costmap_data.csv', index=False, header=False)
+            # '''
+
+            start = time.time()
+
+            # start perturbed_node_image ROS C++ node
+            Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
+
+            # Wait until perturb_node_image is finished
+            rospy.wait_for_service("/perturb_node_image/finished")
+            # print('perturb_node_image finishedn from python')
+
+            # kill ROS node
+            Popen(shlex.split('rosnode kill /perturb_node_image'))
+
+            end = time.time()
+            planner_time = end - start
+
+            # load command velocities
+            self.cmd_vel = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
+            # print('cmd_vel: ', cmd_vel)
+            # print('cmd_vel.shape: ', cmd_vel.shape)
+
+            # load local plans
+            self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
+            # print('local_plans: ', local_plans)
+            # print('local_plans.shape: ', local_plans.shape)
+
+            # load transformed plan
+            self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
+            # print('transformed_plan: ', transformed_plan)
+            # print('transformed_plan.shape: ', transformed_plan.shape)
+
+            self.sampled_instance = sampled_instance
+
+            # self.classifier_fn_image_plot()
+
+            # new output - deviation of the local plan compared to the global plan
+            self.local_plan_deviation = d = pd.DataFrame(1.0, index=np.arange(self.sampled_instance.shape[0]),
+                                                         columns=['deviate'])
+            # print(self.local_plan_deviation)
+
+            transformed_plan_xs = []
+            transformed_plan_ys = []
+            for i in range(0, self.transformed_plan.shape[0]):
+                transformed_plan_xs.append(self.transformed_plan.iloc[i, 0])
+                transformed_plan_ys.append(self.transformed_plan.iloc[i, 1])
+            transformed_plan_xs = np.array(transformed_plan_xs)
+            transformed_plan_ys = np.array(transformed_plan_ys)
+
+            for i in range(0, self.sampled_instance.shape[0]):
+                local_plan_xs = []
+                local_plan_ys = []
+                local_plan_found = False
+                for j in range(0, self.local_plans.shape[0]):
+                    if self.local_plans.iloc[j, -1] == i:
+                        local_plan_found = True
+                        local_plan_xs.append(self.local_plans.iloc[j, 0])
+                        local_plan_ys.append(self.local_plans.iloc[j, 1])
+                if local_plan_found == True:
+                    local_plan_xs = np.array(local_plan_xs)
+                    local_plan_ys = np.array(local_plan_ys)
+                    sum_x = 0
+                    sum_y = 0
+                    if local_plan_xs.shape <= transformed_plan_xs.shape:
+                        for j in range(0, local_plan_xs.shape[0]):
+                            sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                            sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                    else:
+                        for j in range(0, transformed_plan_xs.shape[0]):
+                            sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                            sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                    import math
+                    sum_final = math.sqrt(sum_x + sum_y)
+                    # print('i: ', i)
+                    # print('sum_final: ', sum_final)
+                    if sum_final < 4.0:
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+
+            # print(self.local_plan_deviation)
+
+            # classification
+
+            stop_list = []
+            linear_positive_list = []
+            rotate_left_list = []
+            rotate_right_list = []
+            ahead_straight_list = []
+            ahead_left_list = []
+            ahead_right_list = []
+            for i in range(0, self.cmd_vel.shape[0]):
+                if abs(self.cmd_vel.iloc[i, 0]) < 0.01:
+                    stop_list.append(1.0)
+                else:
+                    stop_list.append(0.0)
+
+                if self.cmd_vel.iloc[i, 0] > 0.01:
+                    linear_positive_list.append(1.0)
+                else:
+                    linear_positive_list.append(0.0)
+
+                if self.cmd_vel.iloc[i, 2] > 0.0:
+                    rotate_left_list.append(1.0)
+                else:
+                    rotate_left_list.append(0.0)
+
+                if self.cmd_vel.iloc[i, 2] < 0.0:
+                    rotate_right_list.append(1.0)
+                else:
+                    rotate_right_list.append(0.0)
+
+                if self.cmd_vel.iloc[i, 0] > 0.01 and abs(self.cmd_vel.iloc[i, 2]) < 0.01:
+                    ahead_straight_list.append(1.0)
+                else:
+                    ahead_straight_list.append(0.0)
+
+                if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] > 0.0:
+                    ahead_left_list.append(1.0)
+                else:
+                    ahead_left_list.append(0.0)
+
+                if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] < 0.0:
+                    ahead_right_list.append(1.0)
+                else:
+                    ahead_right_list.append(0.0)
+
+            self.cmd_vel['deviate'] = self.local_plan_deviation
+            self.cmd_vel['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel.shape[0]),
+                                                columns=['stop'])
+            self.cmd_vel['linear_positive'] = pd.DataFrame(np.array(linear_positive_list),
+                                                           index=np.arange(self.cmd_vel.shape[0]),
+                                                           columns=['linear_positive'])
+            self.cmd_vel['rotate_left'] = pd.DataFrame(np.array(rotate_left_list),
+                                                       index=np.arange(self.cmd_vel.shape[0]), columns=['rotate_left'])
+            self.cmd_vel['rotate_right'] = pd.DataFrame(np.array(rotate_right_list),
+                                                        index=np.arange(self.cmd_vel.shape[0]),
+                                                        columns=['rotate_right'])
+            self.cmd_vel['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list),
+                                                          index=np.arange(self.cmd_vel.shape[0]),
+                                                          columns=['ahead_straight'])
+            self.cmd_vel['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel.shape[0]),
+                                                      columns=['ahead_left'])
+            self.cmd_vel['ahead_right'] = pd.DataFrame(np.array(ahead_right_list),
+                                                       index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_right'])
+
+            # print('self.cmd_vel: ', self.cmd_vel)
+
+            print('classifier_fn_image ended')
+
+            return np.array(self.cmd_vel.iloc[:, 3:]), planner_time
 
     def plotMinimalEvaluation(self, num_samples):
         # make a deepcopy of an image

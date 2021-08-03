@@ -189,7 +189,7 @@ if explanationMode == 'tabular':
 # if LIME image will be used
 elif explanationMode == 'image':
     # optional selection - deterministic
-    expID = 165
+    expID = 60
 
     # Representative situations/costmaps
     # New datasets:
