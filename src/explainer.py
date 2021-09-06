@@ -1,81 +1,125 @@
 #!/usr/bin/env python3
 
+# consider moving explainer.py out of ROS package
 
 # Defining parameters
 
-# testing type: 'single', 'evaluation'
-testType = 'evaluation'
+# test type: 'single', 'evaluation'
+test_type = 'single'
 
-# possible LIME  explanation modes: 'tabular', 'image', 'tabular_costmap'
-explanationMode = 'image'
+# possible explanation algorithms: 'lime', 'shap', 'anchors'
+explanation_alg = 'lime'
 
-# possible LIME tabular explanation modes: 'regression', 'classification'
-mode = 'regression'
+# possible explanation modes: 'tabular', 'image', 'tabular_costmap', 'text'
+explanation_mode = 'image'
 
-# one hot encoding: 'True' or 'False' - needed for LIME tabular classification
+# tabular explanation modes: 'regression', 'classification'
+tabular_mode = 'regression'
+
+# one hot encoding: 'True' or 'False' - needed for tabular classification
 one_hot_encoding = True
 
 # header of the output class/column
 output_class_name = 'beginning' # just to see if it was changed properly
 
-# set number of samples - does not define number of samples in LIME image
+# set number of samples (does not define/affect the number of samples in LIME image)
 num_samples = 256
 
 
 
-# Data loading
-from lime_explainer import DataLoader
 
-# load output data
-cmd_vel = DataLoader.load_output_data()
-#print("output loaded")
+if explanation_alg == 'lime':
 
-#load input data
-odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
-#print("input loaded")
+    # consider moving data DataLoader outside lime
+    # Data loading
+    from lime_explainer import DataLoader
+    
+    # load input data
+    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
+    '''
+    print("---input loaded---")
+    print('\n')
+    '''
 
-# Delete entries with 'None' frame
-# Detect number of entries with 'None' frame based on local_costmap_info
-numOfFirstRowsToDelete = len(local_costmap_info[local_costmap_info['frame'] == 'None'])
-#print(numOfFirstRowsToDelete)
+    # load output data
+    cmd_vel = DataLoader.load_output_data()
+    '''
+    print("---output loaded---")
+    print('\n')
+    '''
 
-# Delete entries with 'None' frame from local_costmap_info
-local_costmap_info.drop(index=local_costmap_info.index[:numOfFirstRowsToDelete], axis=0, inplace=True)
-#print(local_costmap_info)
+    # Delete entries with 'None' frame
+    # Detect number of entries with 'None' frame based on local_costmap_info
+    num_of_first_rows_to_delete = len(local_costmap_info[local_costmap_info['frame'] == 'None'])
+    '''
+    print('num_of_first_rows_to_delete:')
+    print(num_of_first_rows_to_delete)
+    print('\n')
+    '''
 
-# Delete entries with 'None' frame from odom
-odom.drop(index=odom.index[:numOfFirstRowsToDelete], axis=0, inplace=True)
-#print(odom)
+    # Delete entries with 'None' frame from local_costmap_info
+    local_costmap_info.drop(index=local_costmap_info.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
+    '''
+    print('local_costmap_info after deleting entries with None frame:')
+    print(local_costmap_info)
+    print('\n')
+    '''
 
-# Delete entries with 'None' frame from amcl_pose
-amcl_pose.drop(index=amcl_pose.index[:numOfFirstRowsToDelete], axis=0, inplace=True)
-#print(amcl_pose)
+    # Delete entries with 'None' frame from odom
+    odom.drop(index=odom.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
+    '''
+    print('odom after deleting entries with None frame:')
+    print(odom)
+    print('\n')
+    '''
 
-# Delete entries with 'None' frame from cmd_vel
-cmd_vel.drop(index=cmd_vel.index[:numOfFirstRowsToDelete], axis=0, inplace=True)
-#print(cmd_vel)
+    # Delete entries with 'None' frame from amcl_pose
+    amcl_pose.drop(index=amcl_pose.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
+    '''
+    print('amcl_pose after deleting entries with None frame:')
+    print(amcl_pose)
+    print('\n')
+    '''
 
-# Delete entries with 'None' frame from tf_odom_map
-tf_odom_map.drop(index=tf_odom_map.index[:numOfFirstRowsToDelete], axis=0, inplace=True)
-#print(tf_odom_map)
+    # Delete entries with 'None' frame from cmd_vel
+    cmd_vel.drop(index=cmd_vel.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
+    '''
+    print('cmd_vel after deleting entries with None frame:')
+    print(cmd_vel)
+    print('\n')
+    '''
 
-# Delete entries with 'None' frame from tf_map_odom
-tf_map_odom.drop(index=tf_map_odom.index[:numOfFirstRowsToDelete], axis=0, inplace=True)
-#print(tf_map_odom)
+    # Delete entries with 'None' frame from tf_odom_map
+    tf_odom_map.drop(index=tf_odom_map.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
+    '''
+    print('tf_odom_map after deleting entries with None frame:')
+    print(tf_odom_map)
+    print('\n')
+    '''
+
+    # Delete entries with 'None' frame from tf_map_odom
+    tf_map_odom.drop(index=tf_map_odom.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
+    '''
+    print('tf_map_odom after deleting entries with None frame:')
+    print(tf_map_odom)
+    print('\n')
+    '''
+
+    # Deletion of entries with 'None' frame from plans and footprints has not yet been implemented,
+    # because after deleting rows from dataframes, indexes retain their values,
+    # so that further plans' and footprints' instances can be indexed on the same way.
 
 
-# Deletion of entries with 'None' frame from plans and footprints has not yet been implemented,
-# because after deleting rows from dataframes, indexes retain their values,
-# so that further plan and footprintw instances can be indexed in the same way.
+    # Dataset creation
+    X_train = []
+    X_test = []
 
+    # If the LIME tabular is to be used
+    # ' cmd_vel_ang_z' - sometime in the future to correct this gap - delete it
+    if explanation_mode == 'tabular':
 
-# Dataset creation
-X_train = []
-X_test = []
+'''
 
-# If the LIME tabular is to be used
-# ' cmd_vel_ang_z' - sometime in the future to correct this gap - delete it
-if explanationMode == 'tabular':
     from lime_explainer import DatasetCreator
 
     # Select input for explanation algorithm
@@ -147,7 +191,6 @@ if explanationMode == 'tabular':
     X_train, X_test, y_train, y_test = DatasetCreator.split_test_train(X, y, slice_ratio, randomNum) # Row names (indexes) remain preserved even after mixing - very good
 
 
-'''  
     # Ensuring that this data is Dataframes, but not necessary, because they already are. Let it stand here for printing while doing possible debugging process.
     import pandas as pd
     X_train = pd.DataFrame(X_train)
@@ -159,7 +202,6 @@ if explanationMode == 'tabular':
     print(X_test)
     y_test = pd.DataFrame(y_test)
     print(y_test)
-'''
 
 
 # If a LIME image or LIME tabular with costmap as an input will be used
@@ -189,16 +231,17 @@ if explanationMode == 'tabular':
 # if LIME image will be used
 elif explanationMode == 'image':
     # optional selection - deterministic
-    expID = 60
+    expID = 15
 
     # Representative situations/costmaps
     # New datasets:
     # Dataset1: #60, #165
+    # Dataset2: #15 #163, #599
     # Old datasets:
-    # Dataset1:
+    # Dataset1: 163
     # Dataset2:
     # Dataset3:
-    # Dataset4: #100
+    # Dataset4: #100 #190
     # Dataset HARL Workshop 2021 paper: #71
     
     # random selection
@@ -219,9 +262,30 @@ if testType == 'single':
     #expNav.testLocalCostmap()
 
 elif testType == 'evaluation':
-    expNav.explain_instance_evaluation(expID)
+    expID = 15
+    expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
+                                                      current_goal, local_costmap_data, local_costmap_info,
+                                                      amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train,
+                                                      X_test, mode, explanationMode, expID, num_samples,
+                                                      output_class_name, numOfFirstRowsToDelete, footprints)
+    expNav.explain_instance_evaluation(expID, 1)
 
-    '''
+    expID = 163
+    expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
+                                                      current_goal, local_costmap_data, local_costmap_info,
+                                                      amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train,
+                                                      X_test, mode, explanationMode, expID, num_samples,
+                                                      output_class_name, numOfFirstRowsToDelete, footprints)
+    expNav.explain_instance_evaluation(expID, 2)
+
+    expID = 599
+    expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
+                                                      current_goal, local_costmap_data, local_costmap_info,
+                                                      amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train,
+                                                      X_test, mode, explanationMode, expID, num_samples,
+                                                      output_class_name, numOfFirstRowsToDelete, footprints)
+    expNav.explain_instance_evaluation(expID, 3)
+
     import time
     for i in range(0, 50):
         expID = random.randint(0, local_costmap_info.shape[0])
@@ -233,6 +297,6 @@ elif testType == 'evaluation':
                 myfile.write('- ' + str(round(end - start, 4)) + '\n')
         with open("explanations.txt", "a") as myfile:
                 myfile.write('\n')
-    '''
-
+    
+'''
 
