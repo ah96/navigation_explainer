@@ -109,22 +109,60 @@ if explanation_alg == 'lime':
     # because after deleting rows from dataframes, indexes retain their values,
     # so that further plans' and footprints' instances can be indexed on the same way.
 
-
     # Dataset creation
     X_train = []
     X_test = []
 
-    # If the LIME tabular is to be used
-    # ' cmd_vel_ang_z' - sometime in the future to correct this gap - delete it
-    if explanation_mode == 'tabular':
+    # if LIME image will be used
+    if explanation_mode == 'image':
+        # optional instance selection - deterministic
+        expID = 15
+
+        # Representative situations/costmaps
+        # New datasets:
+        # Dataset1: #60, #165
+        # Dataset2: #15 #163, #599
+        # Old datasets:
+        # Dataset1: 163
+        # Dataset2:
+        # Dataset3:
+        # Dataset4: #100 #190
+        # Dataset HARL Workshop 2021 paper: #71
+
+        # random instance selection
+        # import random
+        # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+
+        # output_class_name - not important for LIME image
+        output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - ' cmd_vel_ang_z'
+
+        # Explanation
+        from lime_explainer import ExplainNavigation
+
+        exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
+                                                          current_goal, local_costmap_data, local_costmap_info,
+                                                          amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
+                                                          X_train, X_test, tabular_mode, explanation_mode, expID, num_samples,
+                                                          output_class_name, num_of_first_rows_to_delete, footprints)
+
+        if test_type == 'single':
+            exp_nav.explain_instance(expID)
+            #expNav.testSegmentation()
+            #expNav.testLocalCostmap()
 
 '''
+# Dataset creation
+X_train = []
+X_test = []
 
+# If the LIME tabular is to be used
+# ' cmd_vel_ang_z' - sometime in the future to correct this gap - delete it
+if explanation_mode == 'tabular':
     from lime_explainer import DatasetCreator
-
+    
     # Select input for explanation algorithm
-    X = odom.iloc[:,6:8] # input for explanation are odometry velocities
-    #print(X)
+    X = odom.iloc[:, 6:8]  # input for explanation are odometry velocities
+    # print(X)
 
     if mode == 'regression':
         import numpy as np
@@ -228,38 +266,6 @@ if explanationMode == 'tabular':
     #import random
     #expID = random.randint(0, X_train.shape[0]) # expID se trazi iz X_train
 
-# if LIME image will be used
-elif explanationMode == 'image':
-    # optional selection - deterministic
-    expID = 15
-
-    # Representative situations/costmaps
-    # New datasets:
-    # Dataset1: #60, #165
-    # Dataset2: #15 #163, #599
-    # Old datasets:
-    # Dataset1: 163
-    # Dataset2:
-    # Dataset3:
-    # Dataset4: #100 #190
-    # Dataset HARL Workshop 2021 paper: #71
-    
-    # random selection
-    #import random
-    #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
-    
-    output_class_name = cmd_vel.columns.values[0] # [0] - 'cmd_vel_lin_x'  or [1] - ' cmd_vel_ang_z'
-
-# Explanation
-from lime_explainer import ExplainNavigation
-
-expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, 
-amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, mode, explanationMode, expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints)
-
-if testType == 'single':
-    expNav.explain_instance(expID)
-    #expNav.testSegmentation()
-    #expNav.testLocalCostmap()
 
 elif testType == 'evaluation':
     expID = 15
