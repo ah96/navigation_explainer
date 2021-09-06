@@ -41,9 +41,9 @@ perturb_hide_color = 50
 class ExplainRobotNavigation:
 
     def __init__(self, cmd_vel, odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data,
-                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, modeParam, explanation_mode,
-                 expID, num_samples, output_class_name, numOfFirstRowsToDelete, footprints):
-        print('Constructor starting')
+                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, tabular_mode, explanation_mode,
+                 expID, num_samples, output_class_name, num_of_first_rows_to_delete, footprints):
+        print('Constructor starting\n')
 
         # save variables as class variables
         self.cmd_vel_original = cmd_vel
@@ -61,24 +61,26 @@ class ExplainRobotNavigation:
         self.map_info = map_info
         self.X_train = X_train
         self.X_test = X_test
-        self.mode = modeParam
-        self.explanationMode = explanation_mode
+        self.tabular_mode = tabular_mode
+        self.explanation_mode = explanation_mode
         self.expID = expID
         self.num_samples = num_samples
         self.output_class_name = output_class_name
-        self.offset = numOfFirstRowsToDelete
+        self.offset = num_of_first_rows_to_delete
         self.footprints = footprints
+
+        self.costmap_size = 160
 
         self.printImportantInformation()
 
         # if mode is 'image' - LIME image
-        if self.explanationMode == 'image':
-            self.explainer = lime_image.LimeImageExplainer(verbose=False)
+        if self.explanation_mode == 'image':
+            self.explainer = lime_image.LimeImageExplainer(verbose=True)
             self.index = self.expID
 
             # Get local costmap
             # Original costmap will be saved to self.local_costmap_original
-            self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :] # fix this 160
+            self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * self.costmap_size, :]
 
             '''
             # If a custom costmap is used
@@ -86,7 +88,7 @@ class ExplainRobotNavigation:
             self.local_costmap_original = pd.read_csv('~/amar_ws/costmapToChange.csv')
             '''
 
-            # Make image a np.array deepcopy of local costmap
+            # Make image a np.array deepcopy of local_costmap_original
             self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
             #'''
@@ -109,7 +111,7 @@ class ExplainRobotNavigation:
             self.limeImageSaveData()
 
 
-        elif self.explanationMode == 'tabular':
+        elif self.explanation_mode == 'tabular':
             self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.X_train),
                                                                     feature_names=self.X_train.columns, mode=self.mode,
                                                                     class_names=[output_class_name],
@@ -117,7 +119,7 @@ class ExplainRobotNavigation:
                                                                     discretize_continuous=False,
                                                                     sample_around_instance=False, random_state=None)
 
-        elif self.explanationMode == 'tabular_costmap':
+        elif self.explanation_mode == 'tabular_costmap':
             self.index = self.expID
             img = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :]
             lista = []
@@ -134,9 +136,11 @@ class ExplainRobotNavigation:
                                                                     verbose=True, feature_selection='none',
                                                                     discretize_continuous=False)
 
-        print('Constructor ending')
+        print('Constructor ending\n')
 
-    def explain_instance_evaluation(self, expID):
+    def explain_instance_evaluation(self, expID, ID):
+
+        self.expID = expID
 
         # Use new variable in the algorithm
         img = copy.deepcopy(self.image)
@@ -149,7 +153,7 @@ class ExplainRobotNavigation:
 
         import time
 
-        with open("explanations.csv", "w") as myfile:
+        with open('explanations' + str(ID) + '.csv', "w") as myfile:
             myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
             for i in range(0, segments_num + 1):
                 for j in range(0, 30):
@@ -573,14 +577,10 @@ class ExplainRobotNavigation:
         return 2 ** segments_unique.shape[0], segments_unique.shape[0]
 
     def explain_instance(self, expID):
-        print('explain_instance function starting')
+        print('explain_instance function starting\n')
 
-        # ordinal number of the instance
-        #self.expID = expID
-        #print('self.expID: ', self.expID)
-
-        # if mode is 'image'
-        if self.explanationMode == 'image':
+        # if explanation_mode is 'image'
+        if self.explanation_mode == 'image':
             # Use new variable in the algorithm
             img = copy.deepcopy(self.image)
 
@@ -622,7 +622,7 @@ class ExplainRobotNavigation:
             '''
 
 
-        elif self.explanationMode == 'tabular':
+        elif self.explanation_mode == 'tabular':
             # search for instance queue index (original instance queue name in almost (haman) input data frames)
             self.index = self.X_train.index.values[self.expID]
             print('self.index: ', self.index)
@@ -637,7 +637,7 @@ class ExplainRobotNavigation:
             plt.savefig('explanation.png')
 
 
-        elif self.explanationMode == 'tabular_costmap':
+        elif self.explanation_mode == 'tabular_costmap':
             self.explanation = self.explainer.explain_instance(data_row=self.tabular_costmap,
                                                                predict_fn=self.classifier_fn_tabular_costmap,
                                                                num_samples=self.num_samples,
@@ -789,12 +789,13 @@ class ExplainRobotNavigation:
     def printImportantInformation(self):
         #'''
         # print important information
-        print('self.mode: ', self.mode)
-        print('self.explanationMode: ', self.explanationMode)
+        print('self.explanation_mode: ', self.explanation_mode)
+        print('self.tabular_mode: ', self.tabular_mode)
         print('self.expID: ', self.expID)
         print('self.num_samples: ', self.num_samples)
         print('self.output_class_name: ', self.output_class_name)
         print('self.offset: ', self.offset)
+        print('\n')
         #'''
 
     def PFP2PO(self):
