@@ -4,8 +4,8 @@
 
 # Defining parameters
 
-# test type: 'single', 'evaluation'
-test_type = 'single'
+# test type: 'single', 'evaluation', 'dataset_creation'
+test_type = 'dataset_creation'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -24,6 +24,8 @@ output_class_name = 'beginning' # just to see if it was changed properly
 
 # set number of samples (does not define/affect the number of samples in LIME image)
 num_samples = 256
+
+costmap_size = 160
 
 
 
@@ -113,26 +115,8 @@ if explanation_alg == 'lime':
     X_train = []
     X_test = []
 
-    # if LIME image will be used
+    # if LIME image
     if explanation_mode == 'image':
-        # optional instance selection - deterministic
-        expID = 15
-
-        # Representative situations/costmaps
-        # New datasets:
-        # Dataset1: #60, #165
-        # Dataset2: #15 #163, #599
-        # Old datasets:
-        # Dataset1: 163
-        # Dataset2:
-        # Dataset3:
-        # Dataset4: #100 #190
-        # Dataset HARL Workshop 2021 paper: #71
-
-        # random instance selection
-        # import random
-        # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
-
         # output_class_name - not important for LIME image
         output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - ' cmd_vel_ang_z'
 
@@ -142,13 +126,56 @@ if explanation_alg == 'lime':
         exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                           current_goal, local_costmap_data, local_costmap_info,
                                                           amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                          X_train, X_test, tabular_mode, explanation_mode, expID, num_samples,
-                                                          output_class_name, num_of_first_rows_to_delete, footprints)
+                                                          X_train, X_test, tabular_mode, explanation_mode, num_samples,
+                                                          output_class_name, num_of_first_rows_to_delete, footprints, test_type, costmap_size)
+
+        # Representative situations/costmaps
+        # New datasets:
+        # Dataset1: #60, #165
+        # Dataset2: #15 # 78 #163, #599
+        # Old datasets:
+        # Dataset1: 163
+        # Dataset2:
+        # Dataset3:
+        # Dataset4: #100 #190
+        # Dataset HARL Workshop 2021 paper: #71
 
         if test_type == 'single':
+            # optional instance selection - deterministic
+            expID = 15
+
+            # random instance selection
+            # import random
+            # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+
             exp_nav.explain_instance(expID)
             #expNav.testSegmentation()
             #expNav.testLocalCostmap()
+
+        elif test_type == 'dataset_creation':
+            dataset_size = 7
+            for i in range(0, dataset_size):
+                # optional instance selection - deterministic
+                #expID = 78
+
+                # random instance selection
+                import random
+                expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+
+                exp_nav.explain_instance_dataset(expID, i)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 '''
 # Dataset creation
