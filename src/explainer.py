@@ -153,16 +153,16 @@ if explanation_alg == 'lime':
             #expNav.testLocalCostmap()
 
         elif test_type == 'dataset_creation':
-            dataset_size = 7
-            for i in range(0, dataset_size):
+            dataset_size = 1000
+            for i in range(85, dataset_size):
                 # optional instance selection - deterministic
                 #expID = 78
 
                 # random instance selection
-                import random
-                expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+                #import random
+                #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
-                exp_nav.explain_instance_dataset(expID, i)
+                exp_nav.explain_instance_dataset(i, i)
 
 
 
