@@ -156,7 +156,7 @@ class ExplainRobotNavigation:
 
             # Get local costmap
             # Original costmap will be saved to self.local_costmap_original
-            self.local_costmap_original = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * self.costmap_size, :]
+            self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
 
             '''
             # If a custom costmap is used
