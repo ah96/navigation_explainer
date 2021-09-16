@@ -522,9 +522,16 @@ class ExplainRobotNavigation:
         plt.clf()
 
         # plot costmap
-        plt.figure()
-        ax = plt.gca()
+        fig = plt.figure(figsize=[1.6, 1.6], frameon=False)
+        fig.set_size_inches(1.6, 1.6)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
+        fig.add_axes(ax)
+
+        #ax = plt.gca()
+        #ax.set_axis_off()
+        print('self.plan_x_list: ', self.plan_x_list)
+        print('self.plan_y_list: ', self.plan_y_list)
         # Plot coordinates of the global plan in the local costmap
         plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
         # plot robots' location, orientation and local plan
@@ -533,10 +540,14 @@ class ExplainRobotNavigation:
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         # make a deepcopy of an image
         img_ = copy.deepcopy(self.image)
+        print('img_.shape: ', img_.shape)
+        import matplotlib
+        #matplotlib.image.imsave('slika.png', img_)
         # plot segments with centroids and labels/weights
-        plt.imshow(self.matrixFlip(img_, 'h').astype('uint8'))
+        ax.imshow(self.matrixFlip(img_, 'h').astype('uint8'), aspect='auto')
+        #plt.show()
         # Save segments with nice numbering as a picture
-        plt.savefig(str(iteration_ID) + '_input' + '.png')
+        fig.savefig(str(iteration_ID) + '_input' + '.png')
         plt.clf()
 
 
