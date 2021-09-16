@@ -154,7 +154,7 @@ if explanation_alg == 'lime':
 
         elif test_type == 'dataset_creation':
             dataset_size = 1000
-            for i in range(85, dataset_size):
+            for i in range(60, 61):
                 # optional instance selection - deterministic
                 #expID = 78
 
