@@ -4,8 +4,8 @@
 
 # Defining parameters
 
-# test type: 'single', 'evaluation', 'dataset_creation'
-test_type = 'dataset_creation'
+# test type: 'single', 'evaluation', 'dataset_creation', 'single_pix2pix_GAN'
+test_type = 'single_pix2pix_GAN'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -26,6 +26,22 @@ output_class_name = 'beginning' # just to see if it was changed properly
 num_samples = 256
 
 costmap_size = 160
+
+import math
+
+
+def quaternion_to_euler(x, y, z, w):
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+    return [yaw, pitch, roll]
 
 
 
@@ -163,6 +179,154 @@ if explanation_alg == 'lime':
                 #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
                 exp_nav.explain_instance_dataset(i, i)
+
+        elif test_type == 'single_pix2pix_GAN':
+            # optional instance selection - deterministic
+            expID = 15
+
+            # random instance selection
+            # import random
+            # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+
+            index = expID
+            offset = num_of_first_rows_to_delete
+            costmap_size = 160
+
+            # Get local costmap
+            # Original costmap will be saved to self.local_costmap_original
+            local_costmap_original = local_costmap_data.iloc[(index) * costmap_size:(index + 1) * costmap_size, :]
+            # Make image a np.array deepcopy of local_costmap_original
+            import numpy as np
+            import copy
+            image = np.array(copy.deepcopy(local_costmap_original))
+
+            # '''
+            # Turn inflated area to free space and 100s to 99s
+            for i in range(0, image.shape[0]):
+                for j in range(0, image.shape[1]):
+                    if 99 > image[i, j] > 0:
+                        image[i, j] = 0
+                    elif image[i, j] == 100:
+                        image[i, j] = 99
+            # '''
+
+            # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
+            image = image * 1.0
+            image_flipped = np.flip(image, axis=1)
+
+            import matplotlib.pyplot as plt
+            plt.figure()
+            ax = plt.gca()
+            ax.set_axis_off()
+            ax.imshow(image_flipped.astype('float64'))  # , aspect='auto')
+
+            import pandas as pd
+
+            costmap_info_tmp = local_costmap_info.iloc[index, :]
+            costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
+            costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
+
+            # save costmap info to class variables
+            localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
+            localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
+            localCostmapResolution = costmap_info_tmp.iloc[0, 0]
+            localCostmapHeight = costmap_info_tmp.iloc[0, 2]
+            localCostmapWidth = costmap_info_tmp.iloc[0, 1]
+
+            odom_tmp = odom.iloc[index, :]
+            odom_tmp = pd.DataFrame(odom_tmp).transpose()
+            odom_tmp = odom_tmp.iloc[:, 2:]
+            # save robot odometry location to class variables
+            odom_x = odom_tmp.iloc[0, 0]
+            odom_y = odom_tmp.iloc[0, 1]
+
+            # save indices of robot's odometry location in local costmap to class variables
+            localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
+            localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
+
+            # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
+            x_odom_index = [localCostmapIndex_x_odom]
+            y_odom_index = [localCostmapIndex_y_odom]
+
+            # save robot odometry orientation to class variables
+            odom_z = odom_tmp.iloc[0, 2]
+            odom_w = odom_tmp.iloc[0, 3]
+            # calculate Euler angles based on orientation quaternion
+            [yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+            # find yaw angles projections on x and y axes and save them to class variables
+            yaw_odom_x = math.cos(yaw_odom)
+            yaw_odom_y = math.sin(yaw_odom)
+            
+            # plot robots' location, orientation and local plan
+            ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
+            ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
+
+            local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
+            local_plan_tmp = local_plan_tmp.iloc[:, 1:]
+            # indices of local plan's poses in local costmap
+            local_plan_x_list = []
+            local_plan_y_list = []
+            for i in range(1, local_plan_tmp.shape[0]):
+                local_plan_x_list.append(160 - int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution))
+                local_plan_y_list.append(int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution))
+            ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
+
+            tf_map_odom_tmp = tf_map_odom.iloc[index, :]
+            tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
+
+            # transform global plan from /map to /odom frame
+            # rotation matrix
+            from scipy.spatial.transform import Rotation as R
+
+            r = R.from_quat(
+                [tf_map_odom_tmp.iloc[0, 3], tf_map_odom_tmp.iloc[0, 4], tf_map_odom_tmp.iloc[0, 5],
+                 tf_map_odom_tmp.iloc[0, 6]])
+            # print('r: ', r.as_matrix())
+            r_array = np.asarray(r.as_matrix())
+            # print('r_array: ', r_array)
+            # print('r_array.shape: ', r_array.shape)
+            # translation vector
+            t = np.array(
+                [tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
+            # print('t: ', t)
+            global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
+            global_plan_tmp = global_plan_tmp.iloc[:, 1:]
+            plan_tmp_tmp = copy.deepcopy(global_plan_tmp)
+            for i in range(0, global_plan_tmp.shape[0]):
+                p = np.array(
+                    [global_plan_tmp.iloc[i, 0], global_plan_tmp.iloc[i, 1], global_plan_tmp.iloc[i, 2]])
+                # print('p: ', p)
+                pnew = p.dot(r_array) + t
+                # print('pnew: ', pnew)
+                plan_tmp_tmp.iloc[i, 0] = pnew[0]
+                plan_tmp_tmp.iloc[i, 1] = pnew[1]
+                plan_tmp_tmp.iloc[i, 2] = pnew[2]
+
+            # Get coordinates of the global plan in the local costmap
+            # '''
+            plan_x_list = []
+            plan_y_list = []
+            for i in range(0, plan_tmp_tmp.shape[0], 3):
+                x_temp = 160 - int(
+                    (plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                if 0 <= x_temp <= 159:
+                    plan_x_list.append(x_temp)
+                    plan_y_list.append(
+                        int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution))
+            plt.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
+            # '''
+
+            plt.savefig('input.png', transparent=False)
+            plt.close()
+            plt.clf()
+
+            from models import create_model
+            #model = create_model(opt)  # create a model given opt.model and other options
+            #model.setup(opt)  # regular setup: load and print networks; create schedulers
+            #model.set_input(data)  # unpack data from data loader
+            #model.test()  # run inference
+            #visuals = model.get_current_visuals()  # get image results
+            #img_path = model.get_image_paths()  # get image paths
 
 
 
