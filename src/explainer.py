@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
-# consider moving explainer.py out of ROS package
+# Defining parameters - global variables
 
-# Defining parameters
-
-# test type: 'single', 'evaluation', 'dataset_creation', 'single_pix2pix_GAN'
-test_type = 'single_pix2pix_GAN'
+# test type: 'single', 'evaluation', 'dataset_creation', 'GAN'
+test_type = 'single'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -16,19 +14,19 @@ explanation_mode = 'image'
 # tabular explanation modes: 'regression', 'classification'
 tabular_mode = 'regression'
 
-# one hot encoding: 'True' or 'False' - needed for tabular classification
+# one hot encoding: 'True' or 'False' - for tabular classification
 one_hot_encoding = True
 
 # header of the output class/column
-output_class_name = 'beginning' # just to see if it was changed properly
+#output_class_name = 'beginning'
 
 # set number of samples (does not define/affect the number of samples in LIME image)
 num_samples = 256
 
+# size of the one dimension of a local costmap
 costmap_size = 160
 
 import math
-
 
 def quaternion_to_euler(x, y, z, w):
     t0 = +2.0 * (w * x + y * z)
@@ -43,29 +41,7 @@ def quaternion_to_euler(x, y, z, w):
     yaw = math.atan2(t3, t4)
     return [yaw, pitch, roll]
 
-
-
-
-if explanation_alg == 'lime':
-
-    # consider moving data DataLoader outside lime
-    # Data loading
-    from lime_explainer import DataLoader
-    
-    # load input data
-    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
-    '''
-    print("---input loaded---")
-    print('\n')
-    '''
-
-    # load output data
-    cmd_vel = DataLoader.load_output_data()
-    '''
-    print("---output loaded---")
-    print('\n')
-    '''
-
+def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom):
     # Delete entries with 'None' frame
     # Detect number of entries with 'None' frame based on local_costmap_info
     num_of_first_rows_to_delete = len(local_costmap_info[local_costmap_info['frame'] == 'None'])
@@ -127,6 +103,33 @@ if explanation_alg == 'lime':
     # because after deleting rows from dataframes, indexes retain their values,
     # so that further plans' and footprints' instances can be indexed on the same way.
 
+    return num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom
+
+
+
+
+if explanation_alg == 'lime':
+
+    # consider moving data DataLoader outside lime
+    # Data loading
+    from lime_explainer import DataLoader
+    
+    # load input data
+    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
+    '''
+    print("---input loaded---")
+    print('\n')
+    '''
+
+    # load output data
+    cmd_vel = DataLoader.load_output_data()
+    '''
+    print("---output loaded---")
+    print('\n')
+    '''
+
+    num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom)
+    
     # Dataset creation
     X_train = []
     X_test = []
@@ -150,7 +153,7 @@ if explanation_alg == 'lime':
         # Dataset1: #60, #165
         # Dataset2: #15 # 78 #163, #599
         # Old datasets:
-        # Dataset1: 163
+        # Dataset1: #163
         # Dataset2:
         # Dataset3:
         # Dataset4: #100 #190
@@ -158,7 +161,7 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            expID = 15
+            expID = 60
 
             # random instance selection
             # import random
@@ -180,7 +183,7 @@ if explanation_alg == 'lime':
 
                 exp_nav.explain_instance_dataset(i, i)
 
-        elif test_type == 'single_pix2pix_GAN':
+        elif test_type == 'GAN':
             # optional instance selection - deterministic
             expID = 15
 
