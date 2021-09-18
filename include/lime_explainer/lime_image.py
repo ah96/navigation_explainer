@@ -94,7 +94,7 @@ class ImageExplanation(object):
             #temp[segments == 1] = 0.0
         if positive_only:
             fs = [x[0] for x in exp if x[1] > 0 and x[1] > min_weight][:num_features]
-            print('fs: ', fs)
+            #print('fs: ', fs)
         if negative_only:
             fs = [x[0] for x in exp if x[1] < 0 and abs(x[1]) > min_weight][:num_features]
         if positive_only == True and negative_only == False:

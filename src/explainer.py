@@ -2,8 +2,8 @@
 
 # Defining parameters - global variables
 
-# test type: 'single', 'evaluation', 'dataset_creation', 'GAN'
-test_type = 'single'
+# test type: 'single', 'dataset_creation', 'GAN'
+test_type = 'dataset_creation'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -171,10 +171,10 @@ if explanation_alg == 'lime':
             #exp_nav.testSegmentation(expID)
 
         elif test_type == 'dataset_creation':
-            dataset_size = 1000
+            #dataset_size = 1000
             for i in range(60, 61):
                 # optional instance selection - deterministic
-                #expID = 78
+                #expID = 60
 
                 # random instance selection
                 #import random
