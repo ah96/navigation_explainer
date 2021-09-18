@@ -184,8 +184,12 @@ if explanation_alg == 'lime':
 
         elif test_type == 'evaluation':
             import time
-            evaluation_size = 1
-            for i in range(0, evaluation_size):
+            evaluation_sample_size = 1
+            
+            with open("explanations.txt", "w") as myfile:
+                        myfile.write('explain_instance_time\n')
+            
+            for i in range(0, evaluation_sample_size):
                 # optional instance selection - deterministic
                 expID = 60
 
@@ -193,15 +197,11 @@ if explanation_alg == 'lime':
                 # import random
                 # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
-                for j in range(0, 3):
-                    start = time.time()
-                    exp_nav.explain_instance_evaluation(expID, j)
-                    end = time.time()
-                    with open("explanations.txt", "a") as myfile:
-                        myfile.write('- ' + str(round(end - start, 4)) + '\n')
-                
+                start = time.time()
+                exp_nav.explain_instance_evaluation(expID, i)
+                end = time.time()
                 with open("explanations.txt", "a") as myfile:
-                        myfile.write('\n')        
+                    myfile.write(str(round(end - start, 4)) + '\n')
 
         elif test_type == 'GAN':
             # optional instance selection - deterministic
