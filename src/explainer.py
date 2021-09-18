@@ -168,7 +168,7 @@ if explanation_alg == 'lime':
             # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
             exp_nav.explain_instance(expID)
-            #expNav.testSegmentation()
+            #exp_nav.testSegmentation(expID)
 
         elif test_type == 'dataset_creation':
             dataset_size = 1000

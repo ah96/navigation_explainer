@@ -102,6 +102,26 @@ class ExplainRobotNavigation:
 
         print('Constructor ending\n')
 
+    def matrixFlip(self, m, d):
+        myl = np.array(m)
+        if d == 'v':
+            return np.flip(myl, axis=0)
+        elif d == 'h':
+            return np.flip(myl, axis=1)
+
+    def quaternion_to_euler(self, x, y, z, w):
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll = math.atan2(t0, t1)
+        t2 = +2.0 * (w * y - z * x)
+        t2 = +1.0 if t2 > +1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch = math.asin(t2)
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw = math.atan2(t3, t4)
+        return [yaw, pitch, roll]
+
     def printImportantInformation(self):
         # print important information
 
@@ -1373,6 +1393,292 @@ class ExplainRobotNavigation:
         # https://stackoverflow.com/questions/8218608/scipy-savefig-without-frames-axes-only-content        
         '''
 
+    def mySlicTest(self, img_rgb):
+
+        print('mySlic for testSegmentation starts')
+
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+
+        # show original image
+        img = img_rgb[:, :, 0]
+        # Save picture for segmenting
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(img, aspect='auto')
+        fig.savefig('testSegmentation_img.png')
+        fig.clf()
+
+        # segments_1 - good obstacles
+        # Find segments_1
+        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        # plot segments_1 with centroids and labels
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
+            plt.text(centers[i][0], centers[i][1], str(v))
+            i = i + 1
+        # Save segments_1 as a picture
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1, aspect='auto')
+        fig.savefig('testSegmentation_segments_1.png')
+        fig.clf()
+        # find segments_unique_1
+        segments_unique_1 = np.unique(segments_1)
+        print('segments_unique_1: ', segments_unique_1)
+        print('segments_unique_1.shape: ', segments_unique_1.shape)
+
+        # Find segments_2
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        '''
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        print('segments_unique_2: ', segments_unique_2)
+        print('segments_unique_2.shape: ', segments_unique_2.shape)
+        # make obstacles on segments_2 nice - not needed
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 99:
+                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
+        '''
+        # plot segments_2 with centroids and labels
+        regions = regionprops(segments_2)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
+            ax.text(centers[i][0], centers[i][1], str(v))
+            i = i + 1
+        # Save segments_2 as a picture
+        ax.imshow(segments_2, aspect='auto')
+        fig.savefig('testSegmentation_segments_2.png')
+        fig.clf()
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        print('segments_unique_2: ', segments_unique_2)
+        print('segments_unique_2.shape: ', segments_unique_2.shape)
+
+        # Creating segments using segments_1 and segments_2
+        #'''
+        # Add/Sum segments_1 and segments_2
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
+                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
+                else:
+                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
+        #'''
+        # plot segments with centroids and labels/weights
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1, aspect='auto')
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
+            ax.text(centers[i][0], centers[i][1], str(v))
+            i = i + 1
+        # Save segments as a picture before nice segment numbering
+        fig.savefig('testSegmentation_segments_beforeNiceNumbering.png')
+        fig.clf()
+        # find segments_unique before nice segment numbering
+        segments_unique = np.unique(segments_1)
+        print('segments_unique: ', segments_unique)
+        print('segments_unique.shape: ', segments_unique.shape)
+
+        # Get nice segments' numbering
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                for k in range(0, segments_unique.shape[0]):
+                    if segments_1[i, j] == segments_unique[k]:
+                        segments_1[i, j] = k + 1
+        # find segments_unique after nice segment numbering
+        segments_unique = np.unique(segments_1)
+        print('segments_unique (with nice numbering): ', segments_unique)
+        print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
+        # plot segments with centroids and labels/weights
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1, aspect='auto')
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
+            #plt.text(centers[i][0], centers[i][1], str(v))
+            #'''
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == i:
+                    #print('i: ', i)
+                    #print('j: ', j)
+                    #print('self.exp[j][0]: ', self.exp[j][0])
+                    #print('self.exp[j][1]: ', self.exp[j][1])
+                    #print('v: ', v)
+                    #print('\n')
+                    ax.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))  #str(round(self.exp[j][1],4)) #str(v))
+                    break
+            #'''
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        fig.savefig('testSegmentation_segments.png')
+        fig.clf()
+
+        # plot segments with centroids and labels/weights
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.matrixFlip(segments_1, 'h'), aspect='auto')
+        regions = regionprops(segments_1)
+        centers = []
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            centers.append([cy, cx])
+            ax.scatter(160 - centers[i][0], centers[i][1], c='white', marker='o')
+            # plt.text(centers[i][0], centers[i][1], str(v))
+            # '''
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == i:
+                    # print('i: ', i)
+                    # print('j: ', j)
+                    # print('self.exp[j][0]: ', self.exp[j][0])
+                    # print('self.exp[j][1]: ', self.exp[j][1])
+                    # print('v: ', v)
+                    # print('\n')
+                    ax.text(160 - centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                    break
+            # '''
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        fig.savefig('flipped_testSegmentation_segments.png')
+        fig.clf()
+
+        # print explanation
+        #print('self.exp: ', self.exp)
+        #print('len(self.exp): ', len(self.exp))
+
+        print('mySlic for testSegmentation ends')
+
+        return segments_1
+
+    def testSegmentation(self, expID):
+
+        print('Test segmentation function beginning')
+
+        # Make image a np.array deepcopy of local_costmap_original
+        img_ = copy.deepcopy(self.image)
+
+        # Save local costmap as gray image
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(img_, aspect='auto')
+        fig.savefig('testSegmentation_image_gray.png')
+        fig.clf()
+
+        # Turn gray image to rgb image
+        rgb = gray2rgb(img_)
+
+        # Save local costmap as rgb image
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(rgb, aspect='auto')
+        fig.savefig('testSegmentation_image_rgb.png')
+        fig.clf()
+
+        # Superpixel segmentation with skimage functions
+
+        # felzenszwalb
+        #segments = felzenszwalb(rgb, scale=100, sigma=5, min_size=30, multichannel=True)
+        #segments = felzenszwalb(rgb, scale=1, sigma=0.8, min_size=20, multichannel=True)  # default
+
+        # quickshift
+        #segments = quickshift(rgb, ratio=0.0001, kernel_size=8, max_dist=10, return_tree=False, sigma=0.0, convert2lab=True, random_seed=42)
+        #segments = quickshift(rgb, ratio=1.0, kernel_size=5, max_dist=10, return_tree=False, sigma=0, convert2lab=True, random_seed=42) # default
+
+        # slic
+        #segments = slic(rgb, n_segments=6, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=5, slic_zero=False, start_label=None, mask=None)
+        #segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
+
+        # Turn segments gray image to rgb image
+        #segments_rgb = gray2rgb(segments)
+
+        # Generate segments - superpixels with my slic function
+        segments = self.mySlicTest(rgb)
+
+        # Save segments to .csv file
+        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
+
+        print('Test segmentation function ending')
+
     def explain_instance(self, expID):
         print('explain_instance function starting\n')
 
@@ -1433,9 +1739,9 @@ class ExplainRobotNavigation:
                                                                            min_weight=0.1)  # min_weight=0.1 - default
 
             #self.plotExplanationMinimal()
-            #self.plotExplanationMinimalFlipped()
+            self.plotExplanationMinimalFlipped()
             #self.plotExplanation()
-            self.plotExplanationFlipped()
+            #self.plotExplanationFlipped()
 
 
         elif self.explanation_mode == 'tabular':
@@ -1625,65 +1931,6 @@ class ExplainRobotNavigation:
         # Save segments with nice numbering as a picture
         fig.savefig(str(iteration_ID) + '_input' + '.png')
         plt.clf()
-    
-    def testLocalCostmap(self):
-        img = np.array(self.local_costmap_original)
-
-        plt.imshow(img)
-        plt.savefig('local_costmap_original.png')
-        plt.clf()
-
-        # fill -1 with 100
-        map_tmp = copy.deepcopy(self.map_data)
-        for i in range(0, map_tmp.shape[0]):
-            for j in range(0, map_tmp.shape[1]):
-                if map_tmp.iloc[i, j] == -1:
-                    map_tmp.iloc[i, j] = 100
-
-        # transform 99s from local costmap to /odom location and then from /odom to /map frame
-        for i in range(self.local_costmap_original.shape[0]):
-            print(i)
-            for j in range(self.local_costmap_original.shape[1]):
-                if self.local_costmap_original.iloc[i, j] == 99:
-                    # convert point obstacle to /odom location
-                    x_odom_temp = i * self.localCostmapResolution + self.localCostmapOriginX
-                    y_odom_temp = j * self.localCostmapResolution + self.localCostmapOriginY
-
-                    # convert point obstacle location from /odom to /map
-                    # rotation matrix
-                    from scipy.spatial.transform import Rotation as R
-                    r = R.from_quat(
-                        [self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4],
-                         self.tf_odom_map_tmp.iloc[0, 5], self.tf_odom_map_tmp.iloc[0, 6]])
-                    #print('r: ', r.as_matrix())
-                    r_array = np.asarray(r.as_matrix())
-                    #print('r_array: ', r_array)
-                    #print('r_array.shape: ', r_array.shape)
-                    # translation vector
-                    t = np.array([self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
-                    #print('t: ', t)
-                    # point in /odom frame
-                    p_odom = np.array([x_odom_temp, y_odom_temp, 0.0])
-                    #print('p_odom: ', p_odom)
-                    # point in /map frame
-                    p_map = p_odom.dot(r_array) + t
-                    #print('p_map: ', p_map)
-
-                    # get map indices
-                    x_map_index = int((p_map[0] - self.mapOriginX) / self.mapResolution)
-                    y_map_index = int((p_map[1] - self.mapOriginY) / self.mapResolution)
-                    if map_tmp.iloc[x_map_index, y_map_index] != 100:
-                        img[i, j] = 0
-
-                    plt.scatter(x_map_index, y_map_index, c='blue', marker='o')
-
-        plt.imshow(map_tmp)
-        plt.savefig('map.png')
-        plt.clf()
-
-        plt.imshow(img)
-        plt.savefig('local_costmap_changed.png')
-        plt.clf()
 
     def calculateNumOfSegments(self, img):
         # Turn gray image to rgb image
@@ -1724,69 +1971,10 @@ class ExplainRobotNavigation:
         segments_unique = np.unique(segments_1)
         return 2 ** segments_unique.shape[0], segments_unique.shape[0]
 
-    def quaternion_to_euler(self, x, y, z, w):
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll = math.atan2(t0, t1)
-        t2 = +2.0 * (w * y - z * x)
-        t2 = +1.0 if t2 > +1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        pitch = math.asin(t2)
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw = math.atan2(t3, t4)
-        return [yaw, pitch, roll]
 
     
     
 
-    def testSegmentation(self):
-
-        print('Test segmentation function beginning')
-
-        # make a deepcopy of an image
-        img_ = copy.deepcopy(self.image)
-
-        # Save local costmap to .csv file
-        #pd.DataFrame(img_).to_csv('~/amar_ws/local_costmap_gray_segmentation_test.csv', index=False, header=False)
-
-        # Save local costmap as gray image
-        plt.imshow(img_)
-        plt.savefig('testSegmentation_image_gray.png')
-        plt.clf()
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
-        # Save local costmap as rgb image
-        plt.imshow(rgb)
-        plt.savefig('testSegmentation_image_rgb.png')
-        plt.clf()
-
-        # Superpixel segmentation with skimage functions
-
-        # felzenszwalb
-        #segments = felzenszwalb(rgb, scale=100, sigma=5, min_size=30, multichannel=True)
-        #segments = felzenszwalb(rgb, scale=1, sigma=0.8, min_size=20, multichannel=True)  # default
-
-        # quickshift
-        #segments = quickshift(rgb, ratio=0.0001, kernel_size=8, max_dist=10, return_tree=False, sigma=0.0, convert2lab=True, random_seed=42)
-        #segments = quickshift(rgb, ratio=1.0, kernel_size=5, max_dist=10, return_tree=False, sigma=0, convert2lab=True, random_seed=42) # default
-
-        # slic
-        #segments = slic(rgb, n_segments=6, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=5, slic_zero=False, start_label=None, mask=None)
-        #segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
-
-        # Turn segments gray image to rgb image
-        #segments_rgb = gray2rgb(segments)
-
-        # Generate segments - superpixels with my slic function
-        segments = self.mySlicTest(rgb)
-
-        # Save segments to .csv file
-        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
-
-        print('Test segmentation function ending')
 
     def explain_instance_evaluation(self, expID, ID):
 
@@ -2196,196 +2384,9 @@ class ExplainRobotNavigation:
         pd.DataFrame(marked_boundaries_flipped[:, :, 2]).to_csv('~/amar_ws/marked_boundaries_flipped_B.csv', index=False, header=False)
         '''
 
-    def mySlicTest(self, img_rgb):
 
-        print('mySlic for testSegmentation starts')
 
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
 
-        # show original image
-        img = img_rgb[:, :, 0]
-        # Save segments_1 as a picture
-        plt.imshow(img)
-        plt.savefig('testSegmentation_img.png')
-        plt.clf()
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        # plot segments_1 with centroids and labels
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            plt.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        # Save segments_1 as a picture
-        plt.imshow(segments_1)
-        plt.savefig('testSegmentation_segments_1.png')
-        plt.clf()
-        # find segments_unique_1
-        segments_unique_1 = np.unique(segments_1)
-        print('segments_unique_1: ', segments_unique_1)
-        print('segments_unique_1.shape: ', segments_unique_1.shape)
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        '''
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        print('segments_unique_2: ', segments_unique_2)
-        print('segments_unique_2.shape: ', segments_unique_2.shape)
-        # make obstacles on segments_2 nice - not needed
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 99:
-                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
-        '''
-        # plot segments_2 with centroids and labels
-        regions = regionprops(segments_2)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            plt.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        # Save segments_2 as a picture
-        plt.imshow(segments_2)
-        plt.savefig('testSegmentation_segments_2.png')
-        plt.clf()
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        print('segments_unique_2: ', segments_unique_2)
-        print('segments_unique_2.shape: ', segments_unique_2.shape)
-
-        # Creating segments using segments_1 and segments_2
-        #'''
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        #'''
-        # plot segments with centroids and labels/weights
-        plt.imshow(segments_1)
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            plt.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        # Save segments as a picture before nice segment numbering
-        plt.savefig('testSegmentation_segments_beforeNiceNumbering.png')
-        plt.clf()
-        # find segments_unique before nice segment numbering
-        segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
-
-        # Get nice segments' numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k + 1
-        # find segments_unique after nice segment numbering
-        segments_unique = np.unique(segments_1)
-        print('segments_unique (with nice numbering): ', segments_unique)
-        print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
-        # plot segments with centroids and labels/weights
-        plt.imshow(segments_1)
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            plt.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            #plt.text(centers[i][0], centers[i][1], str(v))
-            #'''
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == i:
-                    #print('i: ', i)
-                    #print('j: ', j)
-                    #print('self.exp[j][0]: ', self.exp[j][0])
-                    #print('self.exp[j][1]: ', self.exp[j][1])
-                    #print('v: ', v)
-                    #print('\n')
-                    plt.text(centers[i][0], centers[i][1], str(round(self.exp[j][1],4)))  #str(round(self.exp[j][1],4)) #str(v))
-                    break
-            #'''
-            i = i + 1
-        # Save segments with nice numbering as a picture
-        plt.savefig('testSegmentation_segments.png')
-        plt.clf()
-
-        # plot segments with centroids and labels/weights
-        plt.imshow(self.matrixFlip(segments_1, 'h'))
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            plt.scatter(160 - centers[i][0], centers[i][1], c='white', marker='o')
-            # plt.text(centers[i][0], centers[i][1], str(v))
-            # '''
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == i:
-                    # print('i: ', i)
-                    # print('j: ', j)
-                    # print('self.exp[j][0]: ', self.exp[j][0])
-                    # print('self.exp[j][1]: ', self.exp[j][1])
-                    # print('v: ', v)
-                    # print('\n')
-                    plt.text(160 - centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                    break
-            # '''
-            i = i + 1
-        # Save segments with nice numbering as a picture
-        plt.savefig('flipped_testSegmentation_segments.png')
-        plt.clf()
-
-        # print explanation
-        #print('self.exp: ', self.exp)
-        #print('len(self.exp): ', len(self.exp))
-
-        print('mySlic for testSegmentation ends')
-
-        return segments_1
-
-    def matrixFlip(self, m, d):
-        myl = np.array(m)
-        if d == 'v':
-            return np.flip(myl, axis=0)
-        elif d == 'h':
-            return np.flip(myl, axis=1)
 
 
 
