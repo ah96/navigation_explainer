@@ -2,8 +2,8 @@
 
 # Defining parameters - global variables
 
-# test type: 'single', 'dataset_creation', 'GAN'
-test_type = 'dataset_creation'
+# test type: 'single', 'dataset_creation', 'evaluation', 'GAN'
+test_type = 'evaluation'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -181,6 +181,27 @@ if explanation_alg == 'lime':
                 #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
                 exp_nav.explain_instance_dataset(i, i)
+
+        elif test_type == 'evaluation':
+            import time
+            evaluation_size = 1
+            for i in range(0, evaluation_size):
+                # optional instance selection - deterministic
+                expID = 60
+
+                # random instance selection
+                # import random
+                # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+
+                for j in range(0, 3):
+                    start = time.time()
+                    exp_nav.explain_instance_evaluation(expID, j)
+                    end = time.time()
+                    with open("explanations.txt", "a") as myfile:
+                        myfile.write('- ' + str(round(end - start, 4)) + '\n')
+                
+                with open("explanations.txt", "a") as myfile:
+                        myfile.write('\n')        
 
         elif test_type == 'GAN':
             # optional instance selection - deterministic
@@ -458,44 +479,6 @@ if explanationMode == 'tabular':
     # random selection
     #import random
     #expID = random.randint(0, X_train.shape[0]) # expID se trazi iz X_train
-
-
-elif testType == 'evaluation':
-    expID = 15
-    expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
-                                                      current_goal, local_costmap_data, local_costmap_info,
-                                                      amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train,
-                                                      X_test, mode, explanationMode, expID, num_samples,
-                                                      output_class_name, numOfFirstRowsToDelete, footprints)
-    expNav.explain_instance_evaluation(expID, 1)
-
-    expID = 163
-    expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
-                                                      current_goal, local_costmap_data, local_costmap_info,
-                                                      amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train,
-                                                      X_test, mode, explanationMode, expID, num_samples,
-                                                      output_class_name, numOfFirstRowsToDelete, footprints)
-    expNav.explain_instance_evaluation(expID, 2)
-
-    expID = 599
-    expNav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
-                                                      current_goal, local_costmap_data, local_costmap_info,
-                                                      amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train,
-                                                      X_test, mode, explanationMode, expID, num_samples,
-                                                      output_class_name, numOfFirstRowsToDelete, footprints)
-    expNav.explain_instance_evaluation(expID, 3)
-
-    import time
-    for i in range(0, 50):
-        expID = random.randint(0, local_costmap_info.shape[0])
-        for j in range(0, 9):
-            start = time.time()
-            expNav.explain_instance(expID, j, i)
-            end = time.time()
-            with open("explanations.txt", "a") as myfile:
-                myfile.write('- ' + str(round(end - start, 4)) + '\n')
-        with open("explanations.txt", "a") as myfile:
-                myfile.write('\n')
     
 '''
 

@@ -2085,8 +2085,47 @@ class ExplainRobotNavigation:
     
     
     
-    
-    def calculateNumOfSegments(self, img):
+        # Turn gray image to rgb image
+        img_rgb = gray2rgb(img)
+
+        # segments_1 - good obstacles
+        # Find segments_1
+        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        # find segments_unique_1
+        #segments_unique_1 = np.unique(segments_1)
+        #print('segments_unique_1: ', segments_unique_1)
+        #print('segments_unique_1.shape: ', segments_unique_1.shape)
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        #print('segments_unique_2: ', segments_unique_2)
+        #print('segments_unique_2.shape: ', segments_unique_2.shape)
+
+        # Creating segments using segments_1 and segments_2
+        # '''
+        # Add/Sum segments_1 and segments_2
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
+                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
+                else:
+                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
+        # '''
+        # find segments_unique before nice segment numbering
+        segments_unique = np.unique(segments_1)
+        return 2 ** segments_unique.shape[0], segments_unique.shape[0]
+
+
+
+    def calculateNumOfSamples(self, img):
         # Turn gray image to rgb image
         img_rgb = gray2rgb(img)
 
@@ -2126,77 +2165,113 @@ class ExplainRobotNavigation:
         return 2 ** segments_unique.shape[0], segments_unique.shape[0]
 
     def explain_instance_evaluation(self, expID, ID):
+        print('explain_instance function starting\n')
 
         self.expID = expID
+            
+        # if explanation_mode is 'image'
+        if self.explanation_mode == 'image':
+            self.index = self.expID
 
-        # Use new variable in the algorithm
-        img = copy.deepcopy(self.image)
+            self.printImportantInformation()
 
-        samples_num, segments_num = self.calculateNumOfSamples(img)
-        # print(samples_num)
+            # Get local costmap
+            # Original costmap will be saved to self.local_costmap_original
+            self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
 
-        # my custom segmentation func
-        segm_fn = 'custom_segmentation'
+            '''
+            # If a custom costmap is used - TO-DO: make custom map loading a separate case in explainer.py
+            self.local_costmap_original.to_csv('~/amar_ws/costmapToChange.csv', index=False, header=True)
+            self.local_costmap_original = pd.read_csv('~/amar_ws/costmapToChange.csv')
+            '''
 
-        import time
+            # Make image a np.array deepcopy of local_costmap_original
+            self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
-        with open('explanations' + str(ID) + '.csv', "w") as myfile:
-            myfile.write(
-                'num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
-            for i in range(0, segments_num + 1):
-                for j in range(0, 30):
-                    start = time.time()
-                    self.explanation, segmentation_time, classifier_fn_time, planner_time = self.explainer.explain_instance_evaluation(
-                        img, self.classifier_fn_image_evaluation,
-                        hide_color=perturb_hide_color,
-                        num_segments=segments_num,
-                        num_segments_current=i,
-                        batch_size=1024, segmentation_fn=segm_fn,
-                        top_labels=10)
-                    end = time.time()
-                    explanation_time = round(end - start, 3)
-                    # print('Explanation time: ', explanation_time)
+            #'''
+            # Turn inflated area to free space and 100s to 99s
+            for i in range(0, self.image.shape[0]):
+                for j in range(0, self.image.shape[1]):
+                    if 99 > self.image[i, j] > 0:
+                        self.image[i, j] = 0
+                    elif self.image[i, j] == 100:
+                        self.image[i, j] = 99
+            #'''
 
-                    start = time.time()
-                    self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0,
-                                                                                             positive_only=False,
-                                                                                             negative_only=False,
-                                                                                             num_features=100,
-                                                                                             hide_rest=False,
-                                                                                             min_weight=0.1)  # min_weight=0.1 - default
-                    end = time.time()
-                    explanation_pics_time = round(end - start, 3)
-                    # print('Getting explanation pics time: ', explanation_pics_time)
+            # Turn point free space (that is surrounded by obstacles) to point obstacle - not really needed
+            #self.PFP2PO()
 
-                    start = time.time()
-                    self.plotMinimalEvaluation(2 ** i)
-                    end = time.time()
-                    plotting_time = round(end - start, 3)
-                    # print('Plotting time: ', round(plotting_time, 3))
+            # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+            self.image = self.image * 1.0
 
-                    # print(self.exp)
+            # Saving data to .csv files for C++ node - local navigation planner
+            self.limeImageSaveData()
 
-                    segmentation_time = round(segmentation_time, 3)
-                    classifier_fn_time = round(classifier_fn_time, 3)
-                    planner_time = round(planner_time, 3)
+            # Use new variable in the algorithm - possible time saving
+            img = copy.deepcopy(self.image)
 
-                    myfile.write(
-                        str(2 ** i) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(
-                            planner_time) + ',' + str(explanation_time) + ',' + str(
-                            explanation_pics_time) + ',' + str(plotting_time) + ',')
-                    for k in range(0, len(self.exp)):
-                        for l in range(0, len(self.exp)):
-                            if k == self.exp[l][0]:
-                                if k != len(self.exp) - 1:
-                                    myfile.write(str(self.exp[l][1]) + ',')
-                                else:
-                                    myfile.write(str(self.exp[l][1]))
-                                break
+            samples_num, segments_num = self.calculateNumOfSamples(img)
+            # print(samples_num)
+
+            # my custom segmentation func
+            segm_fn = 'custom_segmentation'
+ 
+            import time
+
+            with open('explanations' + str(ID) + '.csv', "w") as myfile:
+                myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
+                
+                for i in range(0, segments_num + 1):
+                    for j in range(0, 1): #, 30):
+                        start = time.time()
+                        self.explanation, segmentation_time, classifier_fn_time, planner_time = self.explainer.explain_instance_evaluation(
+                            img, self.classifier_fn_image_evaluation,
+                            hide_color=perturb_hide_color,
+                            num_segments=segments_num,
+                            num_segments_current=i,
+                            batch_size=1024, segmentation_fn=segm_fn,
+                            top_labels=10)
+                        end = time.time()
+                        explanation_time = round(end - start, 3)
+                        # print('Explanation time: ', explanation_time)
+
+                        start = time.time()
+                        self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0,
+                                                                                                positive_only=False,
+                                                                                                negative_only=False,
+                                                                                                num_features=100,
+                                                                                                hide_rest=False,
+                                                                                                min_weight=0.1)  # min_weight=0.1 - default
+                        end = time.time()
+                        explanation_pics_time = round(end - start, 3)
+                        # print('Getting explanation pics time: ', explanation_pics_time)
+
+                        start = time.time()
+                        self.plotMinimalEvaluation(2 ** i)
+                        end = time.time()
+                        plotting_time = round(end - start, 3)
+                        # print('Plotting time: ', round(plotting_time, 3))
+
+                        # print(self.exp)
+
+                        segmentation_time = round(segmentation_time, 3)
+                        classifier_fn_time = round(classifier_fn_time, 3)
+                        planner_time = round(planner_time, 3)
+
+                        myfile.write(
+                            str(2 ** i) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(
+                                planner_time) + ',' + str(explanation_time) + ',' + str(
+                                explanation_pics_time) + ',' + str(plotting_time) + ',')
+                        for k in range(0, len(self.exp)):
+                            for l in range(0, len(self.exp)):
+                                if k == self.exp[l][0]:
+                                    if k != len(self.exp) - 1:
+                                        myfile.write(str(self.exp[l][1]) + ',')
+                                    else:
+                                        myfile.write(str(self.exp[l][1]))
+                                    break
+                        myfile.write('\n')
                     myfile.write('\n')
-                myfile.write('\n')
-
-        # self.plotExplanation()
-        # self.plotExplanationFlipped()
 
     def classifier_fn_image_evaluation(self, sampled_instance):
 
@@ -2536,15 +2611,7 @@ class ExplainRobotNavigation:
 
 
 
-
-
-
-
-
-
-
-
-    # functions that I currently do not use
+    # functions that I currently do not use:
     def slic_help(self, image_rgb, n_segments=100, compactness=10., max_iter=10, sigma=0, spacing=None,
                   multichannel=True, convert2lab=None,
                   enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, start_label=None, mask=None, channel_axis=-1):
@@ -2827,60 +2894,16 @@ class ExplainRobotNavigation:
 
         return np.array(cmd_vel.iloc[:, 2])
 
-new_float_type = {
-    # preserved types
-    np.float32().dtype.char: np.float32,
-    np.float64().dtype.char: np.float64,
-    np.complex64().dtype.char: np.complex64,
-    np.complex128().dtype.char: np.complex128,
-    # altered types
-    np.float16().dtype.char: np.float32,
-    'g': np.float64,  # np.float128 ; doesn't exist on windows
-    'G': np.complex128,  # np.complex256 ; doesn't exist on windows
-}
+        '''
+        
 
-def _supported_float_type(input_dtype, allow_complex=False):
-    if isinstance(input_dtype, Iterable) and not isinstance(input_dtype, str):
-        return np.result_type(*(_supported_float_type(d) for d in input_dtype))
-    input_dtype = np.dtype(input_dtype)
-    if not allow_complex and input_dtype.kind == 'c':
-        raise ValueError("complex valued input is not supported")
-    return new_float_type.get(input_dtype.char, np.float64)
 
-'''
-conditions = [
-    ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-    ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-    ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] > 0)),
-    ((self.cmd_vel['cmd_vel_ang_z'] >= 0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-    ((self.cmd_vel['cmd_vel_ang_z'] <= -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-    ((self.cmd_vel['cmd_vel_ang_z'] < 0.05) & (self.cmd_vel['cmd_vel_ang_z'] > -0.05) & (self.cmd_vel['cmd_vel_lin_x'] < 0)),
-    (abs(self.cmd_vel['cmd_vel_lin_x']) < 0.01)
-]
 
-valuesLeftAhead = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-self.cmd_vel['left_ahead'] = np.select(conditions, valuesLeftAhead)
 
-valuesRightAhead = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-self.cmd_vel['right_ahead'] = np.select(conditions, valuesRightAhead)
 
-valuesStraightAhead = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
-self.cmd_vel['straight_ahead'] = np.select(conditions, valuesStraightAhead)
 
-valuesLeftBack = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
-self.cmd_vel['left_back'] = np.select(conditions, valuesLeftBack)
 
-valuesRightBack = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-self.cmd_vel['right_back'] = np.select(conditions, valuesRightBack)
 
-valuesStraightBack = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-self.cmd_vel['straight_back'] = np.select(conditions, valuesStraightBack)
-
-valuesStop = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
-self.cmd_vel['stop'] = np.select(conditions, valuesStop)
-'''
-
-'''
 # Other code for dealing with calling other ROS node from this one
 import roslaunch
 package = 'teb_local_planner'
@@ -2900,136 +2923,4 @@ launch.start()
 #node_process.terminate()
 
 #node_process = Popen(shlex.split('rosnode kill /perturb_node_image'))
-'''
-
-''' 
-    
-    # Plot segments with legend
-    from matplotlib.patches import Rectangle
-    list_with_data = []
-    for i in range(0, segments_unique.shape[0]):
-        list_temp = [segments_unique[i], [200, 0.0, 0.0, 200.0],
-                     str(segments_unique[i])]  # str(self.explanation[i][1])]
-        list_with_data.append(list_temp)
-    df_legend = pd.DataFrame(list_with_data, columns=['key', 'color', 'weight'])
-
-    handles_1 = [Rectangle((0, 0), 0.8, 0.8, color=[float(c) / 255 for c in color_list]) for color_list in
-                 df_legend['color']]
-    labels = df_legend['weight']
-    plt.figure()
-    plt.subplots_adjust(hspace=0)  # plt.tight_layout()
-    plt.rcParams.update({'legend.fontsize': 20})
-    plt.rc(('xtick', 'ytick'), color=(1, 1, 1, 0))
-    plt.subplot(2, 1, 1), plt.imshow(segments, aspect='auto')
-    plt.subplot(2, 1, 2), plt.legend(handles_1, labels, mode='expand', ncol=3)
-    plt.savefig('segmentation_test_segments_with_weights.png')
-    plt.clf()
-
-    # Generate segments - superpixels with centroids
-    segments_help, centroids_help = self.slic_help(rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0,
-                                              spacing=None, multichannel=True, convert2lab=True,
-                                              enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5,
-                                              start_label=1, mask=None)
-    print('centroids_help: ', centroids_help)
-    print('centroids_help.shape: ', centroids_help.shape)
-    segments_help_unique = np.unique(segments_help)
-    print('np.unique(segments_help): ', segments_help_unique)
-    # Save segments as an image
-    for i in range(0, centroids_help.shape[0]):
-        plt.scatter(centroids_help[i][1], centroids_help[i][2], c='white', marker='o')
-    plt.imshow(segments_help)
-    plt.savefig('segmentation_test_segments_help.png')
-    plt.clf()
-
-
-
-    np.array_equal(fn_result, original_result)
-
-
-
-    # creating a image object (main image) 
-    #im1 = Image.open(r"/home/robolab/amar_ws/explanation.png")
-    #print('Ucitana slika')
-    #print(im1)
-    #print(type(im1))
-    
-    amcl_w = self.amcl_pose_tmp.iloc[:, 3]
-    amcl_z = self.amcl_pose_tmp.iloc[:, 2]
-    yaw = math.atan2(2.0*(0.0*amcl_z + amcl_w*0.0), amcl_w*amcl_w - 0.0*0.0 - 0.0*0.0 + amcl_z*amcl_z);
-    print(yaw)
-    pitch = math.asin(-2.0*(0.0*amcl_z - amcl_w*0.0));
-    print(pitch)
-    roll = math.atan2(2.0*(0.0*0.0 + amcl_w*amcl_z), amcl_w*amcl_w + 0.0*0.0 - 0.0*0.0 - amcl_z*amcl_z);
-    print(roll)
-
-
-    # from classifier_fn_image function
-    # saving sampling costmaps as pics
-    #for i in range(1, 10):                                 
-        #img =  sampled_instance[i][:,:,0]
-        #img =  img * 2.55
-        #img = img.astype(int)            
-        #img = Image.fromarray((img).astype(np.uint8))
-        #img.save("sampled_instance_" + str(i) + ".png")
-        
-    #    self.final = np.concatenate((self.final, sampled_instance[i][:,:,0] * 2.55), axis = 1)            
-    #   self.final_frame = cv.hconcat((self.final_frame, sampled_instance[i][:,:,0] * 2.55))
-              
-    #self.final_final = self.final
-    #self.final_frame_final = self.final_frame
-
-    # saving sampling costmaps as pics
-    #for i in range(10, sampled_instance.shape[0]):
-
-        ## zakljucak -- sve tri dimenzije sampled_instance arraya su jednake
-        #comparison01 = sampled_instance[i][:,:,0] == sampled_instance[i][:,:,1]
-        #equal_arrays01 = comparison01.all()
-        #comparison12 = sampled_instance[i][:,:,1] == sampled_instance[i][:,:,2]
-        #equal_arrays12 = comparison12.all()
-        #comparison02 = sampled_instance[i][:,:,0] == sampled_instance[i][:,:,2]
-        #equal_arrays02 = comparison02.all()
-        #if equal_arrays01 and equal_arrays12 and equal_arrays02:
-            #print('Equal: ' + str(i))
-
-        #print(sampled_instance[i])
-        #img = rgb2gray(img)
-        #img = img.astype(int)
-        #print("sampled_instance_" + str(i) + " gray:")
-        #print(type(img))
-        #print(img.shape)
-        #print(img)
-        
-        #img =  sampled_instance[i][:,:,0]
-        #img =  img * 2.55
-        #img = img.astype(int)            
-        #img = Image.fromarray((img).astype(np.uint8))
-        #img.save("sampled_instance_" + str(i) + ".png")
-
-    #    if i % 10 == 0:
-    #        self.final_final = np.concatenate((self.final_final, self.final), axis = 0)
-    #        self.final_frame_final = cv.vconcat((self.final_frame_final, self.final_frame))    
-    #        self.final = sampled_instance[i][:,:,0] * 2.55            
-    #        self.final_frame = sampled_instance[i][:,:,0] * 2.55
-    #        continue
-    #                                
-    #    self.final = np.concatenate((self.final, sampled_instance[i][:,:,0] * 2.55), axis = 1)
-    #    self.final_frame = cv.hconcat((self.final_frame, sampled_instance[i][:,:,0] * 2.55))
-
-        #print("sampled_instance_" + str(i) + ":")
-        #img = rgb2gray(sampled_instance[i])
-        #img = sampled_instance[i][:,:,0]
-        #df = pd.DataFrame(img)
-        #print(df)
-    
-    #self.final = self.final.astype(int)        
-    #self.final = Image.fromarray((self.final).astype(np.uint8))
-    #self.final.save("final.png")
-    
-    #self.final_final = self.final_final.astype(int)        
-    #self.final_final = Image.fromarray((self.final_final).astype(np.uint8))
-    #self.final_final.save("final_final.png")
-    
-    #cv.imwrite("final_frame.png", self.final_frame)
-
-    #cv.imwrite("final_frame_final.png", self.final_frame_final)    
-'''
+'''       
