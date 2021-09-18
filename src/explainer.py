@@ -169,7 +169,6 @@ if explanation_alg == 'lime':
 
             exp_nav.explain_instance(expID)
             #expNav.testSegmentation()
-            #expNav.testLocalCostmap()
 
         elif test_type == 'dataset_creation':
             dataset_size = 1000
