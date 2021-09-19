@@ -205,11 +205,11 @@ if explanation_alg == 'lime':
 
         elif test_type == 'GAN':
             # optional instance selection - deterministic
-            expID = 15
+            #expID = 15
 
             # random instance selection
-            # import random
-            # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+            import random
+            expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
             index = expID
             offset = num_of_first_rows_to_delete
@@ -303,7 +303,6 @@ if explanation_alg == 'lime':
                     if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                         local_plan_x_list.append(x_temp)
                         local_plan_y_list.append(y_temp)
-                ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
 
                 tf_map_odom_tmp = tf_map_odom.iloc[index, :]
                 tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
@@ -352,7 +351,9 @@ if explanation_alg == 'lime':
                         plan_y_list.append(y_temp)
                 ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
                 # '''
-                                
+
+                ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
+                
                 # plot robots' location, orientation and local plan
                 ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
                 ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
@@ -419,7 +420,6 @@ if explanation_alg == 'lime':
                     if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                         local_plan_x_list.append(x_temp)
                         local_plan_y_list.append(y_temp)
-                ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
 
                 tf_map_odom_tmp = tf_map_odom.iloc[index, :]
                 tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
@@ -465,6 +465,8 @@ if explanation_alg == 'lime':
                         plan_y_list.append(y_temp)
                 ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
 
+                ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
+
                 # plot robots' location, orientation and local plan
                 ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
                 ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
@@ -473,17 +475,40 @@ if explanation_alg == 'lime':
                 fig.savefig('input.png', transparent=False)
                 fig.clf()    
 
-            from models import create_model
-            #model = create_model(opt)  # create a model given opt.model and other options
-            #model.setup(opt)  # regular setup: load and print networks; create schedulers
-            #model.set_input(data)  # unpack data from data loader
-            #model.test()  # run inference
-            #visuals = model.get_current_visuals()  # get image results
-            #img_path = model.get_image_paths()  # get image paths
+            '''
+            import PIL.Image
+            rgba_image = PIL.Image.open('/home/amar/amar_ws/input.png')
+            rgb_image = rgba_image.convert('RGB')
+            #plt.imshow(rgb_image)
+            #plt.show()
 
+                
+            from models import create_model_one
+            from options.test_options import TestOptions
+            from util.util import tensor2im
 
+            opt = TestOptions().parse()  # get test options
+            # hard-code some parameters for test
+            opt.num_threads = 0   # test code only supports num_threads = 0
+            opt.batch_size = 1    # test code only supports batch_size = 1
+            opt.serial_batches = True  # disable data shuffling; comment this line if results on randomly chosen images are needed.
+            opt.no_flip = True    # no flip; comment this line if results on flipped images are needed.
+            opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
+            print(type(opt))
+            
+            model = create_model(opt)      # create a model given opt.model and other options
+            model.setup(opt)               # regular setup: load and print networks; create schedulers
+            
+            input = np.array(rgb_image)
+    
+            model.set_input_one(input)  # unpack data from data loader
+            model.forward()
 
-
+            output = tensor2im(model.fake_B)
+            import matplotlib.pyplot as plt
+            plt.imshow(output)
+            plt.show()
+            '''
 
 
 
