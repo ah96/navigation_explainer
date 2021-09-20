@@ -473,7 +473,11 @@ if explanation_alg == 'lime':
 
                 # '''
                 fig.savefig('input.png', transparent=False)
-                fig.clf()    
+                fig.clf() 
+
+
+            from GAN import gan            
+            gan.predict()       
 
             '''
             import PIL.Image
@@ -482,7 +486,25 @@ if explanation_alg == 'lime':
             #plt.imshow(rgb_image)
             #plt.show()
 
-                
+            from models import create_model_one
+            from options.test_options import TestOptions
+            from util.util import tensor2im
+
+            model = create_model_one()      # create a model given opt.model and other options
+            model.setup()               # regular setup: load and print networks; create schedulers
+            
+            input = np.array(rgb_image)
+    
+            model.set_input_one(input)  # unpack data from data loader
+            model.forward()
+
+            output = tensor2im(model.fake_B)
+            import matplotlib.pyplot as plt
+            plt.imshow(output)
+            plt.show()
+            '''
+
+            '''    
             from models import create_model_one
             from options.test_options import TestOptions
             from util.util import tensor2im
@@ -496,18 +518,8 @@ if explanation_alg == 'lime':
             opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
             print(type(opt))
             
-            model = create_model(opt)      # create a model given opt.model and other options
+            model = create_model_one(opt)      # create a model given opt.model and other options
             model.setup(opt)               # regular setup: load and print networks; create schedulers
-            
-            input = np.array(rgb_image)
-    
-            model.set_input_one(input)  # unpack data from data loader
-            model.forward()
-
-            output = tensor2im(model.fake_B)
-            import matplotlib.pyplot as plt
-            plt.imshow(output)
-            plt.show()
             '''
 
 
