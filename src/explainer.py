@@ -2,8 +2,8 @@
 
 # Defining parameters - global variables
 
-# test type: 'single', 'dataset_creation', 'evaluation', 'GAN'
-test_type = 'GAN'
+# test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
+test_type = 'LIMEvsGAN'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -479,48 +479,185 @@ if explanation_alg == 'lime':
             from GAN import gan            
             gan.predict()       
 
-            '''
-            import PIL.Image
-            rgba_image = PIL.Image.open('/home/amar/amar_ws/input.png')
-            rgb_image = rgba_image.convert('RGB')
-            #plt.imshow(rgb_image)
-            #plt.show()
 
-            from models import create_model_one
-            from options.test_options import TestOptions
-            from util.util import tensor2im
+        elif test_type == 'LIMEvsGAN':
+            num_iter = 50
+            lime_avg = 0
+            gan_avg = 0
+            for num in range(0, num_iter):
+                # optional instance selection - deterministic
+                #expID = 15
 
-            model = create_model_one()      # create a model given opt.model and other options
-            model.setup()               # regular setup: load and print networks; create schedulers
-            
-            input = np.array(rgb_image)
-    
-            model.set_input_one(input)  # unpack data from data loader
-            model.forward()
+                # random instance selection
+                import random
+                expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
-            output = tensor2im(model.fake_B)
-            import matplotlib.pyplot as plt
-            plt.imshow(output)
-            plt.show()
-            '''
 
-            '''    
-            from models import create_model_one
-            from options.test_options import TestOptions
-            from util.util import tensor2im
+                import time
 
-            opt = TestOptions().parse()  # get test options
-            # hard-code some parameters for test
-            opt.num_threads = 0   # test code only supports num_threads = 0
-            opt.batch_size = 1    # test code only supports batch_size = 1
-            opt.serial_batches = True  # disable data shuffling; comment this line if results on randomly chosen images are needed.
-            opt.no_flip = True    # no flip; comment this line if results on flipped images are needed.
-            opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
-            print(type(opt))
-            
-            model = create_model_one(opt)      # create a model given opt.model and other options
-            model.setup(opt)               # regular setup: load and print networks; create schedulers
-            '''
+                time_before = time.time()
+                exp_nav.explain_instance(expID)
+                time_after = time.time()
+                lime_avg += time_after - time_before
+                #print('LIME exp time: ', time_after - time_before)           
+
+                time_before = time.time()
+
+                index = expID
+                offset = num_of_first_rows_to_delete
+
+                # Get local costmap
+                # Original costmap will be saved to self.local_costmap_original
+                local_costmap_original = local_costmap_data.iloc[(index) * costmap_size:(index + 1) * costmap_size, :]
+                
+                # Make image a np.array deepcopy of local_costmap_original
+                import numpy as np
+                import copy
+                image = np.array(copy.deepcopy(local_costmap_original))
+
+                # '''
+                # Turn inflated area to free space and 100s to 99s
+                for i in range(0, image.shape[0]):
+                    for j in range(0, image.shape[1]):
+                        if 99 > image[i, j] > 0:
+                            image[i, j] = 0
+                        elif image[i, j] == 100:
+                            image[i, j] = 99
+                # '''
+
+                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
+                image = image * 1.0
+
+                image_flipped = np.flip(image, axis=1)
+
+                import matplotlib.pyplot as plt
+                fig = plt.figure(frameon=False)
+                w = 1.6 #* 3
+                h = 1.6 #* 3
+                fig.set_size_inches(w, h)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+                ax.imshow(image_flipped.astype('float64'), aspect='auto')
+
+                import pandas as pd
+
+                costmap_info_tmp = local_costmap_info.iloc[index, :]
+                costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
+                costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
+
+                # save costmap info to class variables
+                localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
+                localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
+                localCostmapResolution = costmap_info_tmp.iloc[0, 0]
+                localCostmapHeight = costmap_info_tmp.iloc[0, 2]
+                localCostmapWidth = costmap_info_tmp.iloc[0, 1]
+
+                odom_tmp = odom.iloc[index, :]
+                odom_tmp = pd.DataFrame(odom_tmp).transpose()
+                odom_tmp = odom_tmp.iloc[:, 2:]
+                # save robot odometry location to class variables
+                odom_x = odom_tmp.iloc[0, 0]
+                odom_y = odom_tmp.iloc[0, 1]
+
+                # save indices of robot's odometry location in local costmap to class variables
+                localCostmapIndex_x_odom = 160 - int((odom_x - localCostmapOriginX) / localCostmapResolution)
+                localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
+
+                # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
+                x_odom_index = [localCostmapIndex_x_odom]
+                y_odom_index = [localCostmapIndex_y_odom]
+
+                # save robot odometry orientation to class variables
+                # save robot odometry orientation to class variables
+                odom_z = odom_tmp.iloc[0, 2] # minus je upitan
+                znak = 1
+                if odom_z < 0:
+                    znak = -1
+                odom_z = znak * (1 - abs(odom_z))
+                odom_w = odom_tmp.iloc[0, 3]
+                # calculate Euler angles based on orientation quaternion
+                [yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+                # find yaw angles projections on x and y axes and save them to class variables
+                yaw_odom_x = math.cos(yaw_odom)
+                yaw_odom_y = math.sin(yaw_odom)
+
+                local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
+                local_plan_tmp = local_plan_tmp.iloc[:, 1:]
+                # indices of local plan's poses in local costmap
+                local_plan_x_list = []
+                local_plan_y_list = []
+                for i in range(1, local_plan_tmp.shape[0]):
+                    x_temp = 160 - int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                    y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
+                    if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                        local_plan_x_list.append(x_temp)
+                        local_plan_y_list.append(y_temp)
+
+                tf_map_odom_tmp = tf_map_odom.iloc[index, :]
+                tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
+
+                # transform global plan from /map to /odom frame
+                # rotation matrix
+                from scipy.spatial.transform import Rotation as R
+
+                r = R.from_quat(
+                    [tf_map_odom_tmp.iloc[0, 3], tf_map_odom_tmp.iloc[0, 4], tf_map_odom_tmp.iloc[0, 5],
+                    tf_map_odom_tmp.iloc[0, 6]])
+                # print('r: ', r.as_matrix())
+                r_array = np.asarray(r.as_matrix())
+                # print('r_array: ', r_array)
+                # print('r_array.shape: ', r_array.shape)
+                # translation vector
+                t = np.array(
+                    [tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
+                # print('t: ', t)
+                global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
+                global_plan_tmp = global_plan_tmp.iloc[:, 1:]
+                plan_tmp_tmp = copy.deepcopy(global_plan_tmp)
+                for i in range(0, global_plan_tmp.shape[0]):
+                    p = np.array(
+                        [global_plan_tmp.iloc[i, 0], global_plan_tmp.iloc[i, 1], global_plan_tmp.iloc[i, 2]])
+                    # print('p: ', p)
+                    pnew = p.dot(r_array) + t
+                    # print('pnew: ', pnew)
+                    plan_tmp_tmp.iloc[i, 0] = pnew[0]
+                    plan_tmp_tmp.iloc[i, 1] = pnew[1]
+                    plan_tmp_tmp.iloc[i, 2] = pnew[2]
+
+                # Get coordinates of the global plan in the local costmap
+                # '''
+                plan_x_list = []
+                plan_y_list = []
+                for i in range(0, plan_tmp_tmp.shape[0], 3):
+                    x_temp = 160 - int(
+                        (plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                    y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
+                    if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                        #print('x_temp: ', x_temp)
+                        #print('y_temp: ', y_temp)
+                        #print('\n')
+                        plan_x_list.append(x_temp)
+                        plan_y_list.append(y_temp)
+                ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
+                # '''
+
+                ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
+                
+                # plot robots' location, orientation and local plan
+                ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
+                ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
+
+                fig.savefig('input.png', transparent=False)
+                fig.clf()
+
+                from GAN import gan            
+                gan.predict()
+
+                time_after = time.time()
+                gan_avg += time_after - time_before
+            print('LIME time: ', lime_avg / num_iter)
+            print('GAN time: ', gan_avg / num_iter)
 
 
 

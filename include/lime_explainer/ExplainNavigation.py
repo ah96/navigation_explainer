@@ -868,8 +868,8 @@ class ExplainRobotNavigation:
         # plot segments with centroids and labels/weights
         #print('segments_1.shape: ', segments_1.shape)
         fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
+        w = 1.6
+        h = 1.6
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
@@ -907,10 +907,10 @@ class ExplainRobotNavigation:
 
         # plot explanation
         fig = plt.figure(frameon=True)
-        w = 4.8
-        h = 4.8
+        w = 1.6
+        h = 1.6
         fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 0.95])
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
 
@@ -1001,8 +1001,8 @@ class ExplainRobotNavigation:
         # '''
         # plot explanation
         # print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
-        ax.text(0.0, -4.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(
-            round(self.cmd_vel_original_tmp.iloc[1], 2)))
+        #ax.text(0.0, -4.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(
+        #    round(self.cmd_vel_original_tmp.iloc[1], 2)))
         
         marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
         marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
