@@ -481,12 +481,13 @@ if explanation_alg == 'lime':
 
 
         elif test_type == 'LIMEvsGAN':
-            num_iter = 50
-            lime_avg = 0
-            gan_avg = 0
+            num_iter = 1
+            lime_time_avg = 0
+            gan_time_avg = 0
+            
             for num in range(0, num_iter):
                 # optional instance selection - deterministic
-                #expID = 15
+                #expID = 160 #35
 
                 # random instance selection
                 import random
@@ -495,19 +496,23 @@ if explanation_alg == 'lime':
 
                 import time
 
+                # call LIME    
                 time_before = time.time()
                 exp_nav.explain_instance(expID)
                 time_after = time.time()
-                lime_avg += time_after - time_before
+                lime_time_avg += time_after - time_before
                 #print('LIME exp time: ', time_after - time_before)           
 
-                time_before = time.time()
 
+
+                # call GAN
+                # quality evaluation will be done on flipped images
+                # Prepare data for GAN
+                time_before = time.time()
                 index = expID
                 offset = num_of_first_rows_to_delete
 
                 # Get local costmap
-                # Original costmap will be saved to self.local_costmap_original
                 local_costmap_original = local_costmap_data.iloc[(index) * costmap_size:(index + 1) * costmap_size, :]
                 
                 # Make image a np.array deepcopy of local_costmap_original
@@ -525,11 +530,13 @@ if explanation_alg == 'lime':
                             image[i, j] = 99
                 # '''
 
-                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
+                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
                 image = image * 1.0
 
+                # Get flipped input image    
                 image_flipped = np.flip(image, axis=1)
 
+                # plot input image
                 import matplotlib.pyplot as plt
                 fig = plt.figure(frameon=False)
                 w = 1.6 #* 3
@@ -542,6 +549,7 @@ if explanation_alg == 'lime':
 
                 import pandas as pd
 
+                # get costmap info
                 costmap_info_tmp = local_costmap_info.iloc[index, :]
                 costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
                 costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
@@ -553,6 +561,7 @@ if explanation_alg == 'lime':
                 localCostmapHeight = costmap_info_tmp.iloc[0, 2]
                 localCostmapWidth = costmap_info_tmp.iloc[0, 1]
 
+                # get odometry info
                 odom_tmp = odom.iloc[index, :]
                 odom_tmp = pd.DataFrame(odom_tmp).transpose()
                 odom_tmp = odom_tmp.iloc[:, 2:]
@@ -582,6 +591,7 @@ if explanation_alg == 'lime':
                 yaw_odom_x = math.cos(yaw_odom)
                 yaw_odom_y = math.sin(yaw_odom)
 
+                # get local plan
                 local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
                 local_plan_tmp = local_plan_tmp.iloc[:, 1:]
                 # indices of local plan's poses in local costmap
@@ -594,6 +604,7 @@ if explanation_alg == 'lime':
                         local_plan_x_list.append(x_temp)
                         local_plan_y_list.append(y_temp)
 
+                # get tranformation info
                 tf_map_odom_tmp = tf_map_odom.iloc[index, :]
                 tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
 
@@ -639,12 +650,14 @@ if explanation_alg == 'lime':
                         #print('\n')
                         plan_x_list.append(x_temp)
                         plan_y_list.append(y_temp)
+                # plot global plan        
                 ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
                 # '''
 
+                # plot local plan
                 ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
                 
-                # plot robots' location, orientation and local plan
+                # plot robots' location and orientation
                 ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
                 ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
 
@@ -655,9 +668,52 @@ if explanation_alg == 'lime':
                 gan.predict()
 
                 time_after = time.time()
-                gan_avg += time_after - time_before
-            print('LIME time: ', lime_avg / num_iter)
-            print('GAN time: ', gan_avg / num_iter)
+                gan_time_avg += time_after - time_before
+
+            print('LIME time: ', lime_time_avg / num_iter)
+            print('GAN time: ', gan_time_avg / num_iter)
+
+            segments = exp_nav.getSegmentsForEval(image)
+            print('exp_nav.exp: ', exp_nav.exp)
+            #plt.imshow(segments)
+            #plt.savefig('SEGMENTS.png')
+
+            segments = np.flip(segments, axis=1)
+
+            pd.DataFrame(segments).to_csv('SEGMENTS.csv', index=False)
+
+            import PIL.Image
+            exp_lime = PIL.Image.open('/home/amar/amar_ws/flipped_explanation.png').convert('RGB')
+            exp_gan = PIL.Image.open('/home/amar/amar_ws/GAN.png').convert('RGB')
+
+            exp_lime = np.array(exp_lime)
+            print('exp_lime.shape: ', exp_lime.shape)
+            exp_gan = np.array(exp_gan)
+            print('exp_gan.shape: ', exp_gan.shape)
+
+            seg_unique = np.unique(segments)
+
+            diff_avg_list = []
+            diff_avg_list_percent = []
+            for e in exp_nav.exp:
+                print('e: ', e)
+                diff = -1
+                lime_abs = -0.5
+                count = 1
+                if abs(e[1]) >= 0.1:
+                    diff = 0
+                    lime_abs = 0
+                    count = 0
+                    for row in range(0, segments.shape[0]):
+                        for columns in range(0, segments.shape[1]):
+                            if segments[row, columns] == e[0]:
+                                count += 1
+                                diff += (abs(exp_lime[row, columns, 0] - exp_gan[row, columns, 0]) + abs(exp_lime[row, columns, 1] - exp_gan[row, columns, 1]) + abs(exp_lime[row, columns, 2] - exp_gan[row, columns, 2])) / 3
+                                lime_abs += (exp_lime[row, columns, 0] + exp_lime[row, columns, 1] + exp_lime[row, columns, 2] ) / 3    
+                diff_avg_list.append(diff / count)
+                diff_avg_list_percent.append(100 * diff / lime_abs)
+            print('diff_avg_list: ', diff_avg_list)
+            print('diff_avg_list_percent (%): ', diff_avg_list_percent)    
 
 
 
