@@ -484,14 +484,22 @@ if explanation_alg == 'lime':
             num_iter = 1
             lime_time_avg = 0
             gan_time_avg = 0
+
+            COUNTER = [0.0] * 10
+            R_PERC = [0.0] * 10
+            G_PERC = [0.0] * 10
+            B_PERC = [0.0] * 10
+            PERC_FROM_CHANNELS = [0.0] * 10
+            PERC_NOT_FROM_CHANNELS = [0.0] * 10
+            REDOSLIJED = 0.0
             
             for num in range(0, num_iter):
                 # optional instance selection - deterministic
-                #expID = 160 #35
+                expID = 160 #35 #2
 
                 # random instance selection
-                import random
-                expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+                #import random
+                #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
 
                 import time
@@ -674,7 +682,7 @@ if explanation_alg == 'lime':
             print('GAN time: ', gan_time_avg / num_iter)
 
             segments = exp_nav.getSegmentsForEval(image)
-            print('exp_nav.exp: ', exp_nav.exp)
+            #print('exp_nav.exp: ', exp_nav.exp)
             #plt.imshow(segments)
             #plt.savefig('SEGMENTS.png')
 
@@ -682,43 +690,306 @@ if explanation_alg == 'lime':
 
             pd.DataFrame(segments).to_csv('SEGMENTS.csv', index=False)
 
-            import PIL.Image
-            exp_lime = PIL.Image.open('/home/amar/amar_ws/flipped_explanation.png').convert('RGB')
-            exp_gan = PIL.Image.open('/home/amar/amar_ws/GAN.png').convert('RGB')
 
-            exp_lime = np.array(exp_lime)
+            # RGB evaluation
+            import PIL.Image
+            exp_lime_orig = PIL.Image.open('/home/amar/amar_ws/flipped_explanation.png').convert('RGB')
+            exp_gan_orig = PIL.Image.open('/home/amar/amar_ws/GAN.png').convert('RGB')
+
+            exp_lime = np.array(exp_lime_orig)
             print('exp_lime.shape: ', exp_lime.shape)
-            exp_gan = np.array(exp_gan)
+            exp_gan = np.array(exp_gan_orig)
             print('exp_gan.shape: ', exp_gan.shape)
 
-            seg_unique = np.unique(segments)
+            pd.DataFrame(exp_lime[:,:,0]).to_csv("exp_lime_R.csv")
+            pd.DataFrame(exp_lime[:,:,1]).to_csv("exp_lime_G.csv")
+            pd.DataFrame(exp_lime[:,:,2]).to_csv("exp_lime_B.csv")
 
-            diff_avg_list = []
-            diff_avg_list_percent = []
+            pd.DataFrame(exp_gan[:,:,0]).to_csv("exp_gan_R.csv")
+            pd.DataFrame(exp_gan[:,:,1]).to_csv("exp_gan_G.csv")
+            pd.DataFrame(exp_gan[:,:,2]).to_csv("exp_gan_B.csv")
+
+            #seg_unique = np.unique(segments)
+
+            avg_R_list = []
+            avg_G_list = []
+            avg_B_list = []
+
+            diff_R_list = []
+            diff_G_list = []
+            diff_B_list = []
+
+            diff_R_percent_list = []
+            diff_G_percent_list = []
+            diff_B_percent_list = []
+
+            avg_list = []
+            diff_list = []
+            diff_percent_list = []
+
+            avg_avg_list = []
+            avg_diff_list = []
+            avg_diff_percent_list = []
+
+            same_pixels_count_list = []
+
+            redoslijed = 0
+            red_slijed = True
+                    
+
             for e in exp_nav.exp:
-                print('e: ', e)
-                diff = -1
-                lime_abs = -0.5
-                count = 1
                 if abs(e[1]) >= 0.1:
-                    diff = 0
-                    lime_abs = 0
                     count = 0
+                    same_pixels_count = 0
+                    
+                    avg_R = 0
+                    avg_G = 0
+                    avg_B = 0
+
+                    diff_R = 0
+                    diff_G = 0
+                    diff_B = 0
+
+                    avg_avg = 0
+                    avg_diff = 0
+
+                    for row in range(0, segments.shape[0]):
+                        for columns in range(0, segments.shape[1]):
+                            if segments[row, columns] == e[0]:
+                                if(exp_gan[row, columns, 0]==255 and exp_gan[row, columns, 1]==255 and exp_gan[row, columns, 2]==255) or (exp_gan[row, columns, 0]==127 and exp_gan[row, columns, 1]==127 and exp_gan[row, columns, 2]==127):
+                                    red_slijed = False
+
+                                count += 1
+
+                                avg_R += int(exp_lime[row, columns, 0])
+
+                                avg_G += int(exp_lime[row, columns, 1])
+
+                                avg_B += int(exp_lime[row, columns, 2])
+
+                                diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+
+                                diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+
+                                diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) 
+
+                                avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+
+                                avg_diff += abs((int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
+                                - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
+                                
+                                
+                                if exp_lime[row, columns, 0] == exp_gan[row, columns, 0] and exp_lime[row, columns, 1] == exp_gan[row, columns, 1] and exp_lime[row, columns, 2] == exp_gan[row, columns, 2]:
+                                    same_pixels_count += 1
+
+                    if red_slijed == True:
+                        redoslijed += 1
+                    else:
+                        redoslijed = -20                        
+
+                    avg_R /= count
+                    avg_G /= count
+                    avg_B /= count
+
+                    diff_R /= count
+                    diff_G /= count
+                    diff_B /= count
+
+                    avg_R_list.append(avg_R)
+                    avg_G_list.append(avg_G)
+                    avg_B_list.append(avg_B)
+
+                    diff_R_list.append(diff_R)
+                    diff_G_list.append(diff_G)
+                    diff_B_list.append(diff_B)
+
+                    diff_R_percent_list.append(100 * diff_R / avg_R)
+                    diff_G_percent_list.append(100 * diff_G / avg_G)
+                    diff_B_percent_list.append(100 * diff_B / avg_B)
+
+                    avg = (avg_R + avg_G + avg_B) / 3
+                    avg_list.append(avg)
+                    diff = (diff_R + diff_G + diff_B) / 3
+                    diff_list.append(diff)
+                    diff_percent_list.append(100 * diff / avg) 
+
+                    avg_avg /= count
+                    avg_diff /= count
+                    avg_avg_list.append(avg_avg)
+                    avg_diff_list.append(avg_diff)
+                    avg_diff_percent_list.append(100 * avg_diff / avg_avg)
+
+                    same_pixels_count_list.append(100 * same_pixels_count / count)
+
+                       
+            print('\n')
+
+            print('expID: ', expID)
+            print('\n')
+
+            print('LIME time: ', lime_time_avg / num_iter)
+            print('\n')
+            print('GAN time: ', gan_time_avg / num_iter)
+            print('\n')
+
+            print('exp_nav.exp: ', exp_nav.exp)
+            print('\n')
+
+            print('avg_R_list: ', avg_R_list)
+            print('\n')
+            print('avg_G_list: ', avg_G_list)
+            print('\n')
+            print('avg_B_list: ', avg_B_list)
+            print('\n')
+
+            print('diff_R_list: ', diff_R_list)
+            print('\n')
+            print('diff_G_list: ', diff_G_list)
+            print('\n')
+            print('diff_B_list: ', diff_B_list)
+            print('\n')
+
+            print('diff_R_percent_list (%): ', diff_R_percent_list)
+            print('\n')
+            print('diff_G_percent_list (%):  ', diff_G_percent_list)
+            print('\n')
+            print('diff_B_percent_list (%): ', diff_B_percent_list)
+            print('\n')
+
+            print('avg_list: ', avg_list)
+            print('\n')
+            print('diff_list: ', diff_list)
+            print('\n')
+            print('diff_percent_list (%): ', diff_percent_list)
+            print('\n')
+
+            print('avg_avg_list: ', avg_avg_list)
+            print('\n')
+            print('avg_diff_list: ', avg_diff_list)
+            print('\n')
+            print('avg_diff_percent_list (%): ', avg_diff_percent_list)
+            print('\n')
+
+            print('same_pixels_count_list (%): ', same_pixels_count_list)
+            print('\n')
+
+            # The Intersection over Union (IoU) metric, also referred to as the Jaccard inde
+            intersection = np.logical_and(exp_lime, exp_gan)
+            print('intersection.shape: ', intersection.shape)
+            union = np.logical_or(exp_lime, exp_gan)
+            print('union.shape: ', union.shape)
+            iou_score = np.sum(intersection) / np.sum(union)
+            print('np.sum(intersection): ', np.sum(intersection))
+            print('np.sum(union): ', np.sum(union))
+            print('iou_score: ', iou_score) 
+            print('\n\n\n')
+
+
+            for id in range(0, len(diff_percent_list)):
+                COUNTER[id] += 1
+                R_PERC[id] += diff_R_percent_list[id]
+                G_PERC[id] += diff_G_percent_list[id]
+                B_PERC[id] += diff_B_percent_list[id]
+                PERC_FROM_CHANNELS[id] += diff_percent_list[id]
+                PERC_NOT_FROM_CHANNELS[id] += avg_diff_percent_list[id]
+
+            REDOSLIJED += redoslijed         
+
+
+            # Grayscale evaluation
+            exp_lime_gs = exp_lime_orig.convert('L')
+            exp_lime_gs.save('lime_gs.png')
+
+            exp_gan_gs = exp_gan_orig.convert('L')
+            exp_gan_gs.save('gan_gs.png')
+
+            exp_lime = np.array(exp_lime_gs)
+            print('exp_lime.shape: ', exp_lime.shape)
+            exp_gan = np.array(exp_gan_gs)
+            print('exp_gan.shape: ', exp_gan.shape)
+
+            avg_list = []
+            diff_list = []
+            diff_percent_list = []
+
+            same_pixels_count_list = []
+
+            for e in exp_nav.exp:
+                if abs(e[1]) >= 0.1:
+                    count = 0
+                    same_pixels_count = 0
+
+                    avg = 0
+                    diff = 0
+                    
                     for row in range(0, segments.shape[0]):
                         for columns in range(0, segments.shape[1]):
                             if segments[row, columns] == e[0]:
                                 count += 1
-                                diff += (abs(exp_lime[row, columns, 0] - exp_gan[row, columns, 0]) + abs(exp_lime[row, columns, 1] - exp_gan[row, columns, 1]) + abs(exp_lime[row, columns, 2] - exp_gan[row, columns, 2])) / 3
-                                lime_abs += (exp_lime[row, columns, 0] + exp_lime[row, columns, 1] + exp_lime[row, columns, 2] ) / 3    
-                diff_avg_list.append(diff / count)
-                diff_avg_list_percent.append(100 * diff / lime_abs)
-            print('diff_avg_list: ', diff_avg_list)
-            print('diff_avg_list_percent (%): ', diff_avg_list_percent)    
 
+                                avg += int(exp_lime[row, columns])
 
+                                diff += abs( int(exp_gan[row, columns]) - int(exp_lime[row, columns]) )
+                                  
+                                if exp_lime[row, columns] == exp_gan[row, columns]:
+                                    same_pixels_count += 1
+                                    
 
+                    avg_list.append(avg)
+                    diff_list.append(diff)
+                    diff_percent_list.append(100 * diff / avg) 
 
+                    same_pixels_count_list.append(100 * same_pixels_count / count)
 
+                       
+            print('\n')
+
+            print('expID: ', expID)
+            print('\n')
+
+            print('LIME time: ', lime_time_avg / num_iter)
+            print('\n')
+            print('GAN time: ', gan_time_avg / num_iter)
+            print('\n')
+
+            print('exp_nav.exp: ', exp_nav.exp)
+            print('\n')
+
+            print('avg_list: ', avg_list)
+            print('\n')
+            print('diff_list: ', diff_list)
+            print('\n')
+            print('diff_percent_list (%): ', diff_percent_list)
+            print('\n')
+
+            print('same_pixels_count_list (%): ', same_pixels_count_list)
+            print('\n')
+
+            # The Intersection over Union (IoU) metric, also referred to as the Jaccard inde
+            intersection = np.logical_and(exp_lime, exp_gan)
+            print('intersection.shape: ', intersection.shape)
+            union = np.logical_or(exp_lime, exp_gan)
+            print('union.shape: ', union.shape)
+            iou_score = np.sum(intersection) / np.sum(union)
+            print('np.sum(intersection): ', np.sum(intersection))
+            print('np.sum(union): ', np.sum(union))
+            print('iou_score: ', iou_score)
+
+        for id in range(0, 10):
+            if COUNTER[id] > 0.0:
+                R_PERC[id] /= COUNTER[id]
+                G_PERC[id] /= COUNTER[id]
+                B_PERC[id] /= COUNTER[id]
+                PERC_FROM_CHANNELS[id] /= COUNTER[id]
+                PERC_NOT_FROM_CHANNELS[id] /= COUNTER[id]
+
+        print('COUNTER: ', COUNTER) 
+        print('R_PERC: ', R_PERC)
+        print('G_PERC: ', G_PERC)
+        print('B_PERC: ', B_PERC)
+        print('PERC_FROM_CHANNELS: ', PERC_FROM_CHANNELS)
+        print('PERC_NOT_FROM_CHANNELS: ', PERC_NOT_FROM_CHANNELS)
+        print('REDOSLIJED: ', REDOSLIJED / num_iter)
 
 
 
