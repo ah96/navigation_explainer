@@ -2,7 +2,7 @@
 
 # Defining parameters - global variables
 
-# test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
+# test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN', 'just_eval'
 test_type = 'LIMEvsGAN'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
@@ -481,7 +481,7 @@ if explanation_alg == 'lime':
 
 
         elif test_type == 'LIMEvsGAN':
-            num_iter = 50
+            num_iter = 1
             lime_time_avg = 0
             gan_time_avg = 0
 
@@ -491,16 +491,17 @@ if explanation_alg == 'lime':
             B_PERC = [0.0] * 10
             PERC_FROM_CHANNELS = [0.0] * 10
             PERC_NOT_FROM_CHANNELS = [0.0] * 10
-            REDOSLIJED = 0.0
-            num_r = 0
+
+            from test_color import *
+            create_dict_my()
             
             for num in range(0, num_iter):
                 # optional instance selection - deterministic
-                #expID = 160 #35 #2
+                expID = 0 #254 #160 #35 #2 #0 
 
                 # random instance selection
-                import random
-                expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+                #import random
+                #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
 
                 import time
@@ -694,8 +695,11 @@ if explanation_alg == 'lime':
 
                 # RGB evaluation
                 import PIL.Image
-                exp_lime_orig = PIL.Image.open('/home/robolab/amar_ws/flipped_explanation.png').convert('RGB')
-                exp_gan_orig = PIL.Image.open('/home/robolab/amar_ws/explanation.png').convert('RGB')
+                import os
+                path1 = os.getcwd() + '/flipped_explanation.png'
+                exp_lime_orig = PIL.Image.open(path1).convert('RGB')
+                path1 = os.getcwd() + '/GAN.png'
+                exp_gan_orig = PIL.Image.open(path1).convert('RGB')
 
                 exp_lime = np.array(exp_lime_orig)
                 print('exp_lime.shape: ', exp_lime.shape)
@@ -732,15 +736,13 @@ if explanation_alg == 'lime':
                 avg_diff_list = []
                 avg_diff_percent_list = []
 
-                same_pixels_count_list = []
+                color_coverage_percent = []
 
-                redoslijed = 0
-                        
+                weights = []
 
                 for e in exp_nav.exp:
-                    if abs(e[1]) >= 0.1:
+                    if abs(e[1]) >= 0.0:
                         count = 0
-                        same_pixels_count = 0
                         
                         avg_R = 0
                         avg_G = 0
@@ -753,13 +755,21 @@ if explanation_alg == 'lime':
                         avg_avg = 0
                         avg_diff = 0
 
-                        red_slijed = False
+                        same_color_count = 0
+
+                        weights.append(abs(e[1]))
 
                         for row in range(0, segments.shape[0]):
                             for columns in range(0, segments.shape[1]):
                                 if segments[row, columns] == e[0]:
-                                    if(exp_gan[row, columns, 0]!=255 or exp_gan[row, columns, 1]!=255 or exp_gan[row, columns, 2]!=255) or (exp_gan[row, columns, 0]!=127 or exp_gan[row, columns, 1]!=127 or exp_gan[row, columns, 2]!=127):
-                                        red_slijed = True
+                                    #print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
+                                    #print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
+                                    #print('\n')
+
+                                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                                    if lime_color_name == gan_color_name:
+                                        same_color_count += 1
 
                                     count += 1
 
@@ -780,16 +790,16 @@ if explanation_alg == 'lime':
                                     avg_diff += abs((int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
                                     - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
                                     
-                                    
-                                    if exp_lime[row, columns, 0] == exp_gan[row, columns, 0] and exp_lime[row, columns, 1] == exp_gan[row, columns, 1] and exp_lime[row, columns, 2] == exp_gan[row, columns, 2]:
-                                        same_pixels_count += 1
-
-                        if red_slijed == True:
-                            redoslijed += 1                      
 
                         avg_R /= count
+                        if avg_R == 0:
+                            avg_R = 1
                         avg_G /= count
+                        if avg_G == 0:
+                            avg_G = 1
                         avg_B /= count
+                        if avg_B == 0:
+                            avg_B = 1
 
                         diff_R /= count
                         diff_G /= count
@@ -819,7 +829,7 @@ if explanation_alg == 'lime':
                         avg_diff_list.append(avg_diff)
                         avg_diff_percent_list.append(100 * avg_diff / avg_avg)
 
-                        same_pixels_count_list.append(100 * same_pixels_count / count)
+                        color_coverage_percent.append(100 * same_color_count / count)
 
                        
                 print('\n')
@@ -870,10 +880,28 @@ if explanation_alg == 'lime':
                 print('avg_diff_percent_list (%): ', avg_diff_percent_list)
                 print('\n')
 
-                print('same_pixels_count_list (%): ', same_pixels_count_list)
+                print('color_coverage_percent_list: ', color_coverage_percent)
                 print('\n')
 
-                # The Intersection over Union (IoU) metric, also referred to as the Jaccard inde
+                weights_sum = sum(weights)
+                explanation_saved_percentage = 0.0
+                explanation_saved_percentage_list = []
+                weights_percentage = []
+                for i in range(0, len(weights)):
+                    explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
+                    explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
+                    weights_percentage.append(100 * weights[i] / weights_sum)
+                print('weights: ', weights)
+                print('\n')
+                print('weights_percentage_list: ', weights_percentage)
+                print('\n')
+                print('explanation_saved_percentage_list: ', explanation_saved_percentage_list)
+                print('\n')
+                print('explanation_saved_percentage: ', explanation_saved_percentage)
+                print('\n')    
+
+                '''
+                # The Intersection over Union (IoU) metric, also referred to as the Jaccard index
                 intersection = np.logical_and(exp_lime, exp_gan)
                 print('intersection.shape: ', intersection.shape)
                 union = np.logical_or(exp_lime, exp_gan)
@@ -883,6 +911,7 @@ if explanation_alg == 'lime':
                 print('np.sum(union): ', np.sum(union))
                 print('iou_score: ', iou_score) 
                 print('\n\n\n')
+                '''
 
 
                 for id in range(0, len(diff_percent_list)):
@@ -893,11 +922,7 @@ if explanation_alg == 'lime':
                     PERC_FROM_CHANNELS[id] += diff_percent_list[id]
                     PERC_NOT_FROM_CHANNELS[id] += avg_diff_percent_list[id]
 
-                if redoslijed >= 0:
-                    REDOSLIJED += redoslijed
-                    num_r += 1         
-
-
+                '''
                 # Grayscale evaluation
                 exp_lime_gs = exp_lime_orig.convert('L')
                 exp_lime_gs.save('lime_gs.png')
@@ -978,6 +1003,7 @@ if explanation_alg == 'lime':
                 print('iou_score: ', iou_score)
 
                 print('iter: ', num)
+                '''
 
             for id in range(0, 10):
                 if COUNTER[id] > 0.0:
@@ -993,10 +1019,6 @@ if explanation_alg == 'lime':
             print('B_PERC: ', B_PERC)
             print('PERC_FROM_CHANNELS: ', PERC_FROM_CHANNELS)
             print('PERC_NOT_FROM_CHANNELS: ', PERC_NOT_FROM_CHANNELS)
-            print('REDOSLIJED: ', REDOSLIJED / num_r)
-
-
-
 
 
 '''

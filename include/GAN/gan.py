@@ -1,6 +1,6 @@
 def predict():
     import sys
-    sys.path.insert(1, '/home/robolab/amar_ws/src/lime_explainer/include/GAN')
+    sys.path.insert(1, '/home/amar/amar_ws/src/lime_explainer/include/GAN')
 
 
     from options.test_options import TestOptions
@@ -15,7 +15,7 @@ def predict():
     #rgb_image = rgba_image.convert('RGB')
     #plt.imshow(rgb_image)
 
-    input = PIL.Image.open('/home/robolab/amar_ws/input.png').convert('RGB')
+    input = PIL.Image.open('/home/amar/amar_ws/input.png').convert('RGB')
     #plt.imshow(input)
     #plt.savefig('input_main.png')
 
@@ -61,5 +61,5 @@ def predict():
     ax.set_axis_off()
     fig.add_axes(ax)
     ax.imshow(output, aspect='auto')
-    fig.savefig('explanation.png')
+    fig.savefig('GAN.png')
     fig.clf()
