@@ -6,7 +6,7 @@ import pandas as pd
 
 # Load output data
 def load_output_data():
-    cmd_vel = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Output/cmd_vel.csv') # consider changing this
+    cmd_vel = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Output/cmd_vel.csv')
     #cmd_vel.head()
     '''
     print('cmd_vel:')

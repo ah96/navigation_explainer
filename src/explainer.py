@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN', 'just_eval'
-test_type = 'LIMEvsGAN'
+test_type = 'single'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -45,11 +45,11 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     # Delete entries with 'None' frame
     # Detect number of entries with 'None' frame based on local_costmap_info
     num_of_first_rows_to_delete = len(local_costmap_info[local_costmap_info['frame'] == 'None'])
-    '''
+    #'''
     print('num_of_first_rows_to_delete:')
     print(num_of_first_rows_to_delete)
     print('\n')
-    '''
+    #'''
 
     # Delete entries with 'None' frame from local_costmap_info
     local_costmap_info.drop(index=local_costmap_info.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
