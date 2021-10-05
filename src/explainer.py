@@ -497,11 +497,11 @@ if explanation_alg == 'lime':
             
             for num in range(0, num_iter):
                 # optional instance selection - deterministic
-                expID = 0 #254 #160 #35 #2 #0 
+                #expID = 160 #254 #160 #135 #35 #2 #0 
 
                 # random instance selection
-                #import random
-                #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+                import random
+                expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
 
                 import time
@@ -880,7 +880,7 @@ if explanation_alg == 'lime':
                 print('avg_diff_percent_list (%): ', avg_diff_percent_list)
                 print('\n')
 
-                print('color_coverage_percent_list: ', color_coverage_percent)
+                print('color_coverage_percent_list (%): ', color_coverage_percent)
                 print('\n')
 
                 weights_sum = sum(weights)
@@ -893,13 +893,598 @@ if explanation_alg == 'lime':
                     weights_percentage.append(100 * weights[i] / weights_sum)
                 print('weights: ', weights)
                 print('\n')
-                print('weights_percentage_list: ', weights_percentage)
+                print('weights_percentage_list (%): ', weights_percentage)
                 print('\n')
-                print('explanation_saved_percentage_list: ', explanation_saved_percentage_list)
+                print('explanation_saved_percentage_list_color (%): ', explanation_saved_percentage_list)
                 print('\n')
-                print('explanation_saved_percentage: ', explanation_saved_percentage)
-                print('\n')    
+                print('explanation_saved_percentage_color (%): ', explanation_saved_percentage)
+                print('\n')
 
+                avg_similarity_percentage = []
+                for i in range(0, len(diff_percent_list)):
+                    avg_similarity_percentage.append(100.0 - diff_percent_list[i])
+                explanation_saved_percentage = 0.0
+                explanation_saved_percentage_list = []
+                for i in range(0, len(weights)):
+                    explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
+                    explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)
+                print('weights: ', weights)
+                print('\n')
+                print('weights_percentage_list (%): ', weights_percentage)
+                print('\n')
+                print('explanation_saved_percentage_list_avg (%): ', explanation_saved_percentage_list)
+                print('\n')
+                print('explanation_saved_percentage_avg (%): ', explanation_saved_percentage)
+                print('\n')
+
+                avg_avg_similarity_percentage = []
+                for i in range(0, len(avg_diff_percent_list)):
+                    avg_avg_similarity_percentage.append(100.0 - avg_diff_percent_list[i])
+                explanation_saved_percentage = 0.0
+                explanation_saved_percentage_list = []
+                for i in range(0, len(weights)):
+                    explanation_saved_percentage += avg_avg_similarity_percentage[i] * weights[i] / weights_sum
+                    explanation_saved_percentage_list.append(avg_avg_similarity_percentage[i] * weights[i] / weights_sum)
+                print('weights: ', weights)
+                print('\n')
+                print('weights_percentage_list (%): ', weights_percentage)
+                print('\n')
+                print('explanation_saved_percentage_list_avg_avg (%): ', explanation_saved_percentage_list)
+                print('\n')
+                print('explanation_saved_percentage_avg_avg (%): ', explanation_saved_percentage)
+                print('\n')
+
+
+                # LOCAL PLAN eval 
+                same_color_count = 0
+                count = 0
+
+                avg_R = 0
+                avg_G = 0
+                avg_B = 0
+
+                diff_R = 0
+                diff_G = 0
+                diff_B = 0
+
+                avg_avg = 0
+                avg_diff = 0
+                for i in range(0, len(local_plan_x_list)):
+                    count += 1
+                    row = local_plan_y_list[i]
+                    columns = local_plan_x_list[i]
+                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                    if lime_color_name == gan_color_name:
+                        same_color_count += 1
+
+                    avg_R += int(exp_lime[row, columns, 0])
+
+                    avg_G += int(exp_lime[row, columns, 1])
+
+                    avg_B += int(exp_lime[row, columns, 2])
+
+                    diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+
+                    diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+
+                    diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) 
+
+                    avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+
+                    avg_diff += abs((int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
+                    - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
+    
+                color_coverage_percent = 100 * same_color_count / count
+                print('LOCAL PLAN color_coverage_percent (%): ', color_coverage_percent)
+                print('\n')
+
+                avg_R /= count
+                avg_G /= count
+                avg_B /= count
+                
+                if avg_R == 0:
+                    avg_R = 1
+                if avg_G == 0:
+                    avg_G = 1
+                if avg_B == 0:
+                    avg_B = 1
+
+                diff_R /= count
+                diff_G /= count
+                diff_B /= count
+
+                diff_R_percent = 100 * diff_R / avg_R
+                diff_G_percent = 100 * diff_G / avg_G
+                diff_B_percent = 100 * diff_B / avg_B
+
+                avg = (avg_R + avg_G + avg_B) / 3
+                diff = (diff_R + diff_G + diff_B) / 3
+                diff_percent = 100 * diff / avg 
+
+                avg_avg /= count
+                if avg_avg == 0:
+                    avg_avg = 1
+                avg_diff /= count
+                avg_diff_percent = 100 * avg_diff / avg_avg
+
+                print('LOCAL PLAN avg_R: ', avg_R)
+                print('\n')
+                print('LOCAL PLAN avg_G: ', avg_G)
+                print('\n')
+                print('LOCAL PLAN avg_B: ', avg_B)
+                print('\n')
+
+                print('LOCAL PLAN diff_R: ', diff_R)
+                print('\n')
+                print('LOCAL PLAN diff_G: ', diff_G)
+                print('\n')
+                print('LOCAL PLAN diff_B: ', diff_B)
+                print('\n')
+
+                print('LOCAL PLAN diff_R_percent (%): ', diff_R_percent)
+                print('\n')
+                print('LOCAL PLAN diff_G_percent (%):  ', diff_G_percent)
+                print('\n')
+                print('LOCAL PLAN diff_B_percent (%): ', diff_B_percent)
+                print('\n')
+
+                print('LOCAL PLAN avg: ', avg)
+                print('\n')
+                print('LOCAL PLAN diff: ', diff)
+                print('\n')
+                print('LOCAL PLAN diff_percent (%): ', diff_percent)
+                print('\n')
+
+                print('LOCAL PLAN avg_avg: ', avg_avg)
+                print('\n')
+                print('LOCAL PLAN avg_diff: ', avg_diff)
+                print('\n')
+                print('LOCAL PLAN avg_diff_percent (%): ', avg_diff_percent)
+                print('\n')
+
+
+                # GLOBAL PLAN eval 
+                same_color_count = 0
+                count = 0
+
+                avg_R = 0
+                avg_G = 0
+                avg_B = 0
+
+                diff_R = 0
+                diff_G = 0
+                diff_B = 0
+
+                avg_avg = 0
+                avg_diff = 0
+                for i in range(0, len(plan_x_list)):
+                    count += 1
+                    row = plan_y_list[i]
+                    columns = plan_x_list[i]
+                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                    if lime_color_name == gan_color_name:
+                        same_color_count += 1
+
+                    avg_R += int(exp_lime[row, columns, 0])
+
+                    avg_G += int(exp_lime[row, columns, 1])
+
+                    avg_B += int(exp_lime[row, columns, 2])
+
+                    diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+
+                    diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+
+                    diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) 
+
+                    avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+
+                    avg_diff += abs((int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
+                    - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
+    
+                color_coverage_percent = 100 * same_color_count / count
+                print('GLOBAL PLAN color_coverage_percent (%): ', color_coverage_percent)
+                print('\n')
+
+                avg_R /= count
+                avg_G /= count
+                avg_B /= count
+
+                if avg_R == 0:
+                    avg_R = 1
+                if avg_G == 0:
+                    avg_G = 1
+                if avg_B == 0:
+                    avg_B = 1
+
+                diff_R /= count
+                diff_G /= count
+                diff_B /= count
+
+                diff_R_percent = 100 * diff_R / avg_R
+                diff_G_percent = 100 * diff_G / avg_G
+                diff_B_percent = 100 * diff_B / avg_B
+
+                avg = (avg_R + avg_G + avg_B) / 3
+                diff = (diff_R + diff_G + diff_B) / 3
+                diff_percent = 100 * diff / avg 
+
+                avg_avg /= count
+                if avg_avg == 0:
+                    avg_avg = 1
+                avg_diff /= count
+                avg_diff_percent = 100 * avg_diff / avg_avg
+
+                print('GLOBAL PLAN avg_R: ', avg_R)
+                print('\n')
+                print('GLOBAL PLAN avg_G: ', avg_G)
+                print('\n')
+                print('GLOBAL PLAN avg_B: ', avg_B)
+                print('\n')
+
+                print('GLOBAL PLAN diff_R: ', diff_R)
+                print('\n')
+                print('GLOBAL PLAN diff_G: ', diff_G)
+                print('\n')
+                print('GLOBAL PLAN diff_B: ', diff_B)
+                print('\n')
+
+                print('GLOBAL PLAN diff_R_percent (%): ', diff_R_percent)
+                print('\n')
+                print('GLOBAL PLAN diff_G_percent (%):  ', diff_G_percent)
+                print('\n')
+                print('GLOBAL PLAN diff_B_percent (%): ', diff_B_percent)
+                print('\n')
+
+                print('GLOBAL PLAN avg: ', avg)
+                print('\n')
+                print('GLOBAL PLAN diff: ', diff)
+                print('\n')
+                print('GLOBAL PLAN diff_percent (%): ', diff_percent)
+                print('\n')
+
+                print('GLOBAL PLAN avg_avg: ', avg_avg)
+                print('\n')
+                print('GLOBAL PLAN avg_diff: ', avg_diff)
+                print('\n')
+                print('GLOBAL PLAN avg_diff_percent (%): ', avg_diff_percent)
+                print('\n')
+
+
+                # OBSTACLES eval 
+                same_color_count = 0
+                count = 0
+
+                avg_R = 0
+                avg_G = 0
+                avg_B = 0
+
+                diff_R = 0
+                diff_G = 0
+                diff_B = 0
+
+                avg_avg = 0
+                avg_diff = 0
+                for i in range(0, image_flipped.shape[0]):
+                    for j in range(0, image_flipped.shape[1]):
+                        if image_flipped[i, j] == 99:
+                            count += 1
+                            row = i
+                            columns = j
+                            lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                            gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                            if lime_color_name == gan_color_name:
+                                same_color_count += 1
+
+                            avg_R += int(exp_lime[row, columns, 0])
+
+                            avg_G += int(exp_lime[row, columns, 1])
+
+                            avg_B += int(exp_lime[row, columns, 2])
+
+                            diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+
+                            diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+
+                            diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) 
+
+                            avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+
+                            avg_diff += abs((int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
+                            - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
+        
+                color_coverage_percent = 100 * same_color_count / count
+                print('OBSTACLES color_coverage_percent (%): ', color_coverage_percent)
+                print('\n')
+
+                avg_R /= count
+                avg_G /= count
+                avg_B /= count
+
+                if avg_R == 0:
+                    avg_R = 1
+                if avg_G == 0:
+                    avg_G = 1
+                if avg_B == 0:
+                    avg_B = 1
+
+                diff_R /= count
+                diff_G /= count
+                diff_B /= count
+
+                diff_R_percent = 100 * diff_R / avg_R
+                diff_G_percent = 100 * diff_G / avg_G
+                diff_B_percent = 100 * diff_B / avg_B
+
+                avg = (avg_R + avg_G + avg_B) / 3
+                diff = (diff_R + diff_G + diff_B) / 3
+                diff_percent = 100 * diff / avg 
+
+                avg_avg /= count
+                avg_diff /= count
+                if avg_avg == 0:
+                    avg_avg = 1
+                avg_diff_percent = 100 * avg_diff / avg_avg
+
+                print('OBSTACLES avg_R: ', avg_R)
+                print('\n')
+                print('OBSTACLES avg_G: ', avg_G)
+                print('\n')
+                print('OBSTACLES avg_B: ', avg_B)
+                print('\n')
+
+                print('OBSTACLES diff_R: ', diff_R)
+                print('\n')
+                print('OBSTACLES diff_G: ', diff_G)
+                print('\n')
+                print('OBSTACLES diff_B: ', diff_B)
+                print('\n')
+
+                print('OBSTACLES diff_R_percent (%): ', diff_R_percent)
+                print('\n')
+                print('OBSTACLES diff_G_percent (%):  ', diff_G_percent)
+                print('\n')
+                print('OBSTACLES diff_B_percent (%): ', diff_B_percent)
+                print('\n')
+
+                print('OBSTACLES avg: ', avg)
+                print('\n')
+                print('OBSTACLES diff: ', diff)
+                print('\n')
+                print('OBSTACLES diff_percent (%): ', diff_percent)
+                print('\n')
+
+                print('OBSTACLES avg_avg: ', avg_avg)
+                print('\n')
+                print('OBSTACLES avg_diff: ', avg_diff)
+                print('\n')
+                print('OBSTACLES avg_diff_percent (%): ', avg_diff_percent)
+                print('\n')
+
+
+                # FREE SPACE eval 
+                same_color_count = 0
+                count = 0
+
+                avg_R = 0
+                avg_G = 0
+                avg_B = 0
+
+                diff_R = 0
+                diff_G = 0
+                diff_B = 0
+
+                avg_avg = 0
+                avg_diff = 0
+                for i in range(0, image_flipped.shape[0]):
+                    for j in range(0, image_flipped.shape[1]):
+                        if image_flipped[i, j] == 0:
+                            count += 1
+                            row = i
+                            columns = j
+                            lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                            gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                            if lime_color_name == gan_color_name:
+                                same_color_count += 1
+
+                            avg_R += int(exp_lime[row, columns, 0])
+
+                            avg_G += int(exp_lime[row, columns, 1])
+
+                            avg_B += int(exp_lime[row, columns, 2])
+
+                            diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+
+                            diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+
+                            diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) 
+
+                            avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+
+                            avg_diff += abs((int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
+                            - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
+        
+                color_coverage_percent = 100 * same_color_count / count
+                print('FREE SPACE color_coverage_percent (%): ', color_coverage_percent)
+                print('\n')
+
+                avg_R /= count
+                avg_G /= count
+                avg_B /= count
+
+                if avg_R == 0:
+                    avg_R = 1
+                if avg_G == 0:
+                    avg_G = 1
+                if avg_B == 0:
+                    avg_B = 1
+
+                diff_R /= count
+                diff_G /= count
+                diff_B /= count
+
+                diff_R_percent = 100 * diff_R / avg_R
+                diff_G_percent = 100 * diff_G / avg_G
+                diff_B_percent = 100 * diff_B / avg_B
+
+                avg = (avg_R + avg_G + avg_B) / 3
+                diff = (diff_R + diff_G + diff_B) / 3
+                diff_percent = 100 * diff / avg 
+
+                avg_avg /= count
+                if avg_avg == 0:
+                    avg_avg = 1
+                avg_diff /= count
+                avg_diff_percent = 100 * avg_diff / avg_avg
+
+                print('FREE SPACE avg_R: ', avg_R)
+                print('\n')
+                print('FREE SPACE avg_G: ', avg_G)
+                print('\n')
+                print('FREE SPACE avg_B: ', avg_B)
+                print('\n')
+
+                print('FREE SPACE diff_R: ', diff_R)
+                print('\n')
+                print('FREE SPACE diff_G: ', diff_G)
+                print('\n')
+                print('FREE SPACE diff_B: ', diff_B)
+                print('\n')
+
+                print('FREE SPACE diff_R_percent (%): ', diff_R_percent)
+                print('\n')
+                print('FREE SPACE diff_G_percent (%):  ', diff_G_percent)
+                print('\n')
+                print('FREE SPACE diff_B_percent (%): ', diff_B_percent)
+                print('\n')
+
+                print('FREE SPACE avg: ', avg)
+                print('\n')
+                print('FREE SPACE diff: ', diff)
+                print('\n')
+                print('FREE SPACE diff_percent (%): ', diff_percent)
+                print('\n')
+
+                print('FREE SPACE avg_avg: ', avg_avg)
+                print('\n')
+                print('FREE SPACE avg_diff: ', avg_diff)
+                print('\n')
+                print('FREE SPACE avg_diff_percent (%): ', avg_diff_percent)
+                print('\n')
+
+                # ROBOT POSITION eval 
+                same_color_count = 0
+                count = 0
+
+                avg_R = 0
+                avg_G = 0
+                avg_B = 0
+
+                diff_R = 0
+                diff_G = 0
+                diff_B = 0
+
+                avg_avg = 0
+                avg_diff = 0
+                for i in range(0, len(x_odom_index)):
+                    count += 1
+                    row = y_odom_index[i]
+                    columns = x_odom_index[i]
+                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                    if lime_color_name == gan_color_name:
+                        same_color_count += 1
+
+                    avg_R += int(exp_lime[row, columns, 0])
+
+                    avg_G += int(exp_lime[row, columns, 1])
+
+                    avg_B += int(exp_lime[row, columns, 2])
+
+                    diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+
+                    diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+
+                    diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) 
+
+                    avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+
+                    avg_diff += abs((int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
+                    - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
+    
+                color_coverage_percent = 100 * same_color_count / count
+                print('ROBOT POSITION color_coverage_percent (%): ', color_coverage_percent)
+                print('\n')
+
+                avg_R /= count
+                avg_G /= count
+                avg_B /= count
+
+                if avg_R == 0:
+                    avg_R = 1
+                if avg_G == 0:
+                    avg_G = 1
+                if avg_B == 0:
+                    avg_B = 1
+
+                diff_R /= count
+                diff_G /= count
+                diff_B /= count
+
+                diff_R_percent = 100 * diff_R / avg_R
+                diff_G_percent = 100 * diff_G / avg_G
+                diff_B_percent = 100 * diff_B / avg_B
+
+                avg = (avg_R + avg_G + avg_B) / 3
+                diff = (diff_R + diff_G + diff_B) / 3
+                diff_percent = 100 * diff / avg 
+
+                avg_avg /= count
+                if avg_avg == 0:
+                    avg_avg = 1
+                avg_diff /= count
+                avg_diff_percent = 100 * avg_diff / avg_avg
+
+                print('ROBOT POSITION avg_R: ', avg_R)
+                print('\n')
+                print('ROBOT POSITION avg_G: ', avg_G)
+                print('\n')
+                print('ROBOT POSITION avg_B: ', avg_B)
+                print('\n')
+
+                print('ROBOT POSITION diff_R: ', diff_R)
+                print('\n')
+                print('ROBOT POSITION diff_G: ', diff_G)
+                print('\n')
+                print('ROBOT POSITION diff_B: ', diff_B)
+                print('\n')
+
+                print('ROBOT POSITION diff_R_percent (%): ', diff_R_percent)
+                print('\n')
+                print('ROBOT POSITION diff_G_percent (%):  ', diff_G_percent)
+                print('\n')
+                print('ROBOT POSITION diff_B_percent (%): ', diff_B_percent)
+                print('\n')
+
+                print('ROBOT POSITION avg: ', avg)
+                print('\n')
+                print('ROBOT POSITION diff: ', diff)
+                print('\n')
+                print('ROBOT POSITION diff_percent (%): ', diff_percent)
+                print('\n')
+
+                print('ROBOT POSITION avg_avg: ', avg_avg)
+                print('\n')
+                print('ROBOT POSITION avg_diff: ', avg_diff)
+                print('\n')
+                print('ROBOT POSITION avg_diff_percent (%): ', avg_diff_percent)
+                print('\n')
+                
+
+
+                
                 '''
                 # The Intersection over Union (IoU) metric, also referred to as the Jaccard index
                 intersection = np.logical_and(exp_lime, exp_gan)

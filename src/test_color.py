@@ -77,6 +77,7 @@ def create_dict_my():
     'springgreen',
     'magenta']
 
+
     # a dictionary of all the hex and their respective names in css3
     css3_db = CSS3_HEX_TO_NAMES
     names = []
