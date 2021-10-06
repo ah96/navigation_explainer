@@ -110,17 +110,34 @@ class ExplainRobotNavigation:
             return np.flip(myl, axis=1)
 
     def quaternion_to_euler(self, x, y, z, w):
+        # roll (x-axis rotation)
         t0 = +2.0 * (w * x + y * z)
         t1 = +1.0 - 2.0 * (x * x + y * y)
         roll = math.atan2(t0, t1)
+
+        # pitch (y-axis rotation)
         t2 = +2.0 * (w * y - z * x)
         t2 = +1.0 if t2 > +1.0 else t2
         t2 = -1.0 if t2 < -1.0 else t2
         pitch = math.asin(t2)
+
+        # yaw (z-axis rotation)
         t3 = +2.0 * (w * z + x * y)
         t4 = +1.0 - 2.0 * (y * y + z * z)
         yaw = math.atan2(t3, t4)
+
         return [yaw, pitch, roll]
+
+    def euler_to_quaternion(self, yaw, pitch, roll):
+        qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+        qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+        #qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+        #qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+
+        qz = math.cos(roll/2) * math.cos(pitch/2) * math.sin(yaw/2) - math.sin(roll/2) * math.sin(pitch/2) * math.cos(yaw/2)
+        qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
+        
+        return [qx, qy, qz, qw]
 
     def printImportantInformation(self):
         # print important information
@@ -281,9 +298,11 @@ class ExplainRobotNavigation:
         self.odom_w = self.odom_tmp.iloc[0, 3]
         # calculate Euler angles based on orientation quaternion
         [self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
-        # print('roll_odom: ', roll_odom)
-        # print('pitch_odom: ', pitch_odom)
-        # print('self.yaw_odom: ', self.yaw_odom)
+        #print('roll_odom: ', roll_odom)
+        #print('pitch_odom: ', pitch_odom)
+        #print('self.yaw_odom: ', self.yaw_odom)
+        #[qx, qy, qz, qw] = self.euler_to_quaternion(self.yaw_odom, pitch_odom, roll_odom)
+        
         # find yaw angles projections on x and y axes and save them to class variables
         self.yaw_odom_x = math.cos(self.yaw_odom)
         self.yaw_odom_y = math.sin(self.yaw_odom)
@@ -321,9 +340,9 @@ class ExplainRobotNavigation:
         self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
         # calculate Euler angles based on orientation quaternion
         [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
-        # print('roll_amcl: ', roll_amcl)
-        # print('pitch_amcl: ', pitch_amcl)
-        # print('yaw_amcl: ', self.yaw_amcl)
+        #print('roll_amcl: ', roll_amcl)
+        #print('pitch_amcl: ', pitch_amcl)
+        #print('yaw_amcl: ', self.yaw_amcl)
 
     def classifier_fn_image_plot(self):
         '''
@@ -1620,6 +1639,17 @@ class ExplainRobotNavigation:
 
         return segments_1
 
+    def inflatedToFree(self):
+        #'''
+        # Turn inflated area to free space and 100s to 99s
+        for i in range(0, self.image.shape[0]):
+            for j in range(0, self.image.shape[1]):
+                if 99 > self.image[i, j] > 0:
+                    self.image[i, j] = 0
+                elif self.image[i, j] == 100:
+                    self.image[i, j] = 99
+        #'''
+
     def testSegmentation(self, expID):
 
         print('Test segmentation function beginning')
@@ -1696,22 +1726,15 @@ class ExplainRobotNavigation:
 
             '''
             # If a custom costmap is used - TO-DO: make custom map loading a separate case in explainer.py
-            self.local_costmap_original.to_csv('~/amar_ws/costmapToChange.csv', index=False, header=True)
+            #self.local_costmap_original.to_csv('~/amar_ws/costmapToChange.csv', index=False, header=True)
             self.local_costmap_original = pd.read_csv('~/amar_ws/costmapToChange.csv')
             '''
 
             # Make image a np.array deepcopy of local_costmap_original
             self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
-            #'''
             # Turn inflated area to free space and 100s to 99s
-            for i in range(0, self.image.shape[0]):
-                for j in range(0, self.image.shape[1]):
-                    if 99 > self.image[i, j] > 0:
-                        self.image[i, j] = 0
-                    elif self.image[i, j] == 100:
-                        self.image[i, j] = 99
-            #'''
+            self.inflatedToFree()
 
             # Turn point free space (that is surrounded by obstacles) to point obstacle - not really needed
             #self.PFP2PO()

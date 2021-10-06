@@ -41,63 +41,106 @@ def quaternion_to_euler(x, y, z, w):
     yaw = math.atan2(t3, t4)
     return [yaw, pitch, roll]
 
-def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom):
-    # Delete entries with 'None' frame
+def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints):
+    offsets = []
     # Detect number of entries with 'None' frame based on local_costmap_info
-    num_of_first_rows_to_delete = len(local_costmap_info[local_costmap_info['frame'] == 'None'])
+    offsets.append(len(local_costmap_info[local_costmap_info['frame'] == 'None']))
+
+    # detect offsets in plans
+    offsets.append(int(plan.iloc[0, 5]))
+    offsets.append(int(teb_global_plan.iloc[0, 5]))
+    offsets.append(int(teb_local_plan.iloc[0, 5]))
+    offsets.append(int(footprints.iloc[0, 4]))
+    print('offsets: ', offsets)
+    
+    num_of_first_rows_to_delete = max(offsets)
     #'''
-    print('num_of_first_rows_to_delete:')
-    print(num_of_first_rows_to_delete)
+    print('num_of_first_rows_to_delete: ', num_of_first_rows_to_delete)
     print('\n')
     #'''
 
     # Delete entries with 'None' frame from local_costmap_info
     local_costmap_info.drop(index=local_costmap_info.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
     '''
-    print('local_costmap_info after deleting entries with None frame:')
+    print('local_costmap_info after deleting entries with None frame or plans offset or footprint offset: ')
     print(local_costmap_info)
     print('\n')
     '''
 
+    #'''
+    print('local_costmap_info.shape after deleting entries with None frame or plans offset or footprint offset: ', local_costmap_info.shape)
+    print('\n')
+    #'''
+
+
     # Delete entries with 'None' frame from odom
     odom.drop(index=odom.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
     '''
-    print('odom after deleting entries with None frame:')
+    print('odom after deleting entries with None frame or plans offset or footprint offset:')
     print(odom)
     print('\n')
     '''
 
+    #'''
+    print('odom.shape after deleting entries with None frame or plans offset or footprint offset: ', odom.shape)
+    print('\n')
+    #'''
+
+
     # Delete entries with 'None' frame from amcl_pose
     amcl_pose.drop(index=amcl_pose.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
     '''
-    print('amcl_pose after deleting entries with None frame:')
+    print('amcl_pose after deleting entries with None frame or plans offset or footprint offset:')
     print(amcl_pose)
     print('\n')
     '''
 
+    #'''
+    print('amcl_pose.shape after deleting entries with None frame or plans offset or footprint offset: ', amcl_pose.shape)
+    print('\n')
+    #'''
+
+
     # Delete entries with 'None' frame from cmd_vel
     cmd_vel.drop(index=cmd_vel.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
     '''
-    print('cmd_vel after deleting entries with None frame:')
+    print('cmd_vel after deleting entries with None frame or plans offset or footprint offset:')
     print(cmd_vel)
     print('\n')
     '''
 
+    #'''
+    print('cmd_vel.shape after deleting entries with None frame or plans offset or footprint offset: ', cmd_vel.shape)
+    print('\n')
+    #'''
+
+
     # Delete entries with 'None' frame from tf_odom_map
     tf_odom_map.drop(index=tf_odom_map.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
     '''
-    print('tf_odom_map after deleting entries with None frame:')
+    print('tf_odom_map after deleting entries with None frame or plans offset or footprint offset:')
     print(tf_odom_map)
     print('\n')
     '''
 
+    #'''
+    print('tf_odom_map.shape after deleting entries with None frame or plans offset or footprint offset: ', tf_odom_map.shape)
+    print('\n')
+    #'''
+
+
     # Delete entries with 'None' frame from tf_map_odom
     tf_map_odom.drop(index=tf_map_odom.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
     '''
-    print('tf_map_odom after deleting entries with None frame:')
+    print('tf_map_odom after deleting entries with None frame or plans offset or footprint offset:')
     print(tf_map_odom)
     print('\n')
     '''
+
+    #'''
+    print('tf_map_odom.shape after deleting entries with None frame or plans offset or footprint offset: ', tf_map_odom.shape)
+    print('\n')
+    #'''
 
     # Deletion of entries with 'None' frame from plans and footprints has not yet been implemented,
     # because after deleting rows from dataframes, indexes retain their values,
@@ -110,7 +153,6 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
 
 if explanation_alg == 'lime':
 
-    # consider moving data DataLoader outside lime
     # Data loading
     from lime_explainer import DataLoader
     
@@ -128,7 +170,10 @@ if explanation_alg == 'lime':
     print('\n')
     '''
 
-    num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom)
+    num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
+
+    costmap_size = local_costmap_info.iloc[0, 2]
+    #print('costmap_size: ', costmap_size)
     
     # Dataset creation
     X_train = []
@@ -137,7 +182,7 @@ if explanation_alg == 'lime':
     # if LIME image
     if explanation_mode == 'image':
         # output_class_name - not important for LIME image
-        output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - ' cmd_vel_ang_z'
+        output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
 
         # Explanation
         from lime_explainer import ExplainNavigation
@@ -161,7 +206,7 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            expID = 60
+            expID = 160
 
             # random instance selection
             # import random
@@ -207,7 +252,7 @@ if explanation_alg == 'lime':
             # optional instance selection - deterministic
             #expID = 15
 
-            # random instance selection
+            # rando1m instance selection
             import random
             expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
