@@ -36,7 +36,7 @@ from skimage.segmentation.slic_superpixels import _get_grid_centroids, _get_mask
 from skimage.measure import regionprops
 
 # important global variables
-perturb_hide_color = 50
+perturb_hide_color_value = 50
 
 class ExplainRobotNavigation:
 
@@ -474,12 +474,12 @@ class ExplainRobotNavigation:
         
         #'''
         # I will use channel 0 from sampled_instance as actual perturbed data
-        # Perturbed pixel intensity is perturb_hide_color
+        # Perturbed pixel intensity is perturb_hide_color_value
         # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
         for i in range(0, sampled_instance.shape[0]):
             for j in range(0, sampled_instance[i].shape[0]):
                 for k in range(0, sampled_instance[i].shape[1]):
-                    if sampled_instance[i][j, k, 0] == perturb_hide_color:
+                    if sampled_instance[i][j, k, 0] == perturb_hide_color_value:
                         if self.image[j, k] == 0:
                             sampled_instance[i][j, k, 0] = 99
                             #print('free space')
@@ -516,7 +516,7 @@ class ExplainRobotNavigation:
         print('C++ node ended')
 
         # load command velocities
-        self.cmd_vel = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
+        self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('cmd_vel: ', cmd_vel)
         #print('cmd_vel.shape: ', cmd_vel.shape)
 
@@ -586,53 +586,53 @@ class ExplainRobotNavigation:
         ahead_straight_list = []
         ahead_left_list = []
         ahead_right_list = []
-        for i in range(0, self.cmd_vel.shape[0]):
-            if abs(self.cmd_vel.iloc[i, 0]) < 0.01:
+        for i in range(0, self.cmd_vel_perturb.shape[0]):
+            if abs(self.cmd_vel_perturb.iloc[i, 0]) < 0.01:
                 stop_list.append(1.0)
             else:
                 stop_list.append(0.0)
 
-            if self.cmd_vel.iloc[i, 0] > 0.01:
+            if self.cmd_vel_perturb.iloc[i, 0] > 0.01:
                 linear_positive_list.append(1.0)
             else:
                 linear_positive_list.append(0.0)
 
-            if self.cmd_vel.iloc[i, 2] > 0.0:
+            if self.cmd_vel_perturb.iloc[i, 2] > 0.0:
                 rotate_left_list.append(1.0)
             else:
                 rotate_left_list.append(0.0)
 
-            if self.cmd_vel.iloc[i, 2] < 0.0:
+            if self.cmd_vel_perturb.iloc[i, 2] < 0.0:
                 rotate_right_list.append(1.0)
             else:
                 rotate_right_list.append(0.0)
 
-            if self.cmd_vel.iloc[i, 0] > 0.01 and abs(self.cmd_vel.iloc[i, 2]) < 0.01:
+            if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) < 0.01:
                 ahead_straight_list.append(1.0)
             else:
                 ahead_straight_list.append(0.0)
 
-            if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] > 0.0:
+            if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.0:
                 ahead_left_list.append(1.0)
             else:
                 ahead_left_list.append(0.0)
 
-            if self.cmd_vel.iloc[i, 0] > 0.01 and self.cmd_vel.iloc[i, 2] < 0.0:
+            if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < 0.0:
                 ahead_right_list.append(1.0)
             else:
                 ahead_right_list.append(0.0)
 
-        self.cmd_vel['deviate'] = self.local_plan_deviation
-        self.cmd_vel['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel.shape[0]), columns=['stop'])
-        self.cmd_vel['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel.shape[0]), columns=['linear_positive'])
-        self.cmd_vel['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel.shape[0]), columns=['rotate_left'])
-        self.cmd_vel['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel.shape[0]), columns=['rotate_right'])
-        self.cmd_vel['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_straight'])
-        self.cmd_vel['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_left'])
-        self.cmd_vel['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel.shape[0]), columns=['ahead_right'])
+        self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
+        self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
+        self.cmd_vel_perturb['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['linear_positive'])
+        self.cmd_vel_perturb['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left'])
+        self.cmd_vel_perturb['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right'])
+        self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
+        self.cmd_vel_perturb['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_left'])
+        self.cmd_vel_perturb['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_right'])
 
         '''
-        print('self.cmd_vel: ', self.cmd_vel)
+        print('self.cmd_vel_perturb: ', self.cmd_vel_perturb)
         print('self.local_plan_deviation: ', self.local_plan_deviation)
         print('stop_list: ', stop_list)
         print('linear_positive_list: ', linear_positive_list)
@@ -645,7 +645,7 @@ class ExplainRobotNavigation:
 
         print('classifier_fn_image ended')
 
-        return np.array(self.cmd_vel.iloc[:, 3:])
+        return np.array(self.cmd_vel_perturb.iloc[:, 3:])
 
     def plotExplanationMinimal(self):
         # make a deepcopy of an image
@@ -1751,11 +1751,9 @@ class ExplainRobotNavigation:
             # my custom segmentation func
             segm_fn = 'custom_segmentation'
 
-            # u trenutnoj implementaciji je num_samples nebitan parametar
-            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color, num_samples=self.num_samples,
+            self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color_value, num_samples=self.num_samples,
                                                                batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
-            #print('self.explanation: ', self.explanation)
-
+            
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
@@ -2088,7 +2086,7 @@ class ExplainRobotNavigation:
             segm_fn = 'custom_segmentation'
 
             self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image,
-                                                               hide_color=perturb_hide_color,
+                                                               hide_color=perturb_hide_color_value,
                                                                num_samples=self.num_samples,
                                                                batch_size=1024, segmentation_fn=segm_fn,
                                                                top_labels=10)
@@ -2197,12 +2195,12 @@ class ExplainRobotNavigation:
 
         # '''
         # I will use channel 0 from sampled_instance as actual perturbed data
-        # Perturbed pixel intensity is perturb_hide_color
+        # Perturbed pixel intensity is perturb_hide_color_value
         # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
         for i in range(0, sampled_instance.shape[0]):
             for j in range(0, sampled_instance[i].shape[0]):
                 for k in range(0, sampled_instance[i].shape[1]):
-                    if sampled_instance[i][j, k, 0] == perturb_hide_color:
+                    if sampled_instance[i][j, k, 0] == perturb_hide_color_value:
                         if self.image[j, k] == 0:
                             sampled_instance[i][j, k, 0] = 99
                             # print('free space')
@@ -2212,7 +2210,7 @@ class ExplainRobotNavigation:
         # '''
 
         # '''
-        # Save perturbed costmap_data to file got c++ node
+        # Save perturbed costmap_data to file for c++ local planner node
         # sampled_instance = sampled_instance.astype(int)
         self.costmap_tmp = pd.DataFrame(sampled_instance[0][:, :, 0])
         for i in range(1, sampled_instance.shape[0]):
@@ -2774,7 +2772,7 @@ class ExplainRobotNavigation:
                         start = time.time()
                         self.explanation, segmentation_time, classifier_fn_time, planner_time = self.explainer.explain_instance_evaluation(
                             img, self.classifier_fn_image_evaluation,
-                            hide_color=perturb_hide_color,
+                            hide_color=perturb_hide_color_value,
                             num_segments=segments_num,
                             num_segments_current=i,
                             batch_size=1024, segmentation_fn=segm_fn,

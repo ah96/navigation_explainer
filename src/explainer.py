@@ -209,8 +209,8 @@ if explanation_alg == 'lime':
             expID = 160
 
             # random instance selection
-            # import random
-            # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+            #import random
+            #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
             exp_nav.explain_instance(expID)
             #exp_nav.testSegmentation(expID)

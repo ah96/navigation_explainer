@@ -131,8 +131,14 @@ class ImageExplanation(object):
             return temp, mask, exp
         else:
             counter_local = 0
+            import pandas as pd
+            #pd.DataFrame(segments).to_csv('segments_lime_image.csv', index=False)
             for f, w in exp[:num_features]:
                 #print('(f, w): ', (f, w))
+
+                #if f == 0:
+                #    print(image[segments == f])
+
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
@@ -354,6 +360,9 @@ class LimeImageExplainer(object):
         '''
         segments_1 = segments_1 - 1
 
+        #import pandas as pd
+        #pd.DataFrame(segments_1).to_csv('segments_original.csv', index=False)
+
         #print('mySlic ends')
 
         return segments_1
@@ -406,14 +415,18 @@ class LimeImageExplainer(object):
         """
 
         #print('batch_size: ', batch_size)
+        #print('\n')
 
         '''
         # Plot picture
         import matplotlib.pyplot as plt
         plt.imshow(image)
-        plt.savefig('self.image.png')
+        plt.savefig('self.lime_image_costmap.png')
         plt.clf()
         '''
+
+        #print('len(image.shape): ', len(image.shape))
+        #print('\n')
 
         if len(image.shape) == 2:
             image = gray2rgb(image)
@@ -441,18 +454,33 @@ class LimeImageExplainer(object):
         else:
             fudged_image[:] = hide_color
 
+        '''    
+        # Plot picture
+        import matplotlib.pyplot as plt
+        plt.imshow(fudged_image)
+        plt.savefig('self.lime_image_fudged_image.png')
+        plt.clf()    
+        '''
+
         top = labels
+        #print('top: ', top)
 
         data, labels = self.data_labels(image, fudged_image, segments,
                                         classifier_fn, num_samples,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
 
+        print('data: ', data)
+        print('labels: ', labels)
+
+        #distance_metric = 'jaccard'
         distances = sklearn.metrics.pairwise_distances(
             data,
             data[0].reshape(1, -1),
             metric=distance_metric
         ).ravel()
+
+        #print('distances: ', distances)
 
         ret_exp = ImageExplanation(image, segments)
         if top_labels:
@@ -531,10 +559,12 @@ class LimeImageExplainer(object):
 
         imgs = []
         rows = tqdm(data) if progress_bar else data
+        #print('rows: ', rows)
         for row in rows:
             temp = copy.deepcopy(image)
             zeros = np.where(row == 0)[0]
             mask = np.zeros(segments.shape).astype(bool)
+            #print('mask.shape: ', mask.shape)
             for z in zeros:
                 mask[segments == z] = True
             temp[mask] = fudged_image[mask]
@@ -548,6 +578,9 @@ class LimeImageExplainer(object):
             labels.extend(preds)
 
         #print('data_labels ends')
+
+        #print('data: ', data)
+        #print('labels: ', np.array(labels))
 
         return data, np.array(labels)
 
