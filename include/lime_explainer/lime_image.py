@@ -470,8 +470,8 @@ class LimeImageExplainer(object):
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
 
-        print('data: ', data)
-        print('labels: ', labels)
+        #print('data: ', data)
+        #print('labels: ', labels)
 
         #distance_metric = 'jaccard'
         distances = sklearn.metrics.pairwise_distances(

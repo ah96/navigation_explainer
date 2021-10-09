@@ -457,7 +457,7 @@ class ExplainRobotNavigation:
             plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
 
             # plot command velocities as text
-            plt.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel.iloc[i, 2], 2)))
+            plt.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_perturb.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_perturb.iloc[i, 2], 2)))
 
             # save figure
             plt.savefig('perturbation_' + str(i) + '.png')
@@ -517,27 +517,64 @@ class ExplainRobotNavigation:
 
         # load command velocities
         self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
-        #print('cmd_vel: ', cmd_vel)
-        #print('cmd_vel.shape: ', cmd_vel.shape)
+        #print('self.cmd_vel: ', self.cmd_vel_perturb)
+        #print('self.cmd_vel.shape: ', self.cmd_vel_perturb.shape)
 
         # load local plans
         self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
-        #print('local_plans: ', local_plans)
-        #print('local_plans.shape: ', local_plans.shape)
+        #print('self.local_plans: ', self.local_plans)
+        #print('self.local_plans.shape: ', self.local_plans.shape)
 
         # load transformed plan
         self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
-        #print('transformed_plan: ', transformed_plan)
-        #print('transformed_plan.shape: ', transformed_plan.shape)
+        #print('self.transformed_plan: ', self.transformed_plan)
+        #print('self.transformed_plan.shape: ', self.transformed_plan.shape)
 
-        # moguca usteda vremena
+        # only needed for classifier_fn_image_plot() function
         self.sampled_instance = sampled_instance
 
-        #self.classifier_fn_image_plot()
+        # plot perturbation of local costmap
+        self.classifier_fn_image_plot()
 
-        # new output - deviation of the local plan compared to the global plan
-        self.local_plan_deviation = pd.DataFrame(1.0, index=np.arange(self.sampled_instance.shape[0]), columns=['deviate'])
-        #print(self.local_plan_deviation)
+        # finding deviation type
+        # local plan original - self.local_plan_tmp
+        # command velocity pair original - self.cmd_vel_original_tmp
+        deviation_type = '' # 'deviation', 'no_deviation', 'non_feasible'
+
+        if (self.cmd_vel_original_tmp.iloc[0] == 0 and self.cmd_vel_original_tmp.iloc[1] == 0) or (self.cmd_vel_original_tmp.iloc[0] < 0):
+            deviation_type = 'non_feasible'
+        else:    
+            sum_x = 0
+            sum_y = 0
+            if self.local_plan_tmp.shape[0] <= self.transformed_plan.shape[0]:
+                for j in range(0, self.local_plan_tmp.shape[0]):
+                    sum_x = sum_x + (self.local_plan_tmp.iloc[j, 0] - self.transformed_plan.iloc[j, 0]) ** 2
+                    sum_y = sum_y + (self.local_plan_tmp.iloc[j, 1] - self.transformed_plan.iloc[j, 1]) ** 2
+            else:
+                for j in range(0, self.transformed_plan.shape[0]):
+                    sum_x = sum_x + (self.local_plan_tmp.iloc[j, 0] - self.transformed_plan.iloc[j, 0]) ** 2
+                    sum_y = sum_y + (self.local_plan_tmp.iloc[j, 1] - self.transformed_plan.iloc[j, 1]) ** 2                
+            import math
+            sum_final = math.sqrt(sum_x + sum_y)
+            print('sum_final_original: ', sum_final)
+            if sum_final < 4.0:
+                deviation_type = 'no_deviation'
+            else:
+                deviation_type = 'deviation'
+
+        
+        print('\ndeviation_type: ', deviation_type)
+        print('\n')
+        print('transformed plan length: ', self.transformed_plan.shape[0])
+        print('\n')
+        print('local plan original length: ', self.local_plan_tmp.shape[0])
+        print('\n')
+        print('command velocities original - lin_x: ' + str(self.cmd_vel_original_tmp.iloc[0]) + ', ang_z: ' + str(self.cmd_vel_original_tmp.iloc[1]) + '\n')
+
+
+        # deviation local plan from global plan
+        self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
+        #print('self.local_plan_deviation: ', self.local_plan_deviation)
 
         transformed_plan_xs = []
         transformed_plan_ys = []
@@ -548,7 +585,7 @@ class ExplainRobotNavigation:
         transformed_plan_ys = np.array(transformed_plan_ys)
 
         # fill in deviation dataframe
-        for i in range(0, self.sampled_instance.shape[0]):
+        for i in range(0, sampled_instance.shape[0]):
             local_plan_xs = []
             local_plan_ys = []
             local_plan_found = False
@@ -557,6 +594,7 @@ class ExplainRobotNavigation:
                     local_plan_found = True
                     local_plan_xs.append(self.local_plans.iloc[j, 0])
                     local_plan_ys.append(self.local_plans.iloc[j, 1])
+         
             if local_plan_found == True:
                 local_plan_xs = np.array(local_plan_xs)
                 local_plan_ys = np.array(local_plan_ys)
@@ -572,11 +610,38 @@ class ExplainRobotNavigation:
                         sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
                 import math
                 sum_final = math.sqrt(sum_x + sum_y)
-                #print('i: ', i)
-                #print('sum_final: ', sum_final)
-                if sum_final < 4.0: # heuristics
+
+                if deviation_type == 'no_deviation':
+                    if sum_final < 4.0: # heuristics
+                        self.local_plan_deviation.iloc[i, 0] = 1.0
+                    else:    
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                elif deviation_type == 'deviation':
+                    if sum_final < 4.0: # heuristics
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                    else:    
+                        self.local_plan_deviation.iloc[i, 0] = 1.0
+                elif deviation_type == 'non_feasible':
+                    if self.cmd_vel_perturb.iloc[i, 0] < 0: 
+                        self.local_plan_deviation.iloc[i, 0] = 1.0
+                    else:
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+            else:
+                if deviation_type == 'no_deviation':         
                     self.local_plan_deviation.iloc[i, 0] = 0.0
-        #print(self.local_plan_deviation)
+                elif deviation_type == 'deviation':
+                    self.local_plan_deviation.iloc[i, 0] = 1.0
+                elif deviation_type == 'non_feasible':
+                    self.local_plan_deviation.iloc[i, 0] = 1.0
+            '''
+            print('i: ', i)
+            print('local plan found: ', local_plan_found)
+            print('sum_final: ', sum_final)
+            print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]) + '\n')
+            '''
+            
+        
+        #print('self.local_plan_deviation: ', self.local_plan_deviation)
 
         # classification
         stop_list = []
@@ -749,8 +814,6 @@ class ExplainRobotNavigation:
         for i in range(1, self.local_plan_tmp.shape[0]):
             self.local_plan_x_list.append(int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
             self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        # plot robots' local plan
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         
         # save indices of robot's odometry location in local costmap to class variables
         self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
@@ -796,7 +859,9 @@ class ExplainRobotNavigation:
                     
         plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
 
-        
+        # plot robots' local plan
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
+                
         # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
         self.x_odom_index = [self.localCostmapIndex_x_odom]
         # print('self.x_odom_index: ', self.x_odom_index)
@@ -836,7 +901,6 @@ class ExplainRobotNavigation:
         fig.clf()
         #fig.close()
 
-    # TO-DO: Da li GANU slati originalnu ili flipped costmapu. Trenutno saljem flipped one.
     def plotExplanationMinimalFlipped(self):
         # make a deepcopy of an image
         img_ = copy.deepcopy(self.image)
@@ -940,9 +1004,6 @@ class ExplainRobotNavigation:
             self.local_plan_x_list.append(160 - int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
             self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
 
-        # plot robots' local plan
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-
         # save indices of robot's odometry location in local costmap to class variables
         self.localCostmapIndex_x_odom = 160 - int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
         # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
@@ -987,6 +1048,8 @@ class ExplainRobotNavigation:
                     int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
         plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
 
+        # plot robots' local plan
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         
         # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
         self.x_odom_index = [self.localCostmapIndex_x_odom]
@@ -1759,8 +1822,8 @@ class ExplainRobotNavigation:
                                                                            hide_rest=False,
                                                                            min_weight=0.1)  # min_weight=0.1 - default
 
-            #self.plotExplanationMinimal()
-            self.plotExplanationMinimalFlipped()
+            self.plotExplanationMinimal()
+            #self.plotExplanationMinimalFlipped()
             #self.plotExplanation()
             #self.plotExplanationFlipped()
 

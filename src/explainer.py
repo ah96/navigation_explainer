@@ -206,7 +206,7 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            expID = 160
+            expID = 33 #68 #69
 
             # random instance selection
             #import random
