@@ -534,12 +534,12 @@ class ExplainRobotNavigation:
         self.sampled_instance = sampled_instance
 
         # plot perturbation of local costmap
-        self.classifier_fn_image_plot()
+        #self.classifier_fn_image_plot()
 
         # finding deviation type
         # local plan original - self.local_plan_tmp
         # command velocity pair original - self.cmd_vel_original_tmp
-        deviation_type = '' # 'deviation', 'no_deviation', 'non_feasible'
+        #deviation_type = '' # 'deviation', 'no_deviation', 'non_feasible'
 
         if (self.cmd_vel_original_tmp.iloc[0] == 0 and self.cmd_vel_original_tmp.iloc[1] == 0) or (self.cmd_vel_original_tmp.iloc[0] < 0):
             deviation_type = 'non_feasible'
@@ -557,7 +557,7 @@ class ExplainRobotNavigation:
             import math
             sum_final = math.sqrt(sum_x + sum_y)
             print('sum_final_original: ', sum_final)
-            if sum_final < 4.0:
+            if sum_final < 4.5:
                 deviation_type = 'no_deviation'
             else:
                 deviation_type = 'deviation'
@@ -594,38 +594,38 @@ class ExplainRobotNavigation:
                     local_plan_found = True
                     local_plan_xs.append(self.local_plans.iloc[j, 0])
                     local_plan_ys.append(self.local_plans.iloc[j, 1])
-         
-            if local_plan_found == True:
-                local_plan_xs = np.array(local_plan_xs)
-                local_plan_ys = np.array(local_plan_ys)
-                sum_x = 0
-                sum_y = 0
-                if local_plan_xs.shape <= transformed_plan_xs.shape:
-                    for j in range(0, local_plan_xs.shape[0]):
-                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
-                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
-                else:
-                    for j in range(0, transformed_plan_xs.shape[0]):
-                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
-                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
-                import math
-                sum_final = math.sqrt(sum_x + sum_y)
 
-                if deviation_type == 'no_deviation':
-                    if sum_final < 4.0: # heuristics
-                        self.local_plan_deviation.iloc[i, 0] = 1.0
-                    else:    
-                        self.local_plan_deviation.iloc[i, 0] = 0.0
-                elif deviation_type == 'deviation':
-                    if sum_final < 4.0: # heuristics
-                        self.local_plan_deviation.iloc[i, 0] = 0.0
-                    else:    
-                        self.local_plan_deviation.iloc[i, 0] = 1.0
-                elif deviation_type == 'non_feasible':
-                    if self.cmd_vel_perturb.iloc[i, 0] < 0: 
-                        self.local_plan_deviation.iloc[i, 0] = 1.0
+            sum_final = 0
+
+            if local_plan_found == True:
+                if deviation_type == 'non_feasible':
+                    self.local_plan_deviation.iloc[i, 0] = 0.0
+                else:
+                    local_plan_xs = np.array(local_plan_xs)
+                    local_plan_ys = np.array(local_plan_ys)
+                    sum_x = 0
+                    sum_y = 0
+                    if local_plan_xs.shape <= transformed_plan_xs.shape:
+                        for j in range(0, local_plan_xs.shape[0]):
+                            sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                            sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
                     else:
-                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                        for j in range(0, transformed_plan_xs.shape[0]):
+                            sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                            sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                    import math
+                    sum_final = math.sqrt(sum_x + sum_y)
+
+                    if deviation_type == 'no_deviation':
+                        if sum_final < 3.5: # heuristics
+                            self.local_plan_deviation.iloc[i, 0] = 1.0
+                        else:    
+                            self.local_plan_deviation.iloc[i, 0] = 0.0
+                    elif deviation_type == 'deviation':
+                        if sum_final < 4.5: # heuristics
+                            self.local_plan_deviation.iloc[i, 0] = 0.0
+                        else:    
+                            self.local_plan_deviation.iloc[i, 0] = 1.0                
             else:
                 if deviation_type == 'no_deviation':         
                     self.local_plan_deviation.iloc[i, 0] = 0.0
@@ -633,80 +633,83 @@ class ExplainRobotNavigation:
                     self.local_plan_deviation.iloc[i, 0] = 1.0
                 elif deviation_type == 'non_feasible':
                     self.local_plan_deviation.iloc[i, 0] = 1.0
-            '''
+            #'''
             print('i: ', i)
             print('local plan found: ', local_plan_found)
             print('sum_final: ', sum_final)
             print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]) + '\n')
-            '''
+            #'''
             
         
         #print('self.local_plan_deviation: ', self.local_plan_deviation)
 
-        # classification
-        stop_list = []
-        linear_positive_list = []
-        rotate_left_list = []
-        rotate_right_list = []
-        ahead_straight_list = []
-        ahead_left_list = []
-        ahead_right_list = []
-        for i in range(0, self.cmd_vel_perturb.shape[0]):
-            if abs(self.cmd_vel_perturb.iloc[i, 0]) < 0.01:
-                stop_list.append(1.0)
-            else:
-                stop_list.append(0.0)
-
-            if self.cmd_vel_perturb.iloc[i, 0] > 0.01:
-                linear_positive_list.append(1.0)
-            else:
-                linear_positive_list.append(0.0)
-
-            if self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                rotate_left_list.append(1.0)
-            else:
-                rotate_left_list.append(0.0)
-
-            if self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                rotate_right_list.append(1.0)
-            else:
-                rotate_right_list.append(0.0)
-
-            if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) < 0.01:
-                ahead_straight_list.append(1.0)
-            else:
-                ahead_straight_list.append(0.0)
-
-            if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                ahead_left_list.append(1.0)
-            else:
-                ahead_left_list.append(0.0)
-
-            if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                ahead_right_list.append(1.0)
-            else:
-                ahead_right_list.append(0.0)
-
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
-        self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
-        self.cmd_vel_perturb['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['linear_positive'])
-        self.cmd_vel_perturb['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left'])
-        self.cmd_vel_perturb['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right'])
-        self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
-        self.cmd_vel_perturb['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_left'])
-        self.cmd_vel_perturb['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_right'])
+        
+        more_outputs = False
+        if more_outputs == True:
+            # classification
+            stop_list = []
+            linear_positive_list = []
+            rotate_left_list = []
+            rotate_right_list = []
+            ahead_straight_list = []
+            ahead_left_list = []
+            ahead_right_list = []
+            for i in range(0, self.cmd_vel_perturb.shape[0]):
+                if abs(self.cmd_vel_perturb.iloc[i, 0]) < 0.01:
+                    stop_list.append(1.0)
+                else:
+                    stop_list.append(0.0)
 
-        '''
-        print('self.cmd_vel_perturb: ', self.cmd_vel_perturb)
-        print('self.local_plan_deviation: ', self.local_plan_deviation)
-        print('stop_list: ', stop_list)
-        print('linear_positive_list: ', linear_positive_list)
-        print('rotate_left_list: ', rotate_left_list)
-        print('rotate_right_list: ', rotate_right_list)
-        print('ahead_straight_list: ', ahead_straight_list)
-        print('ahead_left_list: ', ahead_left_list)
-        print('ahead_right_list: ', ahead_right_list)
-        '''
+                if self.cmd_vel_perturb.iloc[i, 0] > 0.01:
+                    linear_positive_list.append(1.0)
+                else:
+                    linear_positive_list.append(0.0)
+
+                if self.cmd_vel_perturb.iloc[i, 2] > 0.0:
+                    rotate_left_list.append(1.0)
+                else:
+                    rotate_left_list.append(0.0)
+
+                if self.cmd_vel_perturb.iloc[i, 2] < 0.0:
+                    rotate_right_list.append(1.0)
+                else:
+                    rotate_right_list.append(0.0)
+
+                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) < 0.01:
+                    ahead_straight_list.append(1.0)
+                else:
+                    ahead_straight_list.append(0.0)
+
+                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.0:
+                    ahead_left_list.append(1.0)
+                else:
+                    ahead_left_list.append(0.0)
+
+                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < 0.0:
+                    ahead_right_list.append(1.0)
+                else:
+                    ahead_right_list.append(0.0)
+
+            self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
+            self.cmd_vel_perturb['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['linear_positive'])
+            self.cmd_vel_perturb['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left'])
+            self.cmd_vel_perturb['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right'])
+            self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
+            self.cmd_vel_perturb['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_left'])
+            self.cmd_vel_perturb['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_right'])
+
+            '''
+            print('self.cmd_vel_perturb: ', self.cmd_vel_perturb)
+            print('self.local_plan_deviation: ', self.local_plan_deviation)
+            print('stop_list: ', stop_list)
+            print('linear_positive_list: ', linear_positive_list)
+            print('rotate_left_list: ', rotate_left_list)
+            print('rotate_right_list: ', rotate_right_list)
+            print('ahead_straight_list: ', ahead_straight_list)
+            print('ahead_left_list: ', ahead_left_list)
+            print('ahead_right_list: ', ahead_right_list)
+            '''
 
         print('classifier_fn_image ended')
 

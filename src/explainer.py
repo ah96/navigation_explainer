@@ -206,11 +206,11 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            expID = 33 #68 #69
+            #expID = 97 #94 #27 #68 #69
 
             # random instance selection
-            #import random
-            #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+            import random
+            expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
 
             exp_nav.explain_instance(expID)
             #exp_nav.testSegmentation(expID)
