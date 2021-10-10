@@ -541,6 +541,7 @@ class ExplainRobotNavigation:
         # command velocity pair original - self.cmd_vel_original_tmp
         #deviation_type = '' # 'deviation', 'no_deviation', 'non_feasible'
 
+        ''' 
         if (self.cmd_vel_original_tmp.iloc[0] == 0 and self.cmd_vel_original_tmp.iloc[1] == 0) or (self.cmd_vel_original_tmp.iloc[0] < 0):
             deviation_type = 'non_feasible'
         else:    
@@ -570,10 +571,11 @@ class ExplainRobotNavigation:
         print('local plan original length: ', self.local_plan_tmp.shape[0])
         print('\n')
         print('command velocities original - lin_x: ' + str(self.cmd_vel_original_tmp.iloc[0]) + ', ang_z: ' + str(self.cmd_vel_original_tmp.iloc[1]) + '\n')
-
+        '''
 
         # deviation local plan from global plan
-        self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
+        #self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
+        self.local_plan_deviation = pd.DataFrame(1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
         #print('self.local_plan_deviation: ', self.local_plan_deviation)
 
         transformed_plan_xs = []
@@ -584,6 +586,38 @@ class ExplainRobotNavigation:
         transformed_plan_xs = np.array(transformed_plan_xs)
         transformed_plan_ys = np.array(transformed_plan_ys)
 
+        # fill in deviation dataframe
+        for i in range(0, self.sampled_instance.shape[0]):
+            local_plan_xs = []
+            local_plan_ys = []
+            local_plan_found = False
+            for j in range(0, self.local_plans.shape[0]):
+                if self.local_plans.iloc[j, -1] == i:
+                    local_plan_found = True
+                    local_plan_xs.append(self.local_plans.iloc[j, 0])
+                    local_plan_ys.append(self.local_plans.iloc[j, 1])
+            if local_plan_found == True:
+                local_plan_xs = np.array(local_plan_xs)
+                local_plan_ys = np.array(local_plan_ys)
+                sum_x = 0
+                sum_y = 0
+                if local_plan_xs.shape <= transformed_plan_xs.shape:
+                    for j in range(0, local_plan_xs.shape[0]):
+                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                else:
+                    for j in range(0, transformed_plan_xs.shape[0]):
+                        sum_x = sum_x + (local_plan_xs[j] - transformed_plan_xs[j]) ** 2
+                        sum_y = sum_y + (local_plan_ys[j] - transformed_plan_ys[j]) ** 2
+                import math
+                sum_final = math.sqrt(sum_x + sum_y)
+                #print('i: ', i)
+                #print('sum_final: ', sum_final)
+                if sum_final < 4.0: # heuristics
+                    self.local_plan_deviation.iloc[i, 0] = 0.0
+        #print(self.local_plan_deviation)
+        
+        '''
         # fill in deviation dataframe
         for i in range(0, sampled_instance.shape[0]):
             local_plan_xs = []
@@ -633,13 +667,13 @@ class ExplainRobotNavigation:
                     self.local_plan_deviation.iloc[i, 0] = 1.0
                 elif deviation_type == 'non_feasible':
                     self.local_plan_deviation.iloc[i, 0] = 1.0
-            #'''
+            
             print('i: ', i)
             print('local plan found: ', local_plan_found)
             print('sum_final: ', sum_final)
             print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]) + '\n')
-            #'''
             
+        '''    
         
         #print('self.local_plan_deviation: ', self.local_plan_deviation)
 
@@ -1825,8 +1859,8 @@ class ExplainRobotNavigation:
                                                                            hide_rest=False,
                                                                            min_weight=0.1)  # min_weight=0.1 - default
 
-            self.plotExplanationMinimal()
-            #self.plotExplanationMinimalFlipped()
+            #self.plotExplanationMinimal()
+            self.plotExplanationMinimalFlipped()
             #self.plotExplanation()
             #self.plotExplanationFlipped()
 

@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN', 'just_eval'
-test_type = 'single'
+test_type = 'LIMEvsGAN'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -524,9 +524,8 @@ if explanation_alg == 'lime':
             from GAN import gan            
             gan.predict()       
 
-
         elif test_type == 'LIMEvsGAN':
-            num_iter = 1
+            num_iter = 50
             lime_time_avg = 0
             gan_time_avg = 0
 
@@ -539,17 +538,46 @@ if explanation_alg == 'lime':
 
             from test_color import *
             create_dict_my()
-            
+
+            import pandas as pd
+            import time
+            import numpy as np
+            import copy
+            import matplotlib.pyplot as plt
+
+            with open("times.csv", "w") as myfile:
+                    myfile.write("lime,gan\n")
+
+            with open("percentages.csv", "w") as myfile:
+                    myfile.write("color,R,G,B,RGB_after,RGB_from_iter\n")
+
+            with open("local_plan.csv", "w") as myfile:
+                    myfile.write("color,RGB_after,RGB_from_iter\n")
+
+            with open("global_plan.csv", "w") as myfile:
+                    myfile.write("color,RGB_after,RGB_from_iter\n")
+
+            with open("obstacles.csv", "w") as myfile:
+                    myfile.write("color,RGB_after,RGB_from_iter\n")
+
+            with open("free_space.csv", "w") as myfile:
+                    myfile.write("color,RGB_after,RGB_from_iter\n")
+
+            #with open("robot_position.csv", "w") as myfile:
+            #        myfile.write("color,RGB_after,RGB_from_iter\n")
+                
             for num in range(0, num_iter):
+                print('NUM:  ', num)
+
+                lime_time_avg = 0
+                gan_time_avg = 0
+                
                 # optional instance selection - deterministic
                 #expID = 160 #254 #160 #135 #35 #2 #0 
 
                 # random instance selection
                 import random
-                expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
-
-
-                import time
+                expID = random.randint(5, local_costmap_info.shape[0] - 5) # expID se trazi iz local_costmap_info
 
                 # call LIME    
                 time_before = time.time()
@@ -557,7 +585,6 @@ if explanation_alg == 'lime':
                 time_after = time.time()
                 lime_time_avg += time_after - time_before
                 #print('LIME exp time: ', time_after - time_before)           
-
 
 
                 # call GAN
@@ -571,8 +598,6 @@ if explanation_alg == 'lime':
                 local_costmap_original = local_costmap_data.iloc[(index) * costmap_size:(index + 1) * costmap_size, :]
                 
                 # Make image a np.array deepcopy of local_costmap_original
-                import numpy as np
-                import copy
                 image = np.array(copy.deepcopy(local_costmap_original))
 
                 # '''
@@ -592,7 +617,6 @@ if explanation_alg == 'lime':
                 image_flipped = np.flip(image, axis=1)
 
                 # plot input image
-                import matplotlib.pyplot as plt
                 fig = plt.figure(frameon=False)
                 w = 1.6 #* 3
                 h = 1.6 #* 3
@@ -601,8 +625,6 @@ if explanation_alg == 'lime':
                 ax.set_axis_off()
                 fig.add_axes(ax)
                 ax.imshow(image_flipped.astype('float64'), aspect='auto')
-
-                import pandas as pd
 
                 # get costmap info
                 costmap_info_tmp = local_costmap_info.iloc[index, :]
@@ -728,6 +750,9 @@ if explanation_alg == 'lime':
                 print('LIME time: ', lime_time_avg / num_iter)
                 print('GAN time: ', gan_time_avg / num_iter)
 
+                with open("times.csv", "a") as myfile:
+                    myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
+
                 segments = exp_nav.getSegmentsForEval(image)
                 #print('exp_nav.exp: ', exp_nav.exp)
                 #plt.imshow(segments)
@@ -735,7 +760,7 @@ if explanation_alg == 'lime':
 
                 segments = np.flip(segments, axis=1)
 
-                pd.DataFrame(segments).to_csv('SEGMENTS.csv', index=False)
+                #pd.DataFrame(segments).to_csv('SEGMENTS.csv', index=False)
 
 
                 # RGB evaluation
@@ -747,17 +772,17 @@ if explanation_alg == 'lime':
                 exp_gan_orig = PIL.Image.open(path1).convert('RGB')
 
                 exp_lime = np.array(exp_lime_orig)
-                print('exp_lime.shape: ', exp_lime.shape)
+                #print('exp_lime.shape: ', exp_lime.shape)
                 exp_gan = np.array(exp_gan_orig)
-                print('exp_gan.shape: ', exp_gan.shape)
+                #print('exp_gan.shape: ', exp_gan.shape)
 
-                pd.DataFrame(exp_lime[:,:,0]).to_csv("exp_lime_R.csv")
-                pd.DataFrame(exp_lime[:,:,1]).to_csv("exp_lime_G.csv")
-                pd.DataFrame(exp_lime[:,:,2]).to_csv("exp_lime_B.csv")
+                #pd.DataFrame(exp_lime[:,:,0]).to_csv("exp_lime_R.csv")
+                #pd.DataFrame(exp_lime[:,:,1]).to_csv("exp_lime_G.csv")
+                #pd.DataFrame(exp_lime[:,:,2]).to_csv("exp_lime_B.csv")
 
-                pd.DataFrame(exp_gan[:,:,0]).to_csv("exp_gan_R.csv")
-                pd.DataFrame(exp_gan[:,:,1]).to_csv("exp_gan_G.csv")
-                pd.DataFrame(exp_gan[:,:,2]).to_csv("exp_gan_B.csv")
+                #pd.DataFrame(exp_gan[:,:,0]).to_csv("exp_gan_R.csv")
+                #pd.DataFrame(exp_gan[:,:,1]).to_csv("exp_gan_G.csv")
+                #pd.DataFrame(exp_gan[:,:,2]).to_csv("exp_gan_B.csv")
 
                 #seg_unique = np.unique(segments)
 
@@ -876,7 +901,7 @@ if explanation_alg == 'lime':
 
                         color_coverage_percent.append(100 * same_color_count / count)
 
-                       
+                '''       
                 print('\n')
 
                 print('expID: ', expID)
@@ -927,8 +952,11 @@ if explanation_alg == 'lime':
 
                 print('color_coverage_percent_list (%): ', color_coverage_percent)
                 print('\n')
+                '''
+
 
                 weights_sum = sum(weights)
+                
                 explanation_saved_percentage = 0.0
                 explanation_saved_percentage_list = []
                 weights_percentage = []
@@ -936,6 +964,7 @@ if explanation_alg == 'lime':
                     explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
                     explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
                     weights_percentage.append(100 * weights[i] / weights_sum)
+                '''    
                 print('weights: ', weights)
                 print('\n')
                 print('weights_percentage_list (%): ', weights_percentage)
@@ -944,6 +973,46 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('explanation_saved_percentage_color (%): ', explanation_saved_percentage)
                 print('\n')
+                '''
+                with open("percentages.csv", "a") as myfile:
+                    myfile.write(str(explanation_saved_percentage) + ",")
+
+
+                avg_similarity_percentage = []
+                for i in range(0, len(diff_R_percent_list)):
+                    avg_similarity_percentage.append(100.0 - diff_R_percent_list[i])
+                explanation_saved_percentage = 0.0
+                explanation_saved_percentage_list = []
+                for i in range(0, len(weights)):
+                    explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
+                    explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
+                with open("percentages.csv", "a") as myfile:
+                    myfile.write(str(explanation_saved_percentage) + ",") 
+
+
+                avg_similarity_percentage = []
+                for i in range(0, len(diff_G_percent_list)):
+                    avg_similarity_percentage.append(100.0 - diff_G_percent_list[i])
+                explanation_saved_percentage = 0.0
+                explanation_saved_percentage_list = []
+                for i in range(0, len(weights)):
+                    explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
+                    explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
+                with open("percentages.csv", "a") as myfile:
+                    myfile.write(str(explanation_saved_percentage) + ",")
+
+
+                avg_similarity_percentage = []
+                for i in range(0, len(diff_B_percent_list)):
+                    avg_similarity_percentage.append(100.0 - diff_B_percent_list[i])
+                explanation_saved_percentage = 0.0
+                explanation_saved_percentage_list = []
+                for i in range(0, len(weights)):
+                    explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
+                    explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
+                with open("percentages.csv", "a") as myfile:
+                    myfile.write(str(explanation_saved_percentage) + ",")           
+
 
                 avg_similarity_percentage = []
                 for i in range(0, len(diff_percent_list)):
@@ -953,6 +1022,7 @@ if explanation_alg == 'lime':
                 for i in range(0, len(weights)):
                     explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
                     explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)
+                '''
                 print('weights: ', weights)
                 print('\n')
                 print('weights_percentage_list (%): ', weights_percentage)
@@ -961,6 +1031,9 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('explanation_saved_percentage_avg (%): ', explanation_saved_percentage)
                 print('\n')
+                '''
+                with open("percentages.csv", "a") as myfile:
+                    myfile.write(str(explanation_saved_percentage) + ",")
 
                 avg_avg_similarity_percentage = []
                 for i in range(0, len(avg_diff_percent_list)):
@@ -970,6 +1043,7 @@ if explanation_alg == 'lime':
                 for i in range(0, len(weights)):
                     explanation_saved_percentage += avg_avg_similarity_percentage[i] * weights[i] / weights_sum
                     explanation_saved_percentage_list.append(avg_avg_similarity_percentage[i] * weights[i] / weights_sum)
+                '''
                 print('weights: ', weights)
                 print('\n')
                 print('weights_percentage_list (%): ', weights_percentage)
@@ -978,6 +1052,10 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('explanation_saved_percentage_avg_avg (%): ', explanation_saved_percentage)
                 print('\n')
+                '''
+                with open("percentages.csv", "a") as myfile:
+                    myfile.write(str(explanation_saved_percentage) + "\n")
+
 
 
                 # LOCAL PLAN eval 
@@ -1021,8 +1099,8 @@ if explanation_alg == 'lime':
                     - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
     
                 color_coverage_percent = 100 * same_color_count / count
-                print('LOCAL PLAN color_coverage_percent (%): ', color_coverage_percent)
-                print('\n')
+                #print('LOCAL PLAN color_coverage_percent (%): ', color_coverage_percent)
+                #print('\n')
 
                 avg_R /= count
                 avg_G /= count
@@ -1053,6 +1131,7 @@ if explanation_alg == 'lime':
                 avg_diff /= count
                 avg_diff_percent = 100 * avg_diff / avg_avg
 
+                '''
                 print('LOCAL PLAN avg_R: ', avg_R)
                 print('\n')
                 print('LOCAL PLAN avg_G: ', avg_G)
@@ -1087,6 +1166,10 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('LOCAL PLAN avg_diff_percent (%): ', avg_diff_percent)
                 print('\n')
+                '''
+
+                with open("local_plan.csv", "a") as myfile:
+                    myfile.write(str(color_coverage_percent) + "," + str(100 - diff_percent) + "," + str(100 - avg_diff_percent) + "\n")
 
 
                 # GLOBAL PLAN eval 
@@ -1130,8 +1213,8 @@ if explanation_alg == 'lime':
                     - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
     
                 color_coverage_percent = 100 * same_color_count / count
-                print('GLOBAL PLAN color_coverage_percent (%): ', color_coverage_percent)
-                print('\n')
+                #print('GLOBAL PLAN color_coverage_percent (%): ', color_coverage_percent)
+                #print('\n')
 
                 avg_R /= count
                 avg_G /= count
@@ -1161,7 +1244,7 @@ if explanation_alg == 'lime':
                     avg_avg = 1
                 avg_diff /= count
                 avg_diff_percent = 100 * avg_diff / avg_avg
-
+                '''
                 print('GLOBAL PLAN avg_R: ', avg_R)
                 print('\n')
                 print('GLOBAL PLAN avg_G: ', avg_G)
@@ -1196,6 +1279,10 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('GLOBAL PLAN avg_diff_percent (%): ', avg_diff_percent)
                 print('\n')
+                '''
+
+                with open("global_plan.csv", "a") as myfile:
+                    myfile.write(str(color_coverage_percent) + "," + str(100 - diff_percent) + "," + str(100 - avg_diff_percent) + "\n")
 
 
                 # OBSTACLES eval 
@@ -1241,8 +1328,8 @@ if explanation_alg == 'lime':
                             - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
         
                 color_coverage_percent = 100 * same_color_count / count
-                print('OBSTACLES color_coverage_percent (%): ', color_coverage_percent)
-                print('\n')
+                #print('OBSTACLES color_coverage_percent (%): ', color_coverage_percent)
+                #print('\n')
 
                 avg_R /= count
                 avg_G /= count
@@ -1272,7 +1359,7 @@ if explanation_alg == 'lime':
                 if avg_avg == 0:
                     avg_avg = 1
                 avg_diff_percent = 100 * avg_diff / avg_avg
-
+                '''
                 print('OBSTACLES avg_R: ', avg_R)
                 print('\n')
                 print('OBSTACLES avg_G: ', avg_G)
@@ -1307,6 +1394,10 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('OBSTACLES avg_diff_percent (%): ', avg_diff_percent)
                 print('\n')
+                '''
+
+                with open("obstacles.csv", "a") as myfile:
+                    myfile.write(str(color_coverage_percent) + "," + str(100 - diff_percent) + "," + str(100 - avg_diff_percent) + "\n")
 
 
                 # FREE SPACE eval 
@@ -1352,8 +1443,8 @@ if explanation_alg == 'lime':
                             - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
         
                 color_coverage_percent = 100 * same_color_count / count
-                print('FREE SPACE color_coverage_percent (%): ', color_coverage_percent)
-                print('\n')
+                #print('FREE SPACE color_coverage_percent (%): ', color_coverage_percent)
+                #print('\n')
 
                 avg_R /= count
                 avg_G /= count
@@ -1383,7 +1474,7 @@ if explanation_alg == 'lime':
                     avg_avg = 1
                 avg_diff /= count
                 avg_diff_percent = 100 * avg_diff / avg_avg
-
+                '''
                 print('FREE SPACE avg_R: ', avg_R)
                 print('\n')
                 print('FREE SPACE avg_G: ', avg_G)
@@ -1418,7 +1509,12 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('FREE SPACE avg_diff_percent (%): ', avg_diff_percent)
                 print('\n')
+                '''
 
+                with open("free_space.csv", "a") as myfile:
+                    myfile.write(str(color_coverage_percent) + "," + str(100 - diff_percent) + "," + str(100 - avg_diff_percent) + "\n")
+
+                '''
                 # ROBOT POSITION eval 
                 same_color_count = 0
                 count = 0
@@ -1460,8 +1556,8 @@ if explanation_alg == 'lime':
                     - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3)
     
                 color_coverage_percent = 100 * same_color_count / count
-                print('ROBOT POSITION color_coverage_percent (%): ', color_coverage_percent)
-                print('\n')
+                #print('ROBOT POSITION color_coverage_percent (%): ', color_coverage_percent)
+                #print('\n')
 
                 avg_R /= count
                 avg_G /= count
@@ -1491,7 +1587,9 @@ if explanation_alg == 'lime':
                     avg_avg = 1
                 avg_diff /= count
                 avg_diff_percent = 100 * avg_diff / avg_avg
+                '''
 
+                '''
                 print('ROBOT POSITION avg_R: ', avg_R)
                 print('\n')
                 print('ROBOT POSITION avg_G: ', avg_G)
@@ -1526,7 +1624,10 @@ if explanation_alg == 'lime':
                 print('\n')
                 print('ROBOT POSITION avg_diff_percent (%): ', avg_diff_percent)
                 print('\n')
-                
+                '''
+
+                #with open("robot_position.csv", "a") as myfile:
+                #    myfile.write(str(color_coverage_percent) + "," + str(100 - diff_percent) + "," + str(100 - avg_diff_percent) + "\n")    
 
 
                 
@@ -1543,7 +1644,7 @@ if explanation_alg == 'lime':
                 print('\n\n\n')
                 '''
 
-
+                '''
                 for id in range(0, len(diff_percent_list)):
                     COUNTER[id] += 1
                     R_PERC[id] += diff_R_percent_list[id]
@@ -1551,6 +1652,7 @@ if explanation_alg == 'lime':
                     B_PERC[id] += diff_B_percent_list[id]
                     PERC_FROM_CHANNELS[id] += diff_percent_list[id]
                     PERC_NOT_FROM_CHANNELS[id] += avg_diff_percent_list[id]
+                '''
 
                 '''
                 # Grayscale evaluation
@@ -1635,6 +1737,7 @@ if explanation_alg == 'lime':
                 print('iter: ', num)
                 '''
 
+            '''
             for id in range(0, 10):
                 if COUNTER[id] > 0.0:
                     R_PERC[id] /= COUNTER[id]
@@ -1649,6 +1752,9 @@ if explanation_alg == 'lime':
             print('B_PERC: ', B_PERC)
             print('PERC_FROM_CHANNELS: ', PERC_FROM_CHANNELS)
             print('PERC_NOT_FROM_CHANNELS: ', PERC_NOT_FROM_CHANNELS)
+            '''
+
+        
 
 
 '''

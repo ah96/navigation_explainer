@@ -1,6 +1,8 @@
 def predict():
+    import os
+    path = os.getcwd() + '/src/lime_explainer/include/GAN'
     import sys
-    sys.path.insert(1, '/home/amar/amar_ws/src/lime_explainer/include/GAN')
+    sys.path.insert(1, path)
 
 
     from options.test_options import TestOptions
@@ -15,7 +17,8 @@ def predict():
     #rgb_image = rgba_image.convert('RGB')
     #plt.imshow(rgb_image)
 
-    input = PIL.Image.open('/home/amar/amar_ws/input.png').convert('RGB')
+    path = os.getcwd() + '/input.png'
+    input = PIL.Image.open(path).convert('RGB')
     #plt.imshow(input)
     #plt.savefig('input_main.png')
 
