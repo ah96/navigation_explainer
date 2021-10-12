@@ -2,8 +2,8 @@
 
 # Defining parameters - global variables
 
-# test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN', 'just_eval'
-test_type = 'LIMEvsGAN'
+# test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
+test_type = 'single'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -51,13 +51,13 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     offsets.append(int(teb_global_plan.iloc[0, 5]))
     offsets.append(int(teb_local_plan.iloc[0, 5]))
     offsets.append(int(footprints.iloc[0, 4]))
-    print('offsets: ', offsets)
+    #print('offsets: ', offsets)
     
     num_of_first_rows_to_delete = max(offsets)
-    #'''
+    '''
     print('num_of_first_rows_to_delete: ', num_of_first_rows_to_delete)
     print('\n')
-    #'''
+    '''
 
     # Delete entries with 'None' frame from local_costmap_info
     local_costmap_info.drop(index=local_costmap_info.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
@@ -67,10 +67,10 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     print('\n')
     '''
 
-    #'''
+    '''
     print('local_costmap_info.shape after deleting entries with None frame or plans offset or footprint offset: ', local_costmap_info.shape)
     print('\n')
-    #'''
+    '''
 
 
     # Delete entries with 'None' frame from odom
@@ -81,10 +81,10 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     print('\n')
     '''
 
-    #'''
+    '''
     print('odom.shape after deleting entries with None frame or plans offset or footprint offset: ', odom.shape)
     print('\n')
-    #'''
+    '''
 
 
     # Delete entries with 'None' frame from amcl_pose
@@ -95,10 +95,10 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     print('\n')
     '''
 
-    #'''
+    '''
     print('amcl_pose.shape after deleting entries with None frame or plans offset or footprint offset: ', amcl_pose.shape)
     print('\n')
-    #'''
+    '''
 
 
     # Delete entries with 'None' frame from cmd_vel
@@ -109,10 +109,10 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     print('\n')
     '''
 
-    #'''
+    '''
     print('cmd_vel.shape after deleting entries with None frame or plans offset or footprint offset: ', cmd_vel.shape)
     print('\n')
-    #'''
+    '''
 
 
     # Delete entries with 'None' frame from tf_odom_map
@@ -123,10 +123,10 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     print('\n')
     '''
 
-    #'''
+    '''
     print('tf_odom_map.shape after deleting entries with None frame or plans offset or footprint offset: ', tf_odom_map.shape)
     print('\n')
-    #'''
+    '''
 
 
     # Delete entries with 'None' frame from tf_map_odom
@@ -137,10 +137,10 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     print('\n')
     '''
 
-    #'''
+    '''
     print('tf_map_odom.shape after deleting entries with None frame or plans offset or footprint offset: ', tf_map_odom.shape)
     print('\n')
-    #'''
+    '''
 
     # Deletion of entries with 'None' frame from plans and footprints has not yet been implemented,
     # because after deleting rows from dataframes, indexes retain their values,
@@ -206,7 +206,7 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            #expID = 97 #94 #27 #68 #69
+            #expID = 27 #27 #49 #68 #69 #77 #94 #97 #117 #131 #160 #184 #185 #227
 
             # random instance selection
             import random

@@ -14,10 +14,10 @@ def load_output_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('cmd_vel.shape: ', cmd_vel.shape)
     print('\n')
-    #'''
+    '''
     
     return cmd_vel
 
@@ -32,10 +32,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('odom.shape: ', odom.shape)
     print('\n')
-    #'''
+    '''
 
 
     teb_global_plan = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/teb_global_plan.csv')
@@ -46,10 +46,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('teb_global_plan.shape: ', teb_global_plan.shape)
     print('\n')
-    #''' 
+    ''' 
 
 
     teb_local_plan = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/teb_local_plan.csv')
@@ -60,10 +60,10 @@ def load_input_data():
     print('\n')
     '''
     
-    #'''
+    '''
     print('teb_local_plan.shape: ', teb_local_plan.shape)
     print('\n')
-    #'''
+    '''
 
     
     current_goal = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/current_goal.csv')
@@ -74,10 +74,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('current_goal.shape: ', current_goal.shape)
     print('\n')
-    #'''
+    '''
 
     
     local_costmap_info = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/local_costmap_info.csv')
@@ -88,10 +88,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('local_costmap_info.shape: ', local_costmap_info.shape)
     print('\n')
-    #'''
+    '''
 
     
     local_costmap_data = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/local_costmap_data.csv',
@@ -103,10 +103,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('local_costmap_data.shape: ', local_costmap_data.shape)
     print('\n')
-    #'''
+    '''
 
     if local_costmap_data.shape[1] > local_costmap_info.iloc[0, 2]:
         # drop last column in the local_costmap_data - NaN data (',')
@@ -117,10 +117,10 @@ def load_input_data():
         print('\n')
         '''
 
-        #'''
+        '''
         print('local_costmap_data.shape after dropping NaN data: ', local_costmap_data.shape)
         print('\n')
-        #'''
+        '''
 
 
     plan = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/plan.csv')
@@ -131,10 +131,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('plan.shape: ', plan.shape)
     print('\n')
-    #'''
+    '''
 
 
     amcl_pose = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/amcl_pose.csv')
@@ -145,10 +145,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('amcl_pose.shape: ', amcl_pose.shape)
     print('\n')
-    #'''
+    '''
 
 
     tf_odom_map = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/tf_odom_map.csv')
@@ -159,10 +159,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('tf_odom_map.shape: ', tf_odom_map.shape)
     print('\n')
-    #'''
+    '''
 
 
     tf_map_odom = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/tf_map_odom.csv')
@@ -173,10 +173,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('tf_map_odom.shape: ', tf_map_odom.shape)
     print('\n')
-    #'''
+    '''
 
 
     map_info = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/map_info.csv')
@@ -187,10 +187,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('map_info.shape: ', map_info.shape)
     print('\n')
-    #'''
+    '''
 
 
     map_data = pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/map_data.csv', header=None)
@@ -201,10 +201,10 @@ def load_input_data():
     print('\n')
     '''
     
-    #'''
+    '''
     print('map_data.shape: ', map_data.shape)
     print('\n')
-    #'''
+    '''
 
     if map_data.shape[1] > map_info.iloc[0, 2]:
         # drop last column in the map_data - NaN data (',')
@@ -215,10 +215,10 @@ def load_input_data():
         print('\n')
         '''
 
-        #'''
+        '''
         print('map_data.shape after dropping NaN data: ', map_data.shape)
         print('\n')
-        #'''
+        '''
 
 
     
@@ -230,10 +230,10 @@ def load_input_data():
     print('\n')
     '''
 
-    #'''
+    '''
     print('footprints.shape: ', footprints.shape)
     print('\n')
-    #'''
+    '''
 
 
     return odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints
