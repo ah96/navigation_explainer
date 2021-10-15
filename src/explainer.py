@@ -206,11 +206,11 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            #expID = 160 #27 #49 #68 #69 #77 #94 #97 #117 #131 #160 #184 #185 #227
+            expID = 227 #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
 
             # random instance selection
-            import random
-            expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+            #import random
+            #expID = random.randint(0, local_costmap_info.shape[0]) 
 
             exp_nav.explain_instance(expID)
             #exp_nav.testSegmentation(expID)
@@ -223,7 +223,7 @@ if explanation_alg == 'lime':
 
                 # random instance selection
                 #import random
-                #expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+                #expID = random.randint(0, local_costmap_info.shape[0]) 
 
                 exp_nav.explain_instance_dataset(i, i)
 
@@ -240,7 +240,7 @@ if explanation_alg == 'lime':
 
                 # random instance selection
                 # import random
-                # expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+                # expID = random.randint(0, local_costmap_info.shape[0]) 
 
                 start = time.time()
                 exp_nav.explain_instance_evaluation(expID, i)
@@ -254,7 +254,7 @@ if explanation_alg == 'lime':
 
             # rando1m instance selection
             import random
-            expID = random.randint(0, local_costmap_info.shape[0]) # expID se trazi iz local_costmap_info
+            expID = random.randint(0, local_costmap_info.shape[0])
 
             index = expID
             offset = num_of_first_rows_to_delete
