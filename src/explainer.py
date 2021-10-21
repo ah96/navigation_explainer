@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'single'
+test_type = 'dataset_creation'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -216,16 +216,28 @@ if explanation_alg == 'lime':
             #exp_nav.testSegmentation(expID)
 
         elif test_type == 'dataset_creation':
+            with open('costmap_data.csv', "w") as myfile:
+                    myfile.write('picture_ID,width,height,origin_x,origin_y,resolution\n')
+
+            with open('local_plan_coordinates.csv', "w") as myfile:
+                    myfile.write('picture_ID,position_x,position_y\n')
+
+            with open('global_plan_coordinates.csv', "w") as myfile:
+                    myfile.write('picture_ID,position_x,position_y\n')
+
+            with open('robot_coordinates.csv', "w") as myfile:
+                myfile.write('picture_ID,position_x,position_y\n') 
+
             #dataset_size = 1000
-            for i in range(60, 61):
+            import random    
+            for i in range(1, 71):
                 # optional instance selection - deterministic
-                #expID = 60
+                #expID = i
 
                 # random instance selection
-                #import random
-                #expID = random.randint(0, local_costmap_info.shape[0]) 
+                expID = random.randint(0, local_costmap_info.shape[0] - 5) 
 
-                exp_nav.explain_instance_dataset(i, i)
+                exp_nav.explain_instance_dataset(expID, i)
 
         elif test_type == 'evaluation':
             import time

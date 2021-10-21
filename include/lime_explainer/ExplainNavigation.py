@@ -2104,13 +2104,21 @@ class ExplainRobotNavigation:
         fig.savefig(str(iteration_ID) + '_input' + '.png')
         fig.clf()
 
+        
     def plotMinimalFlippedDataset(self, iteration_ID):
         # indices of local plan's poses in local costmap
         self.local_plan_x_list = []
         self.local_plan_y_list = []
         for i in range(1, self.local_plan_tmp.shape[0]):
-            self.local_plan_x_list.append(160 - int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+            x_temp = 160 - int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp <= 160 and 0 <= y_temp <= 160:
+                self.local_plan_x_list.append(x_temp)
+                self.local_plan_y_list.append(y_temp)
+
+                with open('local_plan_coordinates.csv', "a") as myfile:
+                     myfile.write(str(iteration_ID) + ',' + str(self.local_plan_tmp.iloc[i, 0]) + ',' + str(self.local_plan_tmp.iloc[i, 1]) + '\n')
+
 
         # transform global plan from /map to /odom frame
         # rotation matrix
@@ -2145,10 +2153,13 @@ class ExplainRobotNavigation:
         self.plan_y_list = []
         for i in range(0, plan_tmp_tmp.shape[0], 3):
             x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            if 0 <= x_temp <= 159:
+            y_temp = int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                 self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(
-                    int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+                self.plan_y_list.append(y_temp)
+
+                with open('global_plan_coordinates.csv', "a") as myfile:
+                    myfile.write(str(iteration_ID) + ',' + str(plan_tmp_tmp.iloc[i, 0]) + ',' + str(plan_tmp_tmp.iloc[i, 1]) + '\n')
 
         # save indices of robot's odometry location in local costmap to class variables
         self.localCostmapIndex_x_odom = 160 - int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
@@ -2164,13 +2175,15 @@ class ExplainRobotNavigation:
 
         # save robot odometry orientation to class variables
         self.odom_z = self.odom_tmp.iloc[0, 2] # minus je upitan
-        znak = 1
-        if self.odom_z < 0:
-            znak = -1
-        self.odom_z = znak * (1 - abs(self.odom_z))        
+        #znak = 1
+        #if self.odom_z < 0:
+        #    znak = -1
+        #self.odom_z = znak * (1 - abs(self.odom_z))        
         self.odom_w = self.odom_tmp.iloc[0, 3]
         # calculate Euler angles based on orientation quaternion
         [self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
+        yaw_sign = math.copysign(1, self.yaw_odom)
+        self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
         # print('roll_odom: ', roll_odom)
         # print('pitch_odom: ', pitch_odom)
         # print('self.yaw_odom: ', self.yaw_odom)
@@ -2180,8 +2193,8 @@ class ExplainRobotNavigation:
         
         # plot explanation
         fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
+        w = 6.4
+        h = 4.8
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
@@ -2194,10 +2207,10 @@ class ExplainRobotNavigation:
         #    round(self.cmd_vel_original_tmp.iloc[1], 2)))
 
         # plot robots' location, orientation, global and local plan
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
+        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
         
         marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
         marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
@@ -2208,11 +2221,11 @@ class ExplainRobotNavigation:
 
 
         # plot costmap
-        fig = plt.figure(figsize=[1.6, 1.6], frameon=False)
-        w = 4.8
+        w = 6.4
         h = 4.8
+        fig = plt.figure(figsize=[w, h], frameon=False)
         fig.set_size_inches(w, h)
-        fig.set_size_inches(1.6, 1.6)
+        #fig.set_size_inches(1.6, 1.6)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
@@ -2222,11 +2235,20 @@ class ExplainRobotNavigation:
         # plot robots' location, orientation and local plan
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
+        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
 
         ax.imshow(self.matrixFlip(self.image, 'h').astype('uint8'), aspect='auto')        
         fig.savefig(str(iteration_ID) + '_input' + '.png')
         fig.clf()
+
+        with open('costmap_data.csv', "a") as myfile:
+                #myfile.write('picture_ID,width,heigth,origin_x,origin_y,resolution\n')
+                myfile.write(str(iteration_ID) + ',' + str(self.localCostmapWidth) + ',' + str(self.localCostmapHeight) + ',' + str(self.localCostmapOriginX) + ',' + str(self.localCostmapOriginY) + ',' + str(self.localCostmapResolution) + '\n')
+
+        with open('robot_coordinates.csv', "a") as myfile:
+                #myfile.write('picture_ID,position_x,position_y\n')
+                myfile.write(str(iteration_ID) + ',' + str(self.odom_x) + ',' + str(self.odom_y) + '\n')        
+
     
     def explain_instance_dataset(self, expID, iteration_ID):
         print('explain_instance_dataset function starting\n')
@@ -2288,16 +2310,13 @@ class ExplainRobotNavigation:
                                                                                      negative_only=False,
                                                                                      num_features=100,
                                                                                      hide_rest=False,
-                                                                                     min_weight=0.01)  # min_weight=0.1 - default
+                                                                                     min_weight=0.1)  # min_weight=0.1 - default
 
             #self.plotMinimalDataset(iteration_ID)
             self.plotMinimalFlippedDataset(iteration_ID)
 
     
-    
-    
-    
-    
+        '''
         # Turn gray image to rgb image
         img_rgb = gray2rgb(img)
 
@@ -2323,19 +2342,19 @@ class ExplainRobotNavigation:
         #print('segments_unique_2.shape: ', segments_unique_2.shape)
 
         # Creating segments using segments_1 and segments_2
-        # '''
         # Add/Sum segments_1 and segments_2
+        #''#
         for i in range(0, segments_1.shape[0]):
             for j in range(0, segments_1.shape[1]):
                 if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
                     segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
                 else:
                     segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        # '''
+        #''#
         # find segments_unique before nice segment numbering
         segments_unique = np.unique(segments_1)
         return 2 ** segments_unique.shape[0], segments_unique.shape[0]
-
+        '''
 
 
     def calculateNumOfSamples(self, img):
