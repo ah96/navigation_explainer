@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'dataset_creation'
+test_type = 'single'
 
 # possible explanation algorithms: 'lime', 'shap', 'anchors'
 explanation_alg = 'lime'
@@ -206,7 +206,7 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            expID = 227 #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
+            expID = 71 #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
 
             # random instance selection
             #import random
