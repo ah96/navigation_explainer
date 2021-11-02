@@ -5,10 +5,10 @@
 # test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
 test_type = 'single'
 
-# possible explanation algorithms: 'lime', 'shap', 'anchors'
+# possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = 'lime'
 
-# possible explanation modes: 'tabular', 'image', 'tabular_costmap', 'text'
+# possible explanation modes: 'tabular', 'image', 'tabular_costmap'
 explanation_mode = 'image'
 
 # tabular explanation modes: 'regression', 'classification'
@@ -193,20 +193,9 @@ if explanation_alg == 'lime':
                                                           X_train, X_test, tabular_mode, explanation_mode, num_samples,
                                                           output_class_name, num_of_first_rows_to_delete, footprints, test_type, costmap_size)
 
-        # Representative situations/costmaps
-        # New datasets:
-        # Dataset1: #60, #165
-        # Dataset2: #15 # 78 #163, #599
-        # Old datasets:
-        # Dataset1: #163
-        # Dataset2:
-        # Dataset3:
-        # Dataset4: #100 #190
-        # Dataset HARL Workshop 2021 paper: #71
-
         if test_type == 'single':
             # optional instance selection - deterministic
-            expID = 71 #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
+            expID = 71 #Dataset1 mew: #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
 
             # random instance selection
             #import random
