@@ -1,0 +1,2 @@
+frame,global_costmap_resolution,global_costmap_width,global_costmap_height,global_costmap_origin_pos_x,global_costmap_origin_pos_y,global_costmap_origin_orientation_z,global_costmap_origin_orientation_w
+map,0.050000,201,304,-5.000000,-5.050000,0.000000,1.000000
