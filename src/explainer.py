@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'single'
+test_type = 'dataset_creation'
 
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = 'lime'
@@ -195,16 +195,17 @@ if explanation_alg == 'lime':
 
         if test_type == 'single':
             # optional instance selection - deterministic
-            expID = 71 #Dataset1 mew: #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
+            expID = 27 #Dataset1 new: #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
 
             # random instance selection
-            #import random
-            #expID = random.randint(0, local_costmap_info.shape[0]) 
+            import random
+            expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
 
             exp_nav.explain_instance(expID)
             #exp_nav.testSegmentation(expID)
 
         elif test_type == 'dataset_creation':
+            #'''
             with open('costmap_data.csv', "w") as myfile:
                     myfile.write('picture_ID,width,height,origin_x,origin_y,resolution\n')
 
@@ -215,18 +216,20 @@ if explanation_alg == 'lime':
                     myfile.write('picture_ID,position_x,position_y\n')
 
             with open('robot_coordinates.csv', "w") as myfile:
-                myfile.write('picture_ID,position_x,position_y\n') 
+                myfile.write('picture_ID,position_x,position_y\n')
+            #''' 
 
-            #dataset_size = 1000
+            dataset_size = 201
             import random    
-            for i in range(1, 71):
+            for i in range(81, dataset_size):
                 # optional instance selection - deterministic
-                #expID = i
+                expID = i
 
                 # random instance selection
-                expID = random.randint(0, local_costmap_info.shape[0] - 5) 
+                #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
 
                 exp_nav.explain_instance_dataset(expID, i)
+                #exp_nav.testSegmentation(expID)
 
         elif test_type == 'evaluation':
             import time
