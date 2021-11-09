@@ -2,8 +2,8 @@
 
 # Defining parameters - global variables
 
-# test type: 'single', 'dataset_creation', 'evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'dataset_creation'
+# test type: 'single', 'dataset_creation', 'lime_evaluation', 'GAN', 'LIMEvsGAN'
+test_type = 'lime_evaluation'
 
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = 'lime'
@@ -219,9 +219,9 @@ if explanation_alg == 'lime':
                 myfile.write('picture_ID,position_x,position_y\n')
             #''' 
 
-            dataset_size = 201
+            dataset_size = 241
             import random    
-            for i in range(81, dataset_size):
+            for i in range(1, dataset_size):
                 # optional instance selection - deterministic
                 expID = i
 
@@ -231,26 +231,26 @@ if explanation_alg == 'lime':
                 exp_nav.explain_instance_dataset(expID, i)
                 #exp_nav.testSegmentation(expID)
 
-        elif test_type == 'evaluation':
+        elif test_type == 'lime_evaluation':
             import time
             evaluation_sample_size = 1
             
             with open("explanations.txt", "w") as myfile:
-                        myfile.write('explain_instance_time\n')
+                myfile.write('explain_instance_time\n')
             
             for i in range(0, evaluation_sample_size):
                 # optional instance selection - deterministic
-                expID = 60
+                expID = 24
 
                 # random instance selection
-                # import random
-                # expID = random.randint(0, local_costmap_info.shape[0]) 
+                #import random
+                #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
 
                 start = time.time()
                 exp_nav.explain_instance_evaluation(expID, i)
                 end = time.time()
                 with open("explanations.txt", "a") as myfile:
-                    myfile.write(str(round(end - start, 4)) + '\n')
+                    myfile.write(str(round(end - start, 2)) + '\n')
 
         elif test_type == 'GAN':
             # optional instance selection - deterministic
