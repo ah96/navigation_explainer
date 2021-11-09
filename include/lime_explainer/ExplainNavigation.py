@@ -3237,7 +3237,24 @@ class ExplainRobotNavigation:
 
 
 
-    def mySlicEval(self, img_rgb):
+    def getSegmentsForGanLimeEval(self, image):
+
+        print('Test segmentation function beginning')
+
+        # Make image a np.array deepcopy of local_costmap_original
+        img_ = copy.deepcopy(image)
+
+        # Turn gray image to rgb image
+        rgb = gray2rgb(img_)
+
+        # Generate segments - superpixels with my slic function
+        segments = self.mySlicGanLimeEval(rgb)
+
+        print('Test segmentation function ending')
+
+        return segments
+
+    def mySlicGanLimeEval(self, img_rgb):
 
         print('mySlic for evaluation starts')
 
@@ -3245,8 +3262,6 @@ class ExplainRobotNavigation:
 
         # import needed libraries
         from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
 
         # segments_1 - good obstacles
         # Find segments_1
@@ -3303,24 +3318,6 @@ class ExplainRobotNavigation:
         print('mySlic for evaluation ends')
 
         return segments_1
-
-    def getSegmentsForEval(self, image):
-
-        print('Test segmentation function beginning')
-
-        # Make image a np.array deepcopy of local_costmap_original
-        img_ = copy.deepcopy(image)
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
-        # Generate segments - superpixels with my slic function
-        segments = self.mySlicEval(rgb)
-
-        print('Test segmentation function ending')
-
-        return segments
-
 
 
     # functions that I currently do not use:

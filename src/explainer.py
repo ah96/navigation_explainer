@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'single', 'dataset_creation', 'lime_evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'lime_evaluation'
+test_type = 'LIMEvsGAN'
 
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = 'lime'
@@ -254,11 +254,11 @@ if explanation_alg == 'lime':
 
         elif test_type == 'GAN':
             # optional instance selection - deterministic
-            #expID = 15
+            #expID = 24
 
             # rando1m instance selection
             import random
-            expID = random.randint(0, local_costmap_info.shape[0])
+            expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete)
 
             index = expID
             offset = num_of_first_rows_to_delete
@@ -285,8 +285,10 @@ if explanation_alg == 'lime':
             # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
             image = image * 1.0
 
-            flipped = True
+            flipped = False
+
             if flipped == True:
+                # za prvu verziju GAN-a
                 image_flipped = np.flip(image, axis=1)
 
                 import matplotlib.pyplot as plt
@@ -329,17 +331,15 @@ if explanation_alg == 'lime':
 
                 # save robot odometry orientation to class variables
                 # save robot odometry orientation to class variables
-                odom_z = odom_tmp.iloc[0, 2] # minus je upitan
-                znak = 1
-                if odom_z < 0:
-                    znak = -1
-                odom_z = znak * (1 - abs(odom_z))
-                odom_w = odom_tmp.iloc[0, 3]
+                #odom_z = odom_tmp.iloc[0, 2] # minus je upitan
+                #odom_w = odom_tmp.iloc[0, 3]
                 # calculate Euler angles based on orientation quaternion
-                [yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+                #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+                #yaw_sign = math.copysign(1, self.yaw_odom)
+                #self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
                 # find yaw angles projections on x and y axes and save them to class variables
-                yaw_odom_x = math.cos(yaw_odom)
-                yaw_odom_y = math.sin(yaw_odom)
+                #yaw_odom_x = math.cos(yaw_odom)
+                #yaw_odom_y = math.sin(yaw_odom)
 
                 local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
                 local_plan_tmp = local_plan_tmp.iloc[:, 1:]
@@ -398,19 +398,18 @@ if explanation_alg == 'lime':
                         #print('\n')
                         plan_x_list.append(x_temp)
                         plan_y_list.append(y_temp)
-                ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
                 # '''
-
-                ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
                 
+                ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
+                ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
                 # plot robots' location, orientation and local plan
                 ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
-                ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
+                #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
 
                 fig.savefig('input.png', transparent=False)
                 fig.clf()
 
-            else:
+            elif flipped == False:
                 import matplotlib.pyplot as plt
                 fig = plt.figure(frameon=False)
                 w = 1.6 #* 3
@@ -450,13 +449,13 @@ if explanation_alg == 'lime':
                 y_odom_index = [localCostmapIndex_y_odom]
 
                 # save robot odometry orientation to class variables
-                odom_z = odom_tmp.iloc[0, 2]
-                odom_w = odom_tmp.iloc[0, 3]
+                #odom_z = odom_tmp.iloc[0, 2]
+                #odom_w = odom_tmp.iloc[0, 3]
                 # calculate Euler angles based on orientation quaternion
-                [yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+                #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
                 # find yaw angles projections on x and y axes and save them to class variables
-                yaw_odom_x = math.cos(yaw_odom)
-                yaw_odom_y = math.sin(yaw_odom)
+                #yaw_odom_x = math.cos(yaw_odom)
+                #yaw_odom_y = math.sin(yaw_odom)
 
                 local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
                 local_plan_tmp = local_plan_tmp.iloc[:, 1:]
@@ -485,8 +484,7 @@ if explanation_alg == 'lime':
                 # print('r_array: ', r_array)
                 # print('r_array.shape: ', r_array.shape)
                 # translation vector
-                t = np.array(
-                    [tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
+                t = np.array([tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
                 # print('t: ', t)
                 global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
                 global_plan_tmp = global_plan_tmp.iloc[:, 1:]
@@ -512,15 +510,15 @@ if explanation_alg == 'lime':
                     if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                         plan_x_list.append(x_temp)
                         plan_y_list.append(y_temp)
+                
                 ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
-
                 ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
-
                 # plot robots' location, orientation and local plan
                 ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
-                ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
-
+                # za novu verziju GAN-a isključiti crtanje orijentacije
+                #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
                 # '''
+                
                 fig.savefig('input.png', transparent=False)
                 fig.clf() 
 
@@ -529,16 +527,6 @@ if explanation_alg == 'lime':
             gan.predict()       
 
         elif test_type == 'LIMEvsGAN':
-            num_iter = 50
-            lime_time_avg = 0
-            gan_time_avg = 0
-
-            COUNTER = [0.0] * 10
-            R_PERC = [0.0] * 10
-            G_PERC = [0.0] * 10
-            B_PERC = [0.0] * 10
-            PERC_FROM_CHANNELS = [0.0] * 10
-            PERC_NOT_FROM_CHANNELS = [0.0] * 10
 
             from test_color import *
             create_dict_my()
@@ -569,19 +557,29 @@ if explanation_alg == 'lime':
 
             #with open("robot_position.csv", "w") as myfile:
             #        myfile.write("color,RGB_after,RGB_from_iter\n")
+
+            num_iter = 1
+            lime_time_avg = 0
+            gan_time_avg = 0
+
+            R_PERC = [0.0] * 10
+            G_PERC = [0.0] * 10
+            B_PERC = [0.0] * 10
+
+            flipped = False
                 
             for num in range(0, num_iter):
-                print('NUM:  ', num)
+                print('iteration: ', num)
 
                 lime_time_avg = 0
                 gan_time_avg = 0
                 
                 # optional instance selection - deterministic
-                #expID = 160 #254 #160 #135 #35 #2 #0 
+                #expID = 190
 
                 # random instance selection
                 import random
-                expID = random.randint(5, local_costmap_info.shape[0] - 5) # expID se trazi iz local_costmap_info
+                expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
 
                 # call LIME    
                 time_before = time.time()
@@ -617,8 +615,11 @@ if explanation_alg == 'lime':
                 # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
                 image = image * 1.0
 
-                # Get flipped input image    
-                image_flipped = np.flip(image, axis=1)
+                # Get flipped input image if wanted
+                if flipped == True:    
+                    image_flipped = np.flip(image, axis=1)
+                elif flipped == False:
+                    image_flipped = image
 
                 # plot input image
                 fig = plt.figure(frameon=False)
@@ -651,7 +652,10 @@ if explanation_alg == 'lime':
                 odom_y = odom_tmp.iloc[0, 1]
 
                 # save indices of robot's odometry location in local costmap to class variables
-                localCostmapIndex_x_odom = 160 - int((odom_x - localCostmapOriginX) / localCostmapResolution)
+                if flipped == True:
+                    localCostmapIndex_x_odom = 160 - int((odom_x - localCostmapOriginX) / localCostmapResolution)
+                elif flipped == False:
+                    localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
                 localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
 
                 # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
@@ -659,18 +663,18 @@ if explanation_alg == 'lime':
                 y_odom_index = [localCostmapIndex_y_odom]
 
                 # save robot odometry orientation to class variables
-                # save robot odometry orientation to class variables
-                odom_z = odom_tmp.iloc[0, 2] # minus je upitan
-                znak = 1
-                if odom_z < 0:
-                    znak = -1
-                odom_z = znak * (1 - abs(odom_z))
-                odom_w = odom_tmp.iloc[0, 3]
+                #odom_z = odom_tmp.iloc[0, 2] 
+                #odom_w = odom_tmp.iloc[0, 3]
                 # calculate Euler angles based on orientation quaternion
-                [yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+                #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+                '''
+                if flipped == True:
+                    yaw_sign = math.copysign(1, self.yaw_odom)
+                    self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
+                '''
                 # find yaw angles projections on x and y axes and save them to class variables
-                yaw_odom_x = math.cos(yaw_odom)
-                yaw_odom_y = math.sin(yaw_odom)
+                #yaw_odom_x = math.cos(yaw_odom)
+                #yaw_odom_y = math.sin(yaw_odom)
 
                 # get local plan
                 local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
@@ -679,7 +683,10 @@ if explanation_alg == 'lime':
                 local_plan_x_list = []
                 local_plan_y_list = []
                 for i in range(1, local_plan_tmp.shape[0]):
-                    x_temp = 160 - int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                    if flipped == True:
+                        x_temp = 160 - int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                    elif flipped == False:
+                        x_temp = int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
                     y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
                     if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                         local_plan_x_list.append(x_temp)
@@ -722,8 +729,10 @@ if explanation_alg == 'lime':
                 plan_x_list = []
                 plan_y_list = []
                 for i in range(0, plan_tmp_tmp.shape[0], 3):
-                    x_temp = 160 - int(
-                        (plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                    if flipped == True:
+                        x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                    elif flipped == False:
+                        x_temp = int((plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)    
                     y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
                     if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                         #print('x_temp: ', x_temp)
@@ -731,16 +740,15 @@ if explanation_alg == 'lime':
                         #print('\n')
                         plan_x_list.append(x_temp)
                         plan_y_list.append(y_temp)
-                # plot global plan        
-                ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
                 # '''
 
+                # plot global plan        
+                ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
                 # plot local plan
                 ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
-                
                 # plot robots' location and orientation
                 ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
-                ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
+                #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
 
                 fig.savefig('input.png', transparent=False)
                 fig.clf()
@@ -757,12 +765,13 @@ if explanation_alg == 'lime':
                 with open("times.csv", "a") as myfile:
                     myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
 
-                segments = exp_nav.getSegmentsForEval(image)
+                segments = exp_nav.getSegmentsForGanLimeEval(image)
                 #print('exp_nav.exp: ', exp_nav.exp)
                 #plt.imshow(segments)
                 #plt.savefig('SEGMENTS.png')
 
-                segments = np.flip(segments, axis=1)
+                if flipped == True:
+                    segments = np.flip(segments, axis=1)
 
                 #pd.DataFrame(segments).to_csv('SEGMENTS.csv', index=False)
 
@@ -770,7 +779,10 @@ if explanation_alg == 'lime':
                 # RGB evaluation
                 import PIL.Image
                 import os
-                path1 = os.getcwd() + '/flipped_explanation.png'
+                if flipped == True:
+                    path1 = os.getcwd() + '/flipped_explanation.png'
+                elif flipped == False:
+                    path1 = os.getcwd() + '/explanation.png'
                 exp_lime_orig = PIL.Image.open(path1).convert('RGB')
                 path1 = os.getcwd() + '/GAN.png'
                 exp_gan_orig = PIL.Image.open(path1).convert('RGB')
@@ -968,6 +980,7 @@ if explanation_alg == 'lime':
                     explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
                     explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
                     weights_percentage.append(100 * weights[i] / weights_sum)
+
                 '''    
                 print('weights: ', weights)
                 print('\n')
@@ -978,6 +991,7 @@ if explanation_alg == 'lime':
                 print('explanation_saved_percentage_color (%): ', explanation_saved_percentage)
                 print('\n')
                 '''
+                
                 with open("percentages.csv", "a") as myfile:
                     myfile.write(str(explanation_saved_percentage) + ",")
 
@@ -1026,6 +1040,7 @@ if explanation_alg == 'lime':
                 for i in range(0, len(weights)):
                     explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
                     explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)
+    
                 '''
                 print('weights: ', weights)
                 print('\n')
@@ -1036,9 +1051,11 @@ if explanation_alg == 'lime':
                 print('explanation_saved_percentage_avg (%): ', explanation_saved_percentage)
                 print('\n')
                 '''
+    
                 with open("percentages.csv", "a") as myfile:
                     myfile.write(str(explanation_saved_percentage) + ",")
 
+    
                 avg_avg_similarity_percentage = []
                 for i in range(0, len(avg_diff_percent_list)):
                     avg_avg_similarity_percentage.append(100.0 - avg_diff_percent_list[i])
@@ -1634,131 +1651,6 @@ if explanation_alg == 'lime':
                 #    myfile.write(str(color_coverage_percent) + "," + str(100 - diff_percent) + "," + str(100 - avg_diff_percent) + "\n")    
 
 
-                
-                '''
-                # The Intersection over Union (IoU) metric, also referred to as the Jaccard index
-                intersection = np.logical_and(exp_lime, exp_gan)
-                print('intersection.shape: ', intersection.shape)
-                union = np.logical_or(exp_lime, exp_gan)
-                print('union.shape: ', union.shape)
-                iou_score = np.sum(intersection) / np.sum(union)
-                print('np.sum(intersection): ', np.sum(intersection))
-                print('np.sum(union): ', np.sum(union))
-                print('iou_score: ', iou_score) 
-                print('\n\n\n')
-                '''
-
-                '''
-                for id in range(0, len(diff_percent_list)):
-                    COUNTER[id] += 1
-                    R_PERC[id] += diff_R_percent_list[id]
-                    G_PERC[id] += diff_G_percent_list[id]
-                    B_PERC[id] += diff_B_percent_list[id]
-                    PERC_FROM_CHANNELS[id] += diff_percent_list[id]
-                    PERC_NOT_FROM_CHANNELS[id] += avg_diff_percent_list[id]
-                '''
-
-                '''
-                # Grayscale evaluation
-                exp_lime_gs = exp_lime_orig.convert('L')
-                exp_lime_gs.save('lime_gs.png')
-
-                exp_gan_gs = exp_gan_orig.convert('L')
-                exp_gan_gs.save('gan_gs.png')
-
-                exp_lime = np.array(exp_lime_gs)
-                print('exp_lime.shape: ', exp_lime.shape)
-                exp_gan = np.array(exp_gan_gs)
-                print('exp_gan.shape: ', exp_gan.shape)
-
-                avg_list = []
-                diff_list = []
-                diff_percent_list = []
-
-                same_pixels_count_list = []
-
-                for e in exp_nav.exp:
-                    if abs(e[1]) >= 0.1:
-                        count = 0
-                        same_pixels_count = 0
-
-                        avg = 0
-                        diff = 0
-                        
-                        for row in range(0, segments.shape[0]):
-                            for columns in range(0, segments.shape[1]):
-                                if segments[row, columns] == e[0]:
-                                    count += 1
-
-                                    avg += int(exp_lime[row, columns])
-
-                                    diff += abs( int(exp_gan[row, columns]) - int(exp_lime[row, columns]) )
-                                    
-                                    if exp_lime[row, columns] == exp_gan[row, columns]:
-                                        same_pixels_count += 1
-                                        
-
-                        avg_list.append(avg)
-                        diff_list.append(diff)
-                        diff_percent_list.append(100 * diff / avg) 
-
-                        same_pixels_count_list.append(100 * same_pixels_count / count)
-
-                        
-                print('\n')
-
-                print('expID: ', expID)
-                print('\n')
-
-                print('LIME time: ', lime_time_avg / num_iter)
-                print('\n')
-                print('GAN time: ', gan_time_avg / num_iter)
-                print('\n')
-
-                print('exp_nav.exp: ', exp_nav.exp)
-                print('\n')
-
-                print('avg_list: ', avg_list)
-                print('\n')
-                print('diff_list: ', diff_list)
-                print('\n')
-                print('diff_percent_list (%): ', diff_percent_list)
-                print('\n')
-
-                print('same_pixels_count_list (%): ', same_pixels_count_list)
-                print('\n')
-
-                # The Intersection over Union (IoU) metric, also referred to as the Jaccard inde
-                intersection = np.logical_and(exp_lime, exp_gan)
-                print('intersection.shape: ', intersection.shape)
-                union = np.logical_or(exp_lime, exp_gan)
-                print('union.shape: ', union.shape)
-                iou_score = np.sum(intersection) / np.sum(union)
-                print('np.sum(intersection): ', np.sum(intersection))
-                print('np.sum(union): ', np.sum(union))
-                print('iou_score: ', iou_score)
-
-                print('iter: ', num)
-                '''
-
-            '''
-            for id in range(0, 10):
-                if COUNTER[id] > 0.0:
-                    R_PERC[id] /= COUNTER[id]
-                    G_PERC[id] /= COUNTER[id]
-                    B_PERC[id] /= COUNTER[id]
-                    PERC_FROM_CHANNELS[id] /= COUNTER[id]
-                    PERC_NOT_FROM_CHANNELS[id] /= COUNTER[id]
-
-            print('COUNTER: ', COUNTER) 
-            print('R_PERC: ', R_PERC)
-            print('G_PERC: ', G_PERC)
-            print('B_PERC: ', B_PERC)
-            print('PERC_FROM_CHANNELS: ', PERC_FROM_CHANNELS)
-            print('PERC_NOT_FROM_CHANNELS: ', PERC_NOT_FROM_CHANNELS)
-            '''
-
-        
 
 
 '''
