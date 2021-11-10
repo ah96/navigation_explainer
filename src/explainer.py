@@ -2,8 +2,8 @@
 
 # Defining parameters - global variables
 
-# test type: 'single', 'dataset_creation', 'lime_evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'LIMEvsGAN'
+# test type: 'lime_single', 'lime_dataset_creation', 'lime_evaluation', 'GAN', 'LIMEvsGAN'
+test_type = 'GAN'
 
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = 'lime'
@@ -193,18 +193,18 @@ if explanation_alg == 'lime':
                                                           X_train, X_test, tabular_mode, explanation_mode, num_samples,
                                                           output_class_name, num_of_first_rows_to_delete, footprints, test_type, costmap_size)
 
-        if test_type == 'single':
+        if test_type == 'lime_single':
             # optional instance selection - deterministic
-            expID = 27 #Dataset1 new: #27 #49 #68 #69 #77 #94 #96 #97 #117 #131 #160 #184 #185 #213 #227
+            #expID = 160 #Dataset1 new: #28 #160 #194
 
             # random instance selection
-            import random
-            expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
+            #import random
+            #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
 
             exp_nav.explain_instance(expID)
             #exp_nav.testSegmentation(expID)
 
-        elif test_type == 'dataset_creation':
+        elif test_type == 'lime_dataset_creation':
             #'''
             with open('costmap_data.csv', "w") as myfile:
                     myfile.write('picture_ID,width,height,origin_x,origin_y,resolution\n')
@@ -254,11 +254,11 @@ if explanation_alg == 'lime':
 
         elif test_type == 'GAN':
             # optional instance selection - deterministic
-            #expID = 24
+            expID = 28
 
             # rando1m instance selection
-            import random
-            expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete)
+            #import random
+            #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete)
 
             index = expID
             offset = num_of_first_rows_to_delete
