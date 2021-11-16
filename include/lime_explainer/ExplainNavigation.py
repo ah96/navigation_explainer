@@ -2075,7 +2075,7 @@ class ExplainRobotNavigation:
                                                                                      negative_only=False,
                                                                                      num_features=100,
                                                                                      hide_rest=False,
-                                                                                     min_weight=0.08)  # min_weight=0.1 - default
+                                                                                     min_weight=0.0)  # min_weight=0.1 - default
             print('self.explanation: ', self.exp)
             print("self.segments: ", np.unique(segments))                                                                             
             segments += 1
