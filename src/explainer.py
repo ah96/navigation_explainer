@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'lime_single', 'lime_dataset_creation', 'lime_evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'GAN'
+test_type = 'lime_dataset_creation'
 
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = 'lime'
@@ -219,7 +219,7 @@ if explanation_alg == 'lime':
                 myfile.write('picture_ID,position_x,position_y\n')
             #''' 
 
-            dataset_size = 241
+            dataset_size = local_costmap_info.shape[0]
             import random    
             for i in range(1, dataset_size):
                 # optional instance selection - deterministic
