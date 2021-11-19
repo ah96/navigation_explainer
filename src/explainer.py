@@ -553,10 +553,10 @@ if explanation_alg == 'lime':
                     myfile.write("color,RGB_after,RGB_from_iter\n")
 
             with open("obstacles.csv", "w") as myfile:
-                    myfile.write("color,RGB_after,RGB_from_iter\n")
+                    myfile.write("color,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
 
             with open("free_space.csv", "w") as myfile:
-                    myfile.write("color,RGB_after,RGB_from_iter\n")
+                    myfile.write("color,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
 
             #with open("robot_position.csv", "w") as myfile:
             #        myfile.write("color,RGB_after,RGB_from_iter\n")
@@ -582,11 +582,11 @@ if explanation_alg == 'lime':
                 gan_time_avg = 0
                 
                 # optional instance selection - deterministic
-                #expID = 604 #633 #491 - Dataset2
+                expID = 3 #633 #491 - Dataset2
 
                 # random instance selection
-                import random
-                expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
+                #import random
+                #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
 
                 # call LIME    
                 time_before = time.time()
@@ -1496,6 +1496,11 @@ if explanation_alg == 'lime':
 
                 same_color_count = 0
                 color_count = 0
+
+                color_change_count = 0
+                color_flip_count = 0
+                color_turn_count = 0
+                color_other_count = 0
                 
                 avg_R = 0
                 avg_G = 0
@@ -1524,6 +1529,33 @@ if explanation_alg == 'lime':
                             gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
                             if lime_color_name == gan_color_name:
                                 same_color_count += 1
+                            else:
+                                # if positive
+                                if lime_color_name == 'aquamarine':
+                                    print("!!!!!!!!!!!!!!!!!!!!!!!!!")
+                                    color_change_count += 1
+                                    if gan_color_name == 'violet':
+                                        color_flip_count += 1
+                                    elif gan_color_name == 'white':
+                                        color_turn_count += 1
+                                    else:
+                                        color_other_count += 1    
+                                # if negative        
+                                elif lime_color_name == 'violet':
+                                    print("!!!!!!!!!!!!!!!!!!!!!!!!!")
+                                    color_change_count += 1
+                                    if gan_color_name == 'aquamarine':
+                                        color_flip_count += 1
+                                    elif gan_color_name == 'white':
+                                        color_turn_count += 1
+                                    else:
+                                        color_other_count += 1
+                                elif lime_color_name == 'white':
+                                    color_change_count += 1
+                                    if gan_color_name == 'aquamarine' or gan_color_name == 'violet':
+                                        color_turn_count += 1
+                                    else:
+                                        color_other_count += 1                                        
 
                             color_count += 1
                             count_R += 1
@@ -1577,6 +1609,10 @@ if explanation_alg == 'lime':
                     color_count = 1    
 
                 color_coverage_percent = 100 * same_color_count / color_count
+                #different_color_count = color_count - same_color_count
+                color_flip_percent = 100 * color_flip_count / color_count #color_change_count
+                color_turn_percent = 100 * color_turn_count / color_count #color_change_count
+                color_other_percent = 100 * color_other_count / color_count #color_change_count
                 
                 diff_R /= count_R
                 diff_G /= count_G
@@ -1662,7 +1698,7 @@ if explanation_alg == 'lime':
                 '''
 
                 with open("obstacles.csv", "a") as myfile:
-                    myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0 - diff)) + "," + str(100 * (1.0 - avg_diff)) + "\n")
+                                        myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0 - diff)) + "," + str(100 * (1.0 - avg_diff)) + ","  + str(color_flip_percent) + ","  + str(color_turn_percent) + "," + str(color_other_percent) + "\n")
 
 
                 # FREE SPACE eval 
@@ -1673,6 +1709,11 @@ if explanation_alg == 'lime':
 
                 same_color_count = 0
                 color_count = 0
+
+                color_change_count = 0
+                color_flip_count = 0
+                color_turn_count = 0
+                color_other_count = 0
                 
                 avg_R = 0
                 avg_G = 0
@@ -1701,6 +1742,31 @@ if explanation_alg == 'lime':
                             gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
                             if lime_color_name == gan_color_name:
                                 same_color_count += 1
+                            else:
+                                # if positive
+                                if lime_color_name == 'lightgreen':
+                                    color_change_count += 1
+                                    if gan_color_name == 'salmon':
+                                        color_flip_count += 1
+                                    elif gan_color_name == 'gray':
+                                        color_turn_count += 1
+                                    else:
+                                        color_other_count += 1    
+                                # if negative        
+                                elif lime_color_name == 'salmon':
+                                    color_change_count += 1
+                                    if gan_color_name == 'lightgreen':
+                                        color_flip_count += 1
+                                    elif gan_color_name == 'gray':
+                                        color_turn_count += 1
+                                    else:
+                                        color_other_count += 1
+                                elif lime_color_name == 'gray':
+                                    color_change_count += 1
+                                    if gan_color_name == 'lightgreen' or gan_color_name == 'salmon':
+                                        color_turn_count += 1
+                                    else:
+                                        color_other_count += 1    
 
                             color_count += 1
                             count_R += 1
@@ -1754,6 +1820,10 @@ if explanation_alg == 'lime':
                     color_count = 1    
 
                 color_coverage_percent = 100 * same_color_count / color_count
+                #different_color_count = color_count - same_color_count
+                color_flip_percent = 100 * color_flip_count / color_count #color_change_count
+                color_turn_percent = 100 * color_turn_count / color_count #color_change_count
+                color_other_percent = 100 * color_other_count / color_count #color_change_count
                 
                 diff_R /= count_R
                 diff_G /= count_G
@@ -1839,7 +1909,7 @@ if explanation_alg == 'lime':
                 '''
 
                 with open("free_space.csv", "a") as myfile:
-                    myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0- diff)) + "," + str(100 * (1.0 - avg_diff)) + "\n")
+                    myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0 - diff)) + "," + str(100 * (1.0 - avg_diff)) + ","  + str(color_flip_percent) + ","  + str(color_turn_percent) + "," + str(color_other_percent) + "\n")
 
                 '''
                 # ROBOT POSITION eval 
