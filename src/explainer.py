@@ -588,11 +588,11 @@ if explanation_alg == 'lime':
                 gan_time_avg = 0
                 
                 # optional instance selection - deterministic
-                expID = 3 #633 #491 - Dataset2
+                #expID = 70
 
                 # random instance selection
-                #import random
-                #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
+                import random
+                expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
 
                 # call LIME    
                 time_before = time.time()
@@ -614,7 +614,7 @@ if explanation_alg == 'lime':
                 # Make image a np.array deepcopy of local_costmap_original
                 image = np.array(copy.deepcopy(local_costmap_original))
 
-                # '''
+                #'''
                 # Turn inflated area to free space and 100s to 99s
                 for i in range(0, image.shape[0]):
                     for j in range(0, image.shape[1]):
@@ -622,10 +622,22 @@ if explanation_alg == 'lime':
                             image[i, j] = 0
                         elif image[i, j] == 100:
                             image[i, j] = 99
-                # '''
+                #'''
 
                 # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
                 image = image * 1.0
+
+                # plot input image
+                fig = plt.figure(frameon=False)
+                #w = 1.6 #* 3
+                #h = 1.6 #* 3
+                #fig.set_size_inches(w, h)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+                ax.imshow(image.astype('float64'), aspect='auto')
+                fig.savefig('costmap_original.png', transparent=False)
+                fig.clf()                
 
                 # Get flipped input image if wanted
                 if flipped == True:    
@@ -635,9 +647,9 @@ if explanation_alg == 'lime':
 
                 # plot input image
                 fig = plt.figure(frameon=False)
-                w = 1.6 #* 3
-                h = 1.6 #* 3
-                fig.set_size_inches(w, h)
+                #w = 1.6 #* 3
+                #h = 1.6 #* 3
+                #fig.set_size_inches(w, h)
                 ax = plt.Axes(fig, [0., 0., 1., 1.])
                 ax.set_axis_off()
                 fig.add_axes(ax)
