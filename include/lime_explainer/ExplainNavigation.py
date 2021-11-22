@@ -738,9 +738,9 @@ class ExplainRobotNavigation:
         # plot segments with centroids and labels/weights
         #print('segments_1.shape: ', segments_1.shape)
         fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
+        #w = 1.6
+        #h = 1.6
+        #fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
@@ -777,9 +777,9 @@ class ExplainRobotNavigation:
 
         # plot explanation
         fig = plt.figure(frameon=True)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
+        #w = 1.6
+        #h = 1.6
+        #fig.set_size_inches(w, h)
         #ax = plt.Axes(fig, [0., 0., 1., 0.95])
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()

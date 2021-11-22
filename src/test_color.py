@@ -33,27 +33,34 @@ def convert_rgb_to_names(rgb_tuple):
     return names[index]
     #return f'closest match: {names[index]}'
 
+#create_dict()
+#print(convert_rgb_to_names((255,127,255)))
+
 '''
-# black
+# black - for robot position
 print(convert_rgb_to_names((0,0,0)))
-# white
+# white - for obstacles with weights below threshold
 print(convert_rgb_to_names((255,255,255)))
-# gray
+# gray - for free space with weights below threshold
 print(convert_rgb_to_names((127,127,127)))
-# yellow
+# yellow - for boundaries between superpixels
 print(convert_rgb_to_names((255,255,0)))
-# red
+# red - for local plan
 print(convert_rgb_to_names((255,0,0)))
-# blue
+# blue - for global plan
 print(convert_rgb_to_names((0,0,255)))
+# salmon - for free space with absolute negative weights above threshold
+print(convert_rgb_to_names((255,127,127)))
+# aquamarine - for obstacles with positive weights above threshold
+print(convert_rgb_to_names((127,255,255)))
+# lightgreen - for free space with positive weights above threshold
+print(convert_rgb_to_names((127,255,127)))
+# violet - for free space with absolute negative weights above threshold
+print(convert_rgb_to_names((255,127,255)))
+
+# other colors currently not used:
 # lime
 print(convert_rgb_to_names((0,255,0)))
-# aquamarine
-print(convert_rgb_to_names((127,255,255)))
-# salmon
-print(convert_rgb_to_names((255,127,127)))
-# lightgreen
-print(convert_rgb_to_names((127,255,127)))
 # springgreen
 print(convert_rgb_to_names((61,255,125)))
 # magenta
@@ -70,12 +77,10 @@ def create_dict_my():
     'yellow',
     'red',
     'blue',
-    'lime',
-    'aquamarine',
     'salmon',
+    'aquamarine',
     'lightgreen',
-    'springgreen',
-    'magenta']
+    'violet']
 
 
     # a dictionary of all the hex and their respective names in css3
@@ -128,4 +133,6 @@ print(convert_rgb_to_names_my((127,255,127)))
 print(convert_rgb_to_names_my((61,255,125)))
 # magenta
 print(convert_rgb_to_names_my((255,0,255)))
+# violet
+print(convert_rgb_to_names((255,127,255)))
 '''
