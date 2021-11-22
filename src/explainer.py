@@ -581,16 +581,18 @@ if explanation_alg == 'lime':
             exp_IDs_list_test_ds1 = [5, 23, 44, 52, 75, 88, 94, 104, 118, 128, 136, 150, 151, 189, 190, 209, 223, 225, 229, 242, 252]
             exp_IDs_list_test_ds2 = [6, 9, 12, 13, 22, 45, 63, 75, 103, 105, 109, 123, 126, 128, 150, 153, 154, 161, 166, 167, 182, 203, 214, 215, 220, 234, 237, 247, 249, 252, 257, 258, 262, 271, 275, 277, 278, 294, 337, 348, 366, 373, 387, 390, 391, 413, 420, 426, 430, 436, 441, 445, 446, 451, 455, 466, 468, 482, 492, 495, 505, 507, 514, 525, 580, 585, 599, 602, 612, 620, 625, 639, 640, 641, 667, 676, 688, 690, 698]
                 
-            for num in range(0, len(exp_IDs_list_test_ds1)):
-            #for num in range(0, len(exp_IDs_list_test_ds2)):
+            #for num in range(0, len(exp_IDs_list_test_ds1)):
+            for num in range(0, len(exp_IDs_list_test_ds2)):
+            #for num in range(0, num_iter):
                 print('iteration: ', num)
 
                 lime_time_avg = 0
                 gan_time_avg = 0
                 
                 # optional instance selection - deterministic
-                expID = exp_IDs_list_test_ds1[num]
-                #expID = exp_IDs_list_test_ds2[num]
+                #expID = exp_IDs_list_test_ds1[num]
+                expID = exp_IDs_list_test_ds2[num]
+                #expID = 203
 
                 # random instance selection
                 #import random
@@ -952,6 +954,10 @@ if explanation_alg == 'lime':
                         avg_diff_list.append(avg_diff)
 
                 weights_sum = sum(weights)
+
+                if weights_sum == 0.0:
+                    weights = [1.0] * len(weights)
+                    weights_sum = sum(weights)
                 
                 explanation_saved_percentage = 0.0
                 explanation_saved_percentage_list = []
@@ -1648,6 +1654,10 @@ if explanation_alg == 'lime':
                             avg_diff_list.append(1.0)    
 
                 weights_sum = sum(weights)
+
+                if weights_sum == 0.0:
+                    weights = [1.0] * len(weights)
+                    weights_sum = sum(weights)
                 
                 explanation_saved_percentage = 0.0
                 explanation_saved_percentage_list = []
@@ -1924,6 +1934,10 @@ if explanation_alg == 'lime':
                             avg_diff_list.append(1.0)    
 
                 weights_sum = sum(weights)
+
+                if weights_sum == 0.0:
+                    weights = [1.0] * len(weights)
+                    weights_sum = sum(weights)
                 
                 explanation_saved_percentage = 0.0
                 explanation_saved_percentage_list = []
