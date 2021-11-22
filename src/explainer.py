@@ -588,8 +588,8 @@ if explanation_alg == 'lime':
                 gan_time_avg = 0
                 
                 # optional instance selection - deterministic
-                expID = exp_IDs_list_test_ds1[num]
                 #expID = exp_IDs_list_test_ds1[num]
+                expID = exp_IDs_list_test_ds2[num]
 
                 # random instance selection
                 #import random
