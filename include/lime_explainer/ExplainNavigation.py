@@ -150,7 +150,7 @@ class ExplainRobotNavigation:
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
-                                                                           min_weight=0.08)  # min_weight=0.1 - default
+                                                                           min_weight=0.0)  # min_weight=0.1 - default
 
             self.plotExplanationMinimal()
             #self.plotExplanationMinimalFlipped()
@@ -738,9 +738,9 @@ class ExplainRobotNavigation:
         # plot segments with centroids and labels/weights
         #print('segments_1.shape: ', segments_1.shape)
         fig = plt.figure(frameon=False)
-        #w = 1.6
-        #h = 1.6
-        #fig.set_size_inches(w, h)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
@@ -777,9 +777,9 @@ class ExplainRobotNavigation:
 
         # plot explanation
         fig = plt.figure(frameon=True)
-        #w = 1.6
-        #h = 1.6
-        #fig.set_size_inches(w, h)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
         #ax = plt.Axes(fig, [0., 0., 1., 0.95])
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()

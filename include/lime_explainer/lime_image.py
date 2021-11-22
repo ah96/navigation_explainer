@@ -235,7 +235,7 @@ class LimeImageExplainer(object):
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
 
-        # plot input image
+        '''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -246,6 +246,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_1.astype('float64'), aspect='auto')
         fig.savefig('segments1.png', transparent=False)
         fig.clf()
+        '''
 
         # Find segments_2
         segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
@@ -253,7 +254,7 @@ class LimeImageExplainer(object):
                           enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
 
-        # plot input image
+        '''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -264,6 +265,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_2.astype('float64'), aspect='auto')
         fig.savefig('segments2.png', transparent=False)
         fig.clf()
+        '''
 
         # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
