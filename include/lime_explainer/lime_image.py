@@ -297,8 +297,20 @@ class LimeImageExplainer(object):
                     if segments_1[i, j] == segments_unique[k]:
                         segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly
         # find segments_unique after nice segment numbering
-
+        
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
         segments_unique = np.unique(segments_1)
+        '''
         
         #segments_1 = segments_1 - 1
 
