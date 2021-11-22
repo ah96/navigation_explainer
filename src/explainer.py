@@ -588,11 +588,11 @@ if explanation_alg == 'lime':
                 gan_time_avg = 0
                 
                 # optional instance selection - deterministic
-                #expID = 70
+                expID = 3
 
                 # random instance selection
-                import random
-                expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
+                #import random
+                #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
 
                 # call LIME    
                 time_before = time.time()
