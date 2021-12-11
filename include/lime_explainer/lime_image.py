@@ -132,9 +132,20 @@ class ImageExplanation(object):
         else:
             counter_local = 0
             import pandas as pd
+
+            w_sum = 0.0
+            w_s = []
+            for f, w in exp[:num_features]:
+                w_sum += abs(w)
+                w_s.append(abs(w))
+            max_w = max(w_s)
+            if max_w == 0:
+                max_w = 1    
+
             #pd.DataFrame(segments).to_csv('segments_lime_image.csv', index=False)
             for f, w in exp[:num_features]:
-                #print('(f, w): ', (f, w))
+                print('(f, w): ', (f, w))
+                print('w_sum: ', w_sum)
 
                 #if f == 0:
                 #    print(image[segments == f])
@@ -142,37 +153,111 @@ class ImageExplanation(object):
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
-                mask[segments == f] = -1 if w < 0 else 1
+                mask[segments == f] = f #-1 if w < 0 else 1
                 #temp[segments == f] = image[segments == f].copy()
                 # if free space
+                val_low = 0
+                val_high = 255
                 if image[segments == f].all() == 0.0:
                     # if positive weight
                     if c == 1:
-                        temp[segments == f, 1] = float(np.max(image)) / 2**counter_local # c is channel, RGB - 012
                         temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
+                        temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
                         temp[segments == f, 2] = 0.0
                     # if negative weight
                     else:
-                        temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
+                        temp[segments == f, 0] = val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
                         temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
                         temp[segments == f, 2] = 0.0
                 # if obstacle
                 else:
                     # if positive weight
                     if c == 1:
-                        temp[segments == f, 1] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
                         temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
-                        temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
+                        temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / max_w)  #120 + 100 * (abs(w) / max_w) #float(np.max(image)) * w / w_sum #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
+                        temp[segments == f, 2] = 0.0 #50 + 170 * (abs(w) / max_w) #float(np.max(image)) * w / w_sum #1.0
                     # if negative weight
                     else:
-                        temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
+                        temp[segments == f, 0] = val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
                         temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
-                        temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
+                        temp[segments == f, 2] = 0.0 #50 + 170 * (abs(w) / max_w) #float(np.max(image)) * w / w_sum #1.0
 
                 counter_local += 1
 
+            #temp = temp.astype(np.uint8)
+            #mask = mask.astype(np.uint8)    
+            
+            '''
+            pd.DataFrame(temp[:,:,0]).to_csv('R.csv')
+            pd.DataFrame(temp[:,:,1]).to_csv('G.csv')
+            pd.DataFrame(temp[:,:,2]).to_csv('B.csv')
+
+            from PIL import Image
+            im = Image.fromarray(temp.astype(np.uint8))
+            im.save("temp.png")
+
+            im = Image.fromarray(mask.astype(np.uint8))
+            im.save("mask.png")
+
+            import matplotlib.pyplot as plt
+            fig = plt.figure(frameon=False)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(temp.astype(np.uint8), aspect='auto')
+            fig.savefig('temp_plt.png')
+            fig.clf()
+            '''
+            
             #print('get_image_and_mask ending')
             return temp, mask, exp
+
+    '''
+    else:
+    counter_local = 0
+    import pandas as pd
+    #pd.DataFrame(segments).to_csv('segments_lime_image.csv', index=False)
+    for f, w in exp[:num_features]:
+        #print('(f, w): ', (f, w))
+
+        #if f == 0:
+        #    print(image[segments == f])
+
+        if np.abs(w) < min_weight:
+            continue
+        c = 0 if w < 0 else 1
+        mask[segments == f] = -1 if w < 0 else 1
+        #temp[segments == f] = image[segments == f].copy()
+        # if free space
+        if image[segments == f].all() == 0.0:
+            # if positive weight
+            if c == 1:
+                temp[segments == f, 1] = float(np.max(image)) / 2**counter_local # c is channel, RGB - 012
+                temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
+                temp[segments == f, 2] = 0.0
+            # if negative weight
+            else:
+                temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
+                temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
+                temp[segments == f, 2] = 0.0
+        # if obstacle
+        else:
+            # if positive weight
+            if c == 1:
+                temp[segments == f, 1] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
+                temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
+                temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
+            # if negative weight
+            else:
+                temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
+                temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
+                temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
+
+        counter_local += 1
+
+    #print('get_image_and_mask ending')
+    return temp, mask, exp
+    '''
 
 
 class LimeImageExplainer(object):

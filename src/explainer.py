@@ -3,7 +3,7 @@
 # Defining parameters - global variables
 
 # test type: 'lime_single', 'lime_dataset_creation', 'lime_evaluation', 'GAN', 'LIMEvsGAN'
-test_type = 'LIMEvsGAN'
+test_type = 'lime_single'
 
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = 'lime'
@@ -195,7 +195,9 @@ if explanation_alg == 'lime':
 
         if test_type == 'lime_single':
             # optional instance selection - deterministic
-            #expID = 160 #Dataset1 new: #28 #160 #194
+            expID = 44 #Dataset1 new: #28 #160 #194
+
+            print(local_costmap_info.shape[0] - num_of_first_rows_to_delete)
 
             # random instance selection
             #import random
