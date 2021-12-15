@@ -47,6 +47,8 @@ class ExplainRobotNavigation:
                  num_samples, output_class_name, num_of_first_rows_to_delete, footprints, test_type, costmap_size):
         print('Constructor starting\n')
 
+        self.manual = True
+
         # save variables as class variables
         self.cmd_vel_original = cmd_vel
         self.odom = odom
@@ -135,68 +137,68 @@ class ExplainRobotNavigation:
             # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
             self.image = self.image * 1.0
 
-            '''
-            #pd.DataFrame(self.image).to_csv('costmap_new.csv', index=False)
-            self.image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
+            if self.manual == True:
+                #pd.DataFrame(self.image).to_csv('costmap_new.csv', index=False)
+                self.image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
 
-            # Save footprint instance to a file
-            #self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
-            #self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
-            #self.footprint_tmp.to_csv('footprint_new.csv', index=False, header=True)
-            self.footprint_tmp = pd.read_csv('footprint_new.csv')
-            #print(self.footprint_tmp)
+                # Save footprint instance to a file
+                #self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
+                #self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
+                #self.footprint_tmp.to_csv('footprint_new.csv', index=False, header=True)
+                self.footprint_tmp = pd.read_csv('footprint_new.csv')
+                #print(self.footprint_tmp)
+                
+                # Save local plan instance to a file
+                #self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
+                #self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
+                #self.local_plan_tmp.to_csv('local_plan_new.csv', index=False, header=True)
+                self.local_plan_tmp = pd.read_csv('local_plan_new.csv')
+
+                # Save plan (from global planner) instance to a file
+                #self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
+                #self.plan_tmp = self.plan_tmp.iloc[:, 1:]
+                #self.plan_tmp.to_csv('plan_new.csv', index=False, header=True)
+                self.plan_tmp = pd.read_csv('plan_new.csv')
+
+                # Save global plan instance to a file
+                #self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
+                #self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
+                #self.global_plan_tmp.to_csv('global_plan_new.csv', index=False, header=True)
+                self.global_plan_tmp = pd.read_csv('global_plan_new.csv')
+
+                # Save costmap_info instance to file
+                #self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
+                #self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
+                #self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
+                #self.costmap_info_tmp.to_csv('costmap_info_new.csv', index=False, header=True)
+                self.costmap_info_tmp = pd.read_csv('costmap_info_new.csv')
+
+                # Save amcl_pose instance to file
+                #self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
+                #self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
+                #self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
+                #self.amcl_pose_tmp.to_csv('amcl_pose_new.csv', index=False, header=True)
+                self.amcl_pose_tmp = pd.read_csv('amcl_pose_new.csv')
+
+                # Save tf_odom_map instance to file
+                #self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
+                #self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
+                #self.tf_odom_map_tmp.to_csv('tf_odom_map_new.csv', index=False, header=True)
+                self.tf_odom_map_tmp = pd.read_csv('tf_odom_map_new.csv')
+
+                # Save tf_map_odom instance to file
+                #self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
+                #self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
+                #self.tf_map_odom_tmp.to_csv('tf_map_odom_new.csv', index=False, header=True)
+                self.tf_map_odom_tmp = pd.read_csv('tf_map_odom_new.csv')
+
+                # Save odometry instance to file
+                #self.odom_tmp = self.odom.iloc[self.index, :]
+                #self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
+                #self.odom_tmp = self.odom_tmp.iloc[:, 2:]
+                #self.odom_tmp.to_csv('odom_new.csv', index=False, header=True)
+                self.odom_tmp = pd.read_csv('odom_new.csv')
             
-            # Save local plan instance to a file
-            #self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
-            #self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
-            #self.local_plan_tmp.to_csv('local_plan_new.csv', index=False, header=True)
-            self.local_plan_tmp = pd.read_csv('local_plan_new.csv')
-
-            # Save plan (from global planner) instance to a file
-            #self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
-            #self.plan_tmp = self.plan_tmp.iloc[:, 1:]
-            #self.plan_tmp.to_csv('plan_new.csv', index=False, header=True)
-            self.plan_tmp = pd.read_csv('plan_new.csv')
-
-            # Save global plan instance to a file
-            #self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
-            #self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
-            #self.global_plan_tmp.to_csv('global_plan_new.csv', index=False, header=True)
-            self.global_plan_tmp = pd.read_csv('global_plan_new.csv')
-
-            # Save costmap_info instance to file
-            #self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
-            #self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
-            #self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
-            #self.costmap_info_tmp.to_csv('costmap_info_new.csv', index=False, header=True)
-            self.costmap_info_tmp = pd.read_csv('costmap_info_new.csv')
-
-            # Save amcl_pose instance to file
-            #self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
-            #self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
-            #self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
-            #self.amcl_pose_tmp.to_csv('amcl_pose_new.csv', index=False, header=True)
-            self.amcl_pose_tmp = pd.read_csv('amcl_pose_new.csv')
-
-            # Save tf_odom_map instance to file
-            #self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
-            #self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-            #self.tf_odom_map_tmp.to_csv('tf_odom_map_new.csv', index=False, header=True)
-            self.tf_odom_map_tmp = pd.read_csv('tf_odom_map_new.csv')
-
-            # Save tf_map_odom instance to file
-            #self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
-            #self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-            #self.tf_map_odom_tmp.to_csv('tf_map_odom_new.csv', index=False, header=True)
-            self.tf_map_odom_tmp = pd.read_csv('tf_map_odom_new.csv')
-
-            # Save odometry instance to file
-            #self.odom_tmp = self.odom.iloc[self.index, :]
-            #self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
-            #self.odom_tmp = self.odom_tmp.iloc[:, 2:]
-            #self.odom_tmp.to_csv('odom_new.csv', index=False, header=True)
-            self.odom_tmp = pd.read_csv('odom_new.csv')
-            '''
 
             # Saving data to .csv files for C++ node - local navigation planner
             self.limeImageSaveData()
@@ -246,7 +248,6 @@ class ExplainRobotNavigation:
             plt.savefig('explanation.png')
 
         print('explain_instance function ending')
-
 
     def classifier_fn_image(self, sampled_instance):
 
@@ -303,13 +304,13 @@ class ExplainRobotNavigation:
         self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('self.cmd_vel: ', self.cmd_vel_perturb)
         #print('self.cmd_vel.shape: ', self.cmd_vel_perturb.shape)
-        self.cmd_vel_perturb.to_csv('cmd_vel.csv')
+        #self.cmd_vel_perturb.to_csv('cmd_vel.csv')
 
         # load local plans
         self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
         #print('self.local_plans: ', self.local_plans)
         #print('self.local_plans.shape: ', self.local_plans.shape)
-        self.local_plans.to_csv('local_plans.csv')
+        #self.local_plans.to_csv('local_plans.csv')
 
         # load transformed plan
         self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
@@ -1186,14 +1187,14 @@ class ExplainRobotNavigation:
         #fig.close()
 
         fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
+        w = 1.6*3
+        h = 1.6*3
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
         ax.imshow(self.image, aspect='auto')
         fig.savefig(path_core + '/input_.png')
@@ -1908,58 +1909,94 @@ class ExplainRobotNavigation:
                             self.image[i, j] = 99
 
     def limeImageSaveData(self):
-        # Saving data to .csv files for C++ node - local navigation planner
-        # Save footprint instance to a file
-        self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
-        self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
-        self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+        if self.manual == False:
+            # Saving data to .csv files for C++ node - local navigation planner
+            # Save footprint instance to a file
+            self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
+            self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
+            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
-        # Save local plan instance to a file
-        self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
-        self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
-        self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+            # Save local plan instance to a file
+            self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
+            self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
+            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
-        # Save plan (from global planner) instance to a file
-        self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
-        self.plan_tmp = self.plan_tmp.iloc[:, 1:]
-        self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+            # Save plan (from global planner) instance to a file
+            self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
+            self.plan_tmp = self.plan_tmp.iloc[:, 1:]
+            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
-        # Save global plan instance to a file
-        self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
-        self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
-        self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
-                                    header=False)
+            # Save global plan instance to a file
+            self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
+            self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
+            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
+                                        header=False)
 
-        # Save costmap_info instance to file
-        self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
-        self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
-        self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
-        self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
-                                     header=False)
+            # Save costmap_info instance to file
+            self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
+            self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
+            self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
+            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
+                                        header=False)
 
-        # Save amcl_pose instance to file
-        self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
-        self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
-        self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
-        self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+            # Save amcl_pose instance to file
+            self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
+            self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
+            self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
+            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
-        # Save tf_odom_map instance to file
-        self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
-        self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-        self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
-                                    header=False)
+            # Save tf_odom_map instance to file
+            self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
+            self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
+            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
+                                        header=False)
 
-        # Save tf_map_odom instance to file
-        self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
-        self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-        self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
-                                    header=False)
+            # Save tf_map_odom instance to file
+            self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
+            self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
+            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
+                                        header=False)
 
-        # Save odometry instance to file
-        self.odom_tmp = self.odom.iloc[self.index, :]
-        self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
-        self.odom_tmp = self.odom_tmp.iloc[:, 2:]
-        self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+            # Save odometry instance to file
+            self.odom_tmp = self.odom.iloc[self.index, :]
+            self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
+            self.odom_tmp = self.odom_tmp.iloc[:, 2:]
+            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+
+        else:
+            # Saving data to .csv files for C++ node - local navigation planner
+            # Save footprint instance to a file
+            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+
+            # Save local plan instance to a file
+            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+
+            # Save plan (from global planner) instance to a file
+            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+
+            # Save global plan instance to a file
+            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
+                                        header=False)
+
+            # Save costmap_info instance to file
+            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
+                                        header=False)
+
+            # Save amcl_pose instance to file
+            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+
+            # Save tf_odom_map instance to file
+            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
+                                        header=False)
+
+            # Save tf_map_odom instance to file
+            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
+                                        header=False)
+
+            # Save odometry instance to file
+            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+
+    
 
         # Take original command speed
         self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]

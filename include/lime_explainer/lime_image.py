@@ -144,8 +144,8 @@ class ImageExplanation(object):
 
             #pd.DataFrame(segments).to_csv('segments_lime_image.csv', index=False)
             for f, w in exp[:num_features]:
-                print('(f, w): ', (f, w))
-                print('w_sum: ', w_sum)
+                #print('(f, w): ', (f, w))
+                #print('w_sum: ', w_sum)
 
                 #if f == 0:
                 #    print(image[segments == f])
