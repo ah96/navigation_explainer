@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-# Defining parameters - global variables
+# Global variables
 
-# test type: 'lime_single', 'lime_dataset_creation', 'lime_evaluation', 'GAN', 'LIMEvsGAN'
+# test type: 'lime_single', 'lime_create_dataset', 'lime_evaluate', 'GAN', 'LIMEvsGAN'
 test_type = 'lime_single'
 
 # possible explanation algorithms: 'lime', 'anchors'
@@ -16,9 +16,6 @@ tabular_mode = 'regression'
 
 # one hot encoding: 'True' or 'False' - for tabular classification
 one_hot_encoding = True
-
-# header of the output class/column
-#output_class_name = 'beginning'
 
 # set number of samples (does not define/affect the number of samples in LIME image)
 num_samples = 256
@@ -53,11 +50,14 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     offsets.append(int(footprints.iloc[0, 4]))
     #print('offsets: ', offsets)
     
+
+    # Calculating offset
     num_of_first_rows_to_delete = max(offsets)
     '''
     print('num_of_first_rows_to_delete: ', num_of_first_rows_to_delete)
     print('\n')
     '''
+
 
     # Delete entries with 'None' frame from local_costmap_info
     local_costmap_info.drop(index=local_costmap_info.index[:num_of_first_rows_to_delete], axis=0, inplace=True)
@@ -149,6 +149,10 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     return num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom
 
 
+from tkinter import *
+# GUI architecture
+root = Tk()
+root.mainloop()
 
 
 if explanation_alg == 'lime':
