@@ -215,7 +215,7 @@ class ExplainRobotNavigation:
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
                                                                            negative_only=False, num_features=100,
                                                                            hide_rest=False,
-                                                                           min_weight=0.08)  # min_weight=0.1 - default
+                                                                           min_weight=0.0)  # min_weight=0.1 - default
 
             self.plotExplanationMinimal()
             #self.plotExplanationMinimalFlipped()
@@ -501,9 +501,6 @@ class ExplainRobotNavigation:
                         print('local plan length: ', len(local_plan_xs))
                         print('local_plan_gap: ', local_plan_gap)
                         print('max(local_plan_gaps): ', max(local_plan_gaps))
-                        if local_plan_gap == False:
-                            print('deviation: ', real_deviation)
-                            #print('minimal diff: ', min(diffs))
                     print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                     print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
 

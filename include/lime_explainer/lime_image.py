@@ -72,25 +72,12 @@ class ImageExplanation(object):
         image = self.image
         exp = self.local_exp[label]
 
-        '''
-        # plot for the HARL Workshop 2021 paper
-        exp_list = []
-        for i in range(0, len(exp)):
-            exp_list.append(list(exp[i]))
-            exp_list[i][1] = 0.0
-        exp_list[1][1] = 0.9
-        print('exp_list: ', exp_list)
-        exp = []
-        for i in range(0, len(exp_list)):
-            exp.append(tuple(exp_list[i]))
-        print('exp: ', exp)
-        '''
-
         mask = np.zeros(segments.shape, segments.dtype)
         if hide_rest:
             temp = np.zeros(self.image.shape)
         else:
-            temp = self.image.copy()
+            #temp = self.image.copy()
+            temp = np.zeros(self.image.shape)
             #temp[segments == 1] = 0.0
         if positive_only:
             fs = [x[0] for x in exp if x[1] > 0 and x[1] > min_weight][:num_features]
@@ -153,11 +140,12 @@ class ImageExplanation(object):
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
-                mask[segments == f] = f #-1 if w < 0 else 1
+                print('(f, w, c): ', (f, w, c))
+                mask[segments == f] = 120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
                 #temp[segments == f] = image[segments == f].copy()
+                val_low = 5.0
+                val_high = 200.0
                 # if free space
-                val_low = 0
-                val_high = 255
                 if image[segments == f].all() == 0.0:
                     # if positive weight
                     if c == 1:
