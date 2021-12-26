@@ -44,7 +44,7 @@ class ExplainRobotNavigation:
 
     def __init__(self, cmd_vel, odom, plan, global_plan, local_plan, current_goal, local_costmap_data,
                  local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, tabular_mode, explanation_mode,
-                 num_samples, output_class_name, num_of_first_rows_to_delete, footprints, test_type, costmap_size):
+                 num_samples, output_class_name, num_of_first_rows_to_delete, footprints, costmap_size):
         print('Constructor starting\n')
 
         self.manual = False
@@ -71,7 +71,6 @@ class ExplainRobotNavigation:
         self.output_class_name = output_class_name
         self.offset = num_of_first_rows_to_delete
         self.footprints = footprints
-        self.test_type = test_type
         self.costmap_size = costmap_size
 
         # manually modified LIME image
