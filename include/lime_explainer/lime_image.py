@@ -288,6 +288,128 @@ class LimeImageExplainer(object):
         self.feature_selection = feature_selection
         self.base = lime_base.LimeBase(kernel_fn, verbose, random_state=self.random_state)
 
+    def semantic_segment(self, image, img_rgb, costmap_info, map_info, tf_odom_map):
+        from skimage.segmentation import slic
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        import time
+
+        semantic_map = np.array(pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/semantic_global_map.csv'))
+
+        start = time.time()
+
+        # Find segments
+        segments = slic(img_rgb, n_segments=8, compactness=100, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+        #pd.DataFrame(segments).to_csv('segments.csv')
+
+        #'''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments.png', transparent=False)
+        fig.clf()
+        #'''
+
+        obstacles = []                    
+
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j] == 99:
+                    obstacles.append(segments[i, j])
+
+        obstacles = np.unique(obstacles)            
+        print('obstacles: ', obstacles)
+        print('obstacles: ', obstacles.shape)
+
+        localCostmapOriginX = costmap_info.iloc[0, 3]
+        localCostmapOriginY = costmap_info.iloc[0, 4]
+        localCostmapRes = costmap_info.iloc[0, 0]
+
+        mapOriginX = map_info.iloc[0, 4]
+        mapOriginY = map_info.iloc[0, 5]
+        mapRes = map_info.iloc[0, 1]
+
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat([tf_odom_map.iloc[0, 3], tf_odom_map.iloc[0, 4], tf_odom_map.iloc[0, 5], tf_odom_map.iloc[0, 6]])
+        r_array = np.asarray(r.as_matrix())
+        t = np.array([tf_odom_map.iloc[0, 0], tf_odom_map.iloc[0, 1], tf_odom_map.iloc[0, 2]])
+
+        upper_left = np.array([localCostmapOriginX, localCostmapOriginY, 0.0]).dot(r_array) + t
+        upper_left_x = int((upper_left[0] - mapOriginX) / mapRes)
+        upper_left_y = int((upper_left[1] - mapOriginY) / mapRes)
+
+        upper_right = np.array([159 * localCostmapRes + localCostmapOriginX, 0 * localCostmapRes + localCostmapOriginY, 0.0]).dot(r_array) + t
+        upper_right_x = int((upper_right[0] - mapOriginX) / mapRes)
+        upper_right_y = int((upper_right[1] - mapOriginY) / mapRes)
+
+        down_left = np.array([0 * localCostmapRes + localCostmapOriginX, 159 * localCostmapRes + localCostmapOriginY, 0.0]).dot(r_array) + t
+        down_left_x = int((down_left[0] - mapOriginX) / mapRes)
+        down_left_y = int((down_left[1] - mapOriginY) / mapRes)
+
+        down_right = np.array([159 * localCostmapRes + localCostmapOriginX, 159 * localCostmapRes + localCostmapOriginY, 0.0]).dot(r_array) + t
+        down_right_x = int((down_right[0] - mapOriginX) / mapRes)
+        down_right_y = int((down_right[1] - mapOriginY) / mapRes)
+
+        semantic = False
+        for i in range(upper_left_x, upper_right_x + 1):
+            for j in range(upper_left_y, down_left_y + 1):
+                if semantic_map[i, j] >= 100:
+                    semantic = True
+                    break   
+
+        semantic_segments = segments             
+
+        print('(i, j) = ', (i, j))
+        print('semantic: ', semantic)
+        if semantic == True:
+            for i in range(0, image.shape[0]):
+                for j in range(0, image.shape[1]):
+                    odom_x = i * localCostmapRes + localCostmapOriginX
+                    odom_y = j * localCostmapRes + localCostmapOriginY
+
+                    p = np.array([odom_x, odom_y, 0.0])
+                    pnew = p.dot(r_array) + t
+
+                    map_x = int((pnew[0] - mapOriginX) / mapRes)
+                    #print('map_x: ', map_x)
+                    map_y = int((pnew[1] - mapOriginY) / mapRes)
+                    #print('map_y: ', map_y)
+
+                    #print(semantic_map[map_x, map_y])
+                    semantic_segments[i, j] = semantic_map[map_x, map_y]
+            
+        for i in range(0, obstacles.shape[0]):
+            semantic_segments[segments == obstacles[i]] = 99 - 10 * obstacles[i]
+            
+        end = time.time()
+        print('end-start: ', end-start)
+        
+        pd.DataFrame(semantic_segments).to_csv('semantic_segments.csv')
+
+        #'''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(semantic_segments.astype('float64'), aspect='auto')
+        fig.savefig('semantic_segments.png', transparent=False)
+        fig.clf()
+        #'''
+
+        return np.array(semantic_segments)        
+
 
     def mySlic(self, img_rgb):
 
@@ -303,10 +425,20 @@ class LimeImageExplainer(object):
 
         # segments_1 - good obstacles
         # Find segments_1
+        '''
         segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
+        '''
+        segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+
+        early_return = True
+        if early_return == True:
+            return segments_1                  
 
         '''
         fig = plt.figure(frameon=False)
@@ -391,7 +523,7 @@ class LimeImageExplainer(object):
 
         return segments_1
 
-    def explain_instance(self, image, classifier_fn, labels=(1,),
+    def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_samples=1000,
                          batch_size=10,
@@ -452,6 +584,9 @@ class LimeImageExplainer(object):
         #print('len(image.shape): ', len(image.shape))
         #print('\n')
 
+        import copy
+        image_orig = copy.deepcopy(image)
+
         if len(image.shape) == 2:
             image = gray2rgb(image)
         if random_seed is None:
@@ -465,6 +600,8 @@ class LimeImageExplainer(object):
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
             segments = self.mySlic(image)
+        elif segmentation_fn == 'semantic_segmentation':
+            segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
             segments = segmentation_fn(image)
 

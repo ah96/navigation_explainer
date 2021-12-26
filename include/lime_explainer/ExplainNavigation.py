@@ -47,7 +47,7 @@ class ExplainRobotNavigation:
                  num_samples, output_class_name, num_of_first_rows_to_delete, footprints, test_type, costmap_size):
         print('Constructor starting\n')
 
-        self.manual = True
+        self.manual = False
 
         # save variables as class variables
         self.cmd_vel_original = cmd_vel
@@ -207,9 +207,10 @@ class ExplainRobotNavigation:
             img = copy.deepcopy(self.image)
 
             # my custom segmentation func
-            segm_fn = 'custom_segmentation'
+            #segm_fn = 'custom_segmentation'
+            segm_fn = 'semantic_segmentation'
 
-            self.explanation, segments = self.explainer.explain_instance(img, self.classifier_fn_image, hide_color=perturb_hide_color_value, num_samples=self.num_samples,
+            self.explanation, segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map, hide_color=perturb_hide_color_value, num_samples=self.num_samples,
                                                                batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
             
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
@@ -321,8 +322,9 @@ class ExplainRobotNavigation:
         self.sampled_instance = sampled_instance
 
         # plot perturbation of local costmap
-        #self.classifier_fn_image_plot()
+        self.classifier_fn_image_plot()
 
+        print_iterations = True
   
         import math
 
@@ -451,9 +453,6 @@ class ExplainRobotNavigation:
         print('command velocities original - lin_x: ' + str(self.cmd_vel_original_tmp.iloc[0]) + ', ang_z: ' + str(self.cmd_vel_original_tmp.iloc[1]) + '\n')
         '''
         
-
-        print_iterations = False
-
         # deviation of local plan from global plan
         self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
         #print('self.local_plan_deviation: ', self.local_plan_deviation)
