@@ -43,11 +43,9 @@ perturb_hide_color_value = 50
 class ExplainRobotNavigation:
 
     def __init__(self, cmd_vel, odom, plan, global_plan, local_plan, current_goal, local_costmap_data,
-                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, X_train, X_test, tabular_mode, explanation_mode,
-                 num_samples, output_class_name, num_of_first_rows_to_delete, footprints, costmap_size):
-        print('Constructor starting\n')
-
-        self.manual = False
+                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, tabular_mode, explanation_mode,
+                 num_of_first_rows_to_delete, footprints, costmap_size):
+        print('\nConstructor starting\n')
 
         # save variables as class variables
         self.cmd_vel_original = cmd_vel
@@ -63,12 +61,8 @@ class ExplainRobotNavigation:
         self.tf_map_odom = tf_map_odom
         self.map_data = map_data
         self.map_info = map_info
-        self.X_train = X_train
-        self.X_test = X_test
         self.tabular_mode = tabular_mode
         self.explanation_mode = explanation_mode
-        self.num_samples = num_samples
-        self.output_class_name = output_class_name
         self.offset = num_of_first_rows_to_delete
         self.footprints = footprints
         self.costmap_size = costmap_size
@@ -77,7 +71,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.explainer = lime_image.LimeImageExplainer(verbose=True)
 
-
+        '''
         elif self.explanation_mode == 'tabular':
             self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.X_train),
                                                                     feature_names=self.X_train.columns, mode=self.mode,
@@ -100,11 +94,12 @@ class ExplainRobotNavigation:
                                                                     mode=modeParam, class_names=[output_class_name],
                                                                     verbose=True, feature_selection='none',
                                                                     discretize_continuous=False)
+        '''
 
-        print('Constructor ending\n')
+        print('\nConstructor ending')
 
     def explain_instance(self, expID):
-        print('explain_instance function starting\n')
+        print('\nexplain_instance function starting')
 
         self.expID = expID
             
@@ -112,31 +107,23 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.printImportantInformation()
+            self.manual_instance_loading = False
 
-            # Get local costmap
-            # Original costmap will be saved to self.local_costmap_original
-            self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
+            if self.manual_instance_loading == False:
+                # Get local costmap
+                # Original costmap will be saved to self.local_costmap_original
+                self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
 
-            '''
-            # If a custom costmap is used - TO-DO: make custom map loading a separate case in explainer.py
-            #self.local_costmap_original.to_csv('~/amar_ws/costmapToChange.csv', index=False, header=True)
-            self.local_costmap_original = pd.read_csv('~/amar_ws/costmapToChange.csv')
-            '''
+                # Make image a np.array deepcopy of local_costmap_original
+                self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
-            # Make image a np.array deepcopy of local_costmap_original
-            self.image = np.array(copy.deepcopy(self.local_costmap_original))
+                # Turn inflated area to free space and 100s to 99s
+                self.inflatedToFree()
 
-            # Turn inflated area to free space and 100s to 99s
-            self.inflatedToFree()
+                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+                self.image = self.image * 1.0
 
-            # Turn point free space (that is surrounded by obstacles) to point obstacle - not really needed
-            #self.PFP2PO()
-
-            # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-            self.image = self.image * 1.0
-
-            if self.manual == True:
+            elif self.manual_instance_loading == True:
                 #pd.DataFrame(self.image).to_csv('costmap_new.csv', index=False)
                 self.image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
 
@@ -198,31 +185,30 @@ class ExplainRobotNavigation:
                 #self.odom_tmp.to_csv('odom_new.csv', index=False, header=True)
                 self.odom_tmp = pd.read_csv('odom_new.csv')
             
-
             # Saving data to .csv files for C++ node - local navigation planner
-            self.limeImageSaveData()
+            self.limeImageSaveDataForLocalPlanner()
 
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            # my custom segmentation func
-            #segm_fn = 'custom_segmentation'
-            segm_fn = 'semantic_segmentation'
+            semantic_seg = True
+            if semantic_seg == True:
+                segm_fn = 'semantic_segmentation'
+            elif semantic_seg == False:
+                segm_fn = 'custom_segmentation'
 
-            self.explanation, segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map, hide_color=perturb_hide_color_value, num_samples=self.num_samples,
-                                                               batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
+            self.explanation, segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map, 
+                                                                        hide_color=perturb_hide_color_value, batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
             
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False,
-                                                                           negative_only=False, num_features=100,
-                                                                           hide_rest=False,
-                                                                           min_weight=0.0)  # min_weight=0.1 - default
+            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
+                                                                           hide_rest=False, min_weight=0.0)
 
             self.plotExplanationMinimal()
             #self.plotExplanationMinimalFlipped()
             #self.pl#otExplanation()
             #self.plotExplanationFlipped()
 
-
+        '''
         elif self.explanation_mode == 'tabular':
             # search for instance queue index (original instance queue name in almost (haman) input data frames)
             self.index = self.X_train.index.values[self.expID]
@@ -246,8 +232,9 @@ class ExplainRobotNavigation:
             # print(self.explanation.as_list())
             fig = self.explanation.as_pyplot_figure()
             plt.savefig('explanation.png')
+        '''
 
-        print('explain_instance function ending')
+        print('\nexplain_instance function ending')
 
     def classifier_fn_image(self, sampled_instance):
 
@@ -321,9 +308,9 @@ class ExplainRobotNavigation:
         self.sampled_instance = sampled_instance
 
         # plot perturbation of local costmap
-        self.classifier_fn_image_plot()
+        #self.classifier_fn_image_plot()
 
-        print_iterations = True
+        print_iterations = False
   
         import math
 
@@ -854,28 +841,6 @@ class ExplainRobotNavigation:
         return np.array(self.cmd_vel_perturb.iloc[:, 3:])
 
     def classifier_fn_image_plot(self):
-        '''
-        # Visualise last 10 perturbations and last 100 perturbations separately
-        self.perturbations_visualization = self.sampled_instance[0][:, :, 0]
-        for i in range(1, 120):
-            if i == 10:
-                self.perturbations_visualization_final = self.perturbations_visualization
-                self.perturbations_visualization = self.sampled_instance[i][:, :, 0]
-            elif i % 10 == 0 & i != 10:
-                self.perturbations_visualization_final = np.concatenate((self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
-                self.perturbations_visualization = self.sampled_instance[i][:, :, 0]
-            else:
-                self.perturbations_visualization = np.concatenate((self.perturbations_visualization, self.sampled_instance[i][:, :, 0]), axis=1)
-        self.perturbations_visualization_final = np.concatenate((self.perturbations_visualization_final, self.perturbations_visualization), axis=0)
-        '''
-
-        '''
-        # Save perturbations as .csv file
-        for i in range(0, self.sampled_instance.shape[0]):
-            pd.DataFrame(self.sampled_instance[i][:, :, 0]).to_csv('~/amar_ws/perturbation_' + str(i) + '.csv', index=False, header=False)
-        '''
-
-
         #'''
         # indices of transformed plan's poses in local costmap
         self.transformed_plan_x_list = []
@@ -1838,73 +1803,8 @@ class ExplainRobotNavigation:
         
         return [qx, qy, qz, qw]
 
-    def printImportantInformation(self):
-        # print important information
-
-        if self.explanation_mode == 'image':
-            #'''
-            print('self.explanation_mode: ', self.explanation_mode)
-            print('self.expID: ', self.expID)
-            print('self.offset: ', self.offset)
-            print('\n')
-            #'''
-        else:
-            #'''
-            print('self.explanation_mode: ', self.explanation_mode)
-            print('self.tabular_mode: ', self.tabular_mode)
-            print('self.expID: ', self.expID)
-            print('self.num_samples: ', self.num_samples)
-            print('self.output_class_name: ', self.output_class_name)
-            print('self.offset: ', self.offset)
-            print('\n')
-            #'''    
-
-    def PFP2PO(self):
-        # Turn point free space (that is surrounded by obstacles) to point obstacle
-        # Helps in some cases
-        # Because constructor is called only once, this is not a big computational burden (for now)
-        for i in range(0, self.image.shape[0]):
-            for j in range(0, self.image.shape[1]):
-                if self.image[i, j] == 0:
-                    # in the middle
-                    if self.image.shape[0]-1 > i > 0 and self.image.shape[1]-1 > j > 0:
-                        if self.image[i-1, j] == 99 and self.image[i+1, j] == 99 and self.image[i, j-1] == 99 and self.image[i, j+1] == 99:
-                            self.image[i,j] = 99
-                    # top left corner
-                    elif i == 0 and j == 0:
-                        if self.image[0, 1] == 99 and self.image[1, 0] == 99 and self.image[1, 1] == 99:
-                            self.image[i,j] = 99
-                    # top edge
-                    if i == 0 and self.image.shape[1]-1 > j > 0:
-                        if self.image[i, j-1] == 99 and self.image[i+1, j] == 99 and self.image[i, j+1] == 99:
-                            self.image[i,j] = 99
-                    # top right corner
-                    elif i == 0 and j == self.image.shape[1]-1:
-                        if self.image[0, self.image.shape[1]-2] == 99 and self.image[1, self.image.shape[1]-1] == 99 and self.image[1, self.image.shape[1]-2] == 99:
-                            self.image[i,j] = 99
-                    # bottom left corner
-                    elif i == self.image.shape[0]-1 and j == 0:
-                        if self.image[self.image.shape[0]-2, 0] == 99 and self.image[self.image.shape[0]-1, 1] == 99 and self.image[self.image.shape[0]-2, 1] == 99:
-                            self.image[i,j] = 99
-                    # bottom edge
-                    if i == self.image.shape[0]-1 and self.image.shape[1]-1 > j > 0:
-                        if self.image[i, j-1] == 99 and self.image[i-1, j] == 99 and self.image[i, j+1] == 99:
-                            self.image[i,j] = 99
-                    # bottom right corner
-                    elif i == self.image.shape[0]-1 and j == self.image.shape[1]-1:
-                        if self.image[self.image.shape[0]-2, self.image.shape[1]-2] == 99 and self.image[self.image.shape[0]-1, self.image.shape[1]-2] == 99 and self.image[self.image.shape[0]-2, self.image.shape[1]-1] == 99:
-                            self.image[i,j] = 99
-                    # left edge
-                    if self.image.shape[0]-1 > i > 0 and j == 0:
-                        if self.image[i - 1, j] == 99 and self.image[i + 1, j] == 99 and self.image[i, j + 1] == 99:
-                            self.image[i, j] = 99
-                    # right edge
-                    if self.image.shape[0]-1 > i > 0 and j == self.image.shape[1]-1:
-                        if self.image[i - 1, j] == 99 and self.image[i + 1, j] == 99 and self.image[i, j - 1] == 99:
-                            self.image[i, j] = 99
-
-    def limeImageSaveData(self):
-        if self.manual == False:
+    def limeImageSaveDataForLocalPlanner(self):
+        if self.manual_instance_loading == False:
             # Saving data to .csv files for C++ node - local navigation planner
             # Save footprint instance to a file
             self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
@@ -1958,7 +1858,7 @@ class ExplainRobotNavigation:
             self.odom_tmp = self.odom_tmp.iloc[:, 2:]
             self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
-        else:
+        elif self.manual_instance_loading == True:
             # Saving data to .csv files for C++ node - local navigation planner
             # Save footprint instance to a file
             self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
@@ -1990,8 +1890,6 @@ class ExplainRobotNavigation:
 
             # Save odometry instance to file
             self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
-
-    
 
         # Take original command speed
         self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
@@ -2033,10 +1931,6 @@ class ExplainRobotNavigation:
         self.odom_w = self.odom_tmp.iloc[0, 3]
         # calculate Euler angles based on orientation quaternion
         [self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
-        #print('roll_odom: ', roll_odom)
-        #print('pitch_odom: ', pitch_odom)
-        #print('self.yaw_odom: ', self.yaw_odom)
-        #[qx, qy, qz, qw] = self.euler_to_quaternion(self.yaw_odom, pitch_odom, roll_odom)
         
         # find yaw angles projections on x and y axes and save them to class variables
         self.yaw_odom_x = math.cos(self.yaw_odom)
@@ -2046,7 +1940,6 @@ class ExplainRobotNavigation:
         self.footprint_x_list = []
         self.footprint_y_list = []
         for j in range(0, self.footprint_tmp.shape[0]):
-            # print(str(self.footprint_tmp.iloc[j, 0]) + '  ' + str(self.footprint_tmp.iloc[j, 1]))
             self.footprint_x_list.append(
                 int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
             self.footprint_y_list.append(
@@ -2075,10 +1968,7 @@ class ExplainRobotNavigation:
         self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
         # calculate Euler angles based on orientation quaternion
         [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
-        #print('roll_amcl: ', roll_amcl)
-        #print('pitch_amcl: ', pitch_amcl)
-        #print('yaw_amcl: ', self.yaw_amcl)
-    
+
     def inflatedToFree(self):
         #'''
         # Turn inflated area to free space and 100s to 99s

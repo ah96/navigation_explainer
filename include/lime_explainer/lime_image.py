@@ -385,7 +385,8 @@ class LimeImageExplainer(object):
                     #print('map_y: ', map_y)
 
                     #print(semantic_map[map_x, map_y])
-                    semantic_segments[i, j] = semantic_map[map_x, map_y]
+                    if -1 < map_x < semantic_map.shape[0] and -1 < map_y < semantic_map.shape[1]: 
+                        semantic_segments[i, j] = semantic_map[map_x, map_y]
             
         for i in range(0, obstacles.shape[0]):
             semantic_segments[segments == obstacles[i]] = 99 - 10 * obstacles[i]

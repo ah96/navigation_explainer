@@ -11,15 +11,6 @@ explanation_mode = ''
 # tabular explanation modes: 'regression', 'classification'
 tabular_mode = ''
 
-# one hot encoding: 'True' or 'False' - for tabular classification
-one_hot_encoding = True
-
-# set number of samples (does not define/affect the number of samples in LIME image)
-num_samples = 256
-
-# size of the one dimension of a local costmap
-costmap_size = 160
-
 import math
 
 def quaternion_to_euler(x, y, z, w):
@@ -138,10 +129,12 @@ def preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, t
     print('tf_map_odom.shape after deleting entries with None frame or plans offset or footprint offset: ', tf_map_odom.shape)
     print('\n')
     '''
-
+    
+    '''
     # Deletion of entries with 'None' frame from plans and footprints has not yet been implemented,
     # because after deleting rows from dataframes, indexes retain their values,
     # so that further plans' and footprints' instances can be indexed on the same way.
+    '''
 
     return num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom
 
@@ -163,35 +156,32 @@ def LimeSingle():
     print('\n')
     '''
 
+    # preprocess data
     num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
 
     costmap_size = local_costmap_info.iloc[0, 2]
-    #print('costmap_size: ', costmap_size)
+    print('\ncostmap_size: ', costmap_size)
     
-    # Dataset creation
-    X_train = []
-    X_test = []
-
-    # output_class_name - not important for LIME image
-    output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
-
     # Explanation
     from lime_explainer import ExplainNavigation
 
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        X_train, X_test, tabular_mode, explanation_mode, num_samples,
-                                                        output_class_name, num_of_first_rows_to_delete, footprints, costmap_size)
+                                                        tabular_mode, explanation_mode, num_of_first_rows_to_delete, footprints, costmap_size)
        
-    # optional instance selection - deterministic
-    expID = 95 #Dataset1 new: #28 #160 #194
+    choose_random_instance = True
 
-    print(local_costmap_info.shape[0] - num_of_first_rows_to_delete)
-
-    # random instance selection
-    #import random
-    #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
+    if choose_random_instance == True:
+        # random instance selection
+        print('Instance ID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
+        import random
+        expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete)
+        print('\nexpID: ', expID)
+    else:     
+        # optional instance selection - deterministic
+        expID = 195
+        print('\nexpID: ', expID)
 
     exp_nav.explain_instance(expID)
     #exp_nav.testSegmentation(expID)
@@ -2189,6 +2179,10 @@ def EvaluateLIMEvsGAN():
         with open("free_space_weighted.csv", "a") as myfile:
             myfile.write(str(explanation_saved_percentage) + "\n")
 
+
+
+###### TKINTER START ######
+
 from tkinter import *
 # GUI architecture
 root = Tk()
@@ -2199,28 +2193,51 @@ options_exp_alg = [
     "LIME",
     "Anchors"
 ]
+# datatype of menu text
+clicked_exp_alg = StringVar()  
+# initial menu text
+clicked_exp_alg.set( "Choose explanation algorithm" )  
+# Create Dropdown menu
+drop = OptionMenu( root , clicked_exp_alg , *options_exp_alg )
+drop.pack()
 
 options_exp_mode = [
     "image",
     "tabular",
     "tabular_costmap"
 ]
+# datatype of menu text
+clicked_exp_mode = StringVar()  
+# initial menu text
+clicked_exp_mode.set( "Choose LIME explanation method" )  
+# Create Dropdown menu
+drop = OptionMenu( root , clicked_exp_mode , *options_exp_mode )
+drop.pack()
 
 options_tab_mode = [
     "regression",
     "classification"
 ]
-  
 # datatype of menu text
-clicked = StringVar()
-  
+clicked_tab_mode = StringVar()  
 # initial menu text
-clicked.set( "Monday" )
-  
+clicked_tab_mode.set( "Choose LIME tabular explanation method" )  
 # Create Dropdown menu
-drop = OptionMenu( root , clicked , *options )
+drop = OptionMenu( root , clicked_tab_mode , *options_tab_mode )
 drop.pack()
 
+def loadToGlobalVars():
+    global explanation_alg, explanation_mode, tabular_mode
+    explanation_alg = clicked_exp_alg.get()
+    explanation_mode = clicked_exp_mode.get()
+    tabular_mode = clicked_tab_mode.get()
+    
+    print('explanation algorithm: ', explanation_alg)
+    print('explanation mode:', explanation_mode)
+    print('tabular_mode: ', tabular_mode)
+
+button_load = Button( root , text = "Confirm choices" , command = loadToGlobalVars ).pack()
+  
 buttonLimeSingle = Button(root, text='Run LIME single', height=3, width=25, command=LimeSingle, fg='black', bg='white')
 #buttonLimeSingle.grid(row=0,column=0)
 buttonLimeSingle.pack()
@@ -2241,11 +2258,14 @@ buttonEvaluateLIMEvsGAN = Button(root, text='Evaluate LIME vs GAN', height=3, wi
 #buttonEvaluateLIMEvsGAN.grid(row=4,column=0)
 buttonEvaluateLIMEvsGAN.pack()
 
-
 root.mainloop()
 
+###### TKINTER END ######
 
 
+
+
+###### TABULAR Lime ############
 '''
 # Dataset creation
 X_train = []
