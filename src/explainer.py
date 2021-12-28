@@ -170,17 +170,17 @@ def LimeSingle():
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
                                                         tabular_mode, explanation_mode, num_of_first_rows_to_delete, footprints, costmap_size)
        
-    choose_random_instance = True
+    choose_random_instance = False
 
     if choose_random_instance == True:
         # random instance selection
-        print('Instance ID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
+        print('\nexpID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
         import random
         expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete)
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 195
+        expID = 78 #78 #144
         print('\nexpID: ', expID)
 
     exp_nav.explain_instance(expID)

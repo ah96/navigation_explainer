@@ -140,7 +140,7 @@ class ImageExplanation(object):
                 if np.abs(w) < min_weight:
                     continue
                 c = 0 if w < 0 else 1
-                print('(f, w, c): ', (f, w, c))
+                #print('(f, w, c): ', (f, w, c))
                 mask[segments == f] = 120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
                 #temp[segments == f] = image[segments == f].copy()
                 val_low = 5.0
@@ -289,6 +289,8 @@ class LimeImageExplainer(object):
         self.base = lime_base.LimeBase(kernel_fn, verbose, random_state=self.random_state)
 
     def semantic_segment(self, image, img_rgb, costmap_info, map_info, tf_odom_map):
+        print('\nsemantic_segment starts')
+
         from skimage.segmentation import slic
         import matplotlib.pyplot as plt
         import numpy as np
@@ -306,7 +308,7 @@ class LimeImageExplainer(object):
                             start_label=1, mask=None)
         #pd.DataFrame(segments).to_csv('segments.csv')
 
-        #'''
+        '''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -317,7 +319,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments.astype('float64'), aspect='auto')
         fig.savefig('segments.png', transparent=False)
         fig.clf()
-        #'''
+        '''
 
         obstacles = []                    
 
@@ -327,8 +329,8 @@ class LimeImageExplainer(object):
                     obstacles.append(segments[i, j])
 
         obstacles = np.unique(obstacles)            
-        print('obstacles: ', obstacles)
-        print('obstacles: ', obstacles.shape)
+        #print('obstacles: ', obstacles)
+        #print('obstacles: ', obstacles.shape)
 
         localCostmapOriginX = costmap_info.iloc[0, 3]
         localCostmapOriginY = costmap_info.iloc[0, 4]
@@ -368,8 +370,8 @@ class LimeImageExplainer(object):
 
         semantic_segments = segments             
 
-        print('(i, j) = ', (i, j))
-        print('semantic: ', semantic)
+        #print('(i, j) = ', (i, j))
+        #print('semantic: ', semantic)
         if semantic == True:
             for i in range(0, image.shape[0]):
                 for j in range(0, image.shape[1]):
@@ -389,14 +391,15 @@ class LimeImageExplainer(object):
                         semantic_segments[i, j] = semantic_map[map_x, map_y]
             
         for i in range(0, obstacles.shape[0]):
+            #print('obstacles[i]: ', obstacles[i])
             semantic_segments[segments == obstacles[i]] = 99 - 10 * obstacles[i]
             
         end = time.time()
-        print('end-start: ', end-start)
+        print('\nsemantic_segment runtime: ', end-start)
         
-        pd.DataFrame(semantic_segments).to_csv('semantic_segments.csv')
+        #pd.DataFrame(semantic_segments).to_csv('semantic_segments.csv')
 
-        #'''
+        '''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -407,14 +410,14 @@ class LimeImageExplainer(object):
         ax.imshow(semantic_segments.astype('float64'), aspect='auto')
         fig.savefig('semantic_segments.png', transparent=False)
         fig.clf()
-        #'''
+        '''
+
+        print('\nsemantic_segment end')
 
         return np.array(semantic_segments)        
 
-
     def mySlic(self, img_rgb):
-
-        #print('mySlic starts')
+        print('\nmySlic starts')
 
         # import needed libraries
         from skimage.segmentation import slic
@@ -424,20 +427,25 @@ class LimeImageExplainer(object):
         # show original image
         img = img_rgb[:, :, 0]
 
+        start = time.time()
+
         # segments_1 - good obstacles
         # Find segments_1
-        '''
+        #'''
         segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
+        #'''
+        
         '''
         segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
+        '''
 
-        early_return = True
+        early_return = False
         if early_return == True:
             return segments_1                  
 
@@ -501,7 +509,7 @@ class LimeImageExplainer(object):
             for j in range(0, segments_1.shape[1]):
                 for k in range(0, segments_unique.shape[0]):
                     if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly
+                        segments_1[i, j] = k+1 # k+1 must be in order for regionprops() function to work correctly
         # find segments_unique after nice segment numbering
         
         '''
@@ -518,9 +526,10 @@ class LimeImageExplainer(object):
         segments_unique = np.unique(segments_1)
         '''
         
-        #segments_1 = segments_1 - 1
+        end = time.time()
+        print('\nmySlic runtime: ', end-start)
 
-        #print('mySlic ends')
+        print('\nmySlic ends')
 
         return segments_1
 
@@ -571,20 +580,6 @@ class LimeImageExplainer(object):
             explanations.
         """
 
-        #print('batch_size: ', batch_size)
-        #print('\n')
-
-        '''
-        # Plot picture
-        import matplotlib.pyplot as plt
-        plt.imshow(image)
-        plt.savefig('self.lime_image_costmap.png')
-        plt.clf()
-        '''
-
-        #print('len(image.shape): ', len(image.shape))
-        #print('\n')
-
         import copy
         image_orig = copy.deepcopy(image)
 
@@ -616,24 +611,12 @@ class LimeImageExplainer(object):
         else:
             fudged_image[:] = hide_color
 
-        '''    
-        # Plot picture
-        import matplotlib.pyplot as plt
-        plt.imshow(fudged_image)
-        plt.savefig('self.lime_image_fudged_image.png')
-        plt.clf()    
-        '''
-
         top = labels
-        #print('top: ', top)
 
         data, labels = self.data_labels(image, fudged_image, segments,
                                         classifier_fn, num_samples,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
-
-        #print('data: ', data)
-        #print('labels: ', labels)
 
         #distance_metric = 'jaccard'
         distances = sklearn.metrics.pairwise_distances(
@@ -641,8 +624,6 @@ class LimeImageExplainer(object):
             data[0].reshape(1, -1),
             metric=distance_metric
         ).ravel()
-
-        #print('distances: ', distances)
 
         ret_exp = ImageExplanation(image, segments)
         if top_labels:

@@ -45,7 +45,7 @@ class ExplainRobotNavigation:
     def __init__(self, cmd_vel, odom, plan, global_plan, local_plan, current_goal, local_costmap_data,
                  local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, tabular_mode, explanation_mode,
                  num_of_first_rows_to_delete, footprints, costmap_size):
-        print('\nConstructor starting\n')
+        print('\nConstructor starting')
 
         # save variables as class variables
         self.cmd_vel_original = cmd_vel
@@ -99,7 +99,7 @@ class ExplainRobotNavigation:
         print('\nConstructor ending')
 
     def explain_instance(self, expID):
-        print('\nexplain_instance function starting')
+        print('\nexplain_instance starting')
 
         self.expID = expID
             
@@ -191,22 +191,22 @@ class ExplainRobotNavigation:
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            semantic_seg = True
-            if semantic_seg == True:
+            self.semantic_seg = False
+            if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
-            elif semantic_seg == False:
+            elif self.semantic_seg == False:
                 segm_fn = 'custom_segmentation'
 
-            self.explanation, segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map, 
+            self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map, 
                                                                         hide_color=perturb_hide_color_value, batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
             
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
                                                                            hide_rest=False, min_weight=0.0)
 
-            self.plotExplanationMinimal()
+            #self.plotExplanationMinimal()
             #self.plotExplanationMinimalFlipped()
-            #self.pl#otExplanation()
-            #self.plotExplanationFlipped()
+            #self.plotExplanation()
+            self.plotExplanationFlipped()
 
         '''
         elif self.explanation_mode == 'tabular':
@@ -234,11 +234,11 @@ class ExplainRobotNavigation:
             plt.savefig('explanation.png')
         '''
 
-        print('\nexplain_instance function ending')
+        print('\nexplain_instance ending')
 
     def classifier_fn_image(self, sampled_instance):
 
-        print('classifier_fn_image started')
+        print('\nclassifier_fn_image started')
 
         # sampled_instance info
         #print('sampled_instance: ', sampled_instance)
@@ -271,7 +271,7 @@ class ExplainRobotNavigation:
         # self.costmap_tmp.to_csv('~/amar_ws/costmap_data.csv', index=False, header=False)
         #'''
 
-        print('starting C++ node')
+        print('\nstarting C++ node')
 
         # start perturbed_node_image ROS C++ node
         Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
@@ -285,7 +285,7 @@ class ExplainRobotNavigation:
 
         #rospy.sleep(1)
 
-        print('C++ node ended')
+        print('\nC++ node ended')
 
         # load command velocities
         self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
@@ -372,8 +372,8 @@ class ExplainRobotNavigation:
         if max(local_plan_gaps) > local_plan_gap_threshold:
             local_plan_original_gap = True
 
-        print('\nmax(local_plan_original_gaps): ', max(local_plan_gaps))
-        print('len(local_plan_xs_orig): ', len(local_plan_xs_orig))      
+        #print('\nmax(local_plan_original_gaps): ', max(local_plan_gaps))
+        #print('len(local_plan_xs_orig): ', len(local_plan_xs_orig))      
         
         if local_plan_original_gap == True or len(local_plan_xs_orig) == 0:
             deviation_type = 'stop'
@@ -836,7 +836,7 @@ class ExplainRobotNavigation:
             print('ahead_right_list: ', ahead_right_list)
             '''
 
-        print('classifier_fn_image ended')
+        print('\nclassifier_fn_image ended\n')
 
         return np.array(self.cmd_vel_perturb.iloc[:, 3:])
 
@@ -943,51 +943,9 @@ class ExplainRobotNavigation:
     def plotExplanationMinimal(self):
         path_core = os.getcwd()
 
-        # make a deepcopy of an image
-        img_ = copy.deepcopy(self.image)
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
         # import needed libraries
-        from skimage.segmentation import slic
         from skimage.measure import regionprops
         import matplotlib.pyplot as plt
-
-        # show original image
-        img = rgb[:, :, 0]
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        segments_1 = slic(rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-
-        # Find segments_2
-        segments_2 = slic(rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-
-        segments_unique_2 = np.unique(segments_2)
-        # Creating segments using segments_1 and segments_2
-        #'''
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        #'''
-        segments_unique = np.unique(segments_1)
-        # Get nice segments' numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k + 1
 
         # plot segments with centroids and labels/weights
         #print('segments_1.shape: ', segments_1.shape)
@@ -998,31 +956,89 @@ class ExplainRobotNavigation:
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.imshow(segments_1, aspect='auto')
+        ax.imshow(self.segments, aspect='auto')
         
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            # plt.text(centers[i][0], centers[i][1], str(v))
-            # '''
+        if self.semantic_seg == False:
+            regions = regionprops(self.segments)
+            i = 0
+            for props in regions:
+                if i == len(regions) - 1:
+                    break
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
+            ax.scatter(cy, cx, c='white', marker='o')
             # printing/plotting explanation weights
             for j in range(0, len(self.exp)):
-                if self.exp[j][0] == i:
-                    # print('i: ', i)
-                    # print('j: ', j)
-                    # print('self.exp[j][0]: ', self.exp[j][0])
-                    # print('self.exp[j][1]: ', self.exp[j][1])
-                    # print('v: ', v)
-                    # print('\n')
-                    ax.text(centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                if self.exp[j][0] == 0:
+                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
                     break
-            # '''
-            i = i + 1
+
+        elif self.semantic_seg == True:
+            regions = regionprops(self.segments)
+            i = 0
+            '''
+            print('self.exp: ', self.exp)
+            print('len(regions): ', len(regions))
+            print('np.unique(self.segments): ', np.unique(self.segments))
+            '''
+            for props in regions:
+                v = props.label  # value of label
+                if v == len(regions):
+                    v = 0
+                '''    
+                print('i = ', i)
+                print('v = ', v)
+                '''
+                if v > len(regions):
+                    break
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        '''
+                        print('i: ', i)
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        print('v: ', v)
+                        print('\n')
+                        '''
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            for k in range(i, len(regions)):
+                v = regions[k].label
+                '''
+                print('k = ', k)
+                print('v = ', v)
+                '''
+                cx, cy = regions[k].centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    exp_0 = self.exp[j][0]
+                    if exp_0 == 0:
+                        exp_0 = len(regions)
+                    if 99 == regions[k].label + 10 * (exp_0):
+                        '''
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        '''
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                k = k + 1
 
         # Save segments with nice numbering as a picture
         fig.savefig(path_core + '/weighted_segments.png')
@@ -1036,7 +1052,7 @@ class ExplainRobotNavigation:
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.imshow(self.image, aspect='auto')
-        fig.savefig(path_core + '/input.png')
+        fig.savefig(path_core + '/costmap.png')
         fig.clf()
 
         
@@ -1157,58 +1173,17 @@ class ExplainRobotNavigation:
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
         ax.imshow(self.image, aspect='auto')
-        fig.savefig(path_core + '/input_.png')
+        fig.savefig(path_core + '/input.png')
         fig.clf()
 
     # plot explanation picture and segments flipped
     def plotExplanationMinimalFlipped(self):
         path_core = os.getcwd()    
 
-        # make a deepcopy of an image
-        img_ = copy.deepcopy(self.image)
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
         # import needed libraries
-        from skimage.segmentation import slic
         from skimage.measure import regionprops
         import matplotlib.pyplot as plt
 
-        # show original image
-        img = rgb[:, :, 0]
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        segments_1 = slic(rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-
-        # Find segments_2
-        segments_2 = slic(rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-
-        segments_unique_2 = np.unique(segments_2)
-        # Creating segments using segments_1 and segments_2
-        #'''
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        #'''
-        segments_unique = np.unique(segments_1)
-        # Get nice segments' numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k + 1
 
         # plot segments with centroids and labels/weights
         #print('segments_1.shape: ', segments_1.shape)
@@ -1219,31 +1194,89 @@ class ExplainRobotNavigation:
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.imshow(self.matrixFlip(segments_1, 'h').astype('uint8'), aspect='auto')
+        ax.imshow(self.matrixFlip(self.segments, 'h').astype('uint8'), aspect='auto')
         
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            ax.scatter(160 - centers[i][0], centers[i][1], c='white', marker='o')
-            # plt.text(centers[i][0], centers[i][1], str(v))
-            # '''
+        if self.semantic_seg == False:
+            regions = regionprops(self.segments)
+            i = 0
+            for props in regions:
+                if i == len(regions) - 1:
+                    break
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(160 - cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
+            ax.scatter(160 - cy, cx, c='white', marker='o')
             # printing/plotting explanation weights
             for j in range(0, len(self.exp)):
-                if self.exp[j][0] == i:
-                    # print('i: ', i)
-                    # print('j: ', j)
-                    # print('self.exp[j][0]: ', self.exp[j][0])
-                    # print('self.exp[j][1]: ', self.exp[j][1])
-                    # print('v: ', v)
-                    # print('\n')
-                    ax.text(160 - centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                if self.exp[j][0] == 0:
+                    ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
                     break
-            # '''
-            i = i + 1
+
+        elif self.semantic_seg == True:
+            regions = regionprops(self.segments)
+            i = 0
+            '''
+            print('self.exp: ', self.exp)
+            print('len(regions): ', len(regions))
+            print('np.unique(self.segments): ', np.unique(self.segments))
+            '''
+            for props in regions:
+                v = props.label  # value of label
+                if v == len(regions):
+                    v = 0
+                '''    
+                print('i = ', i)
+                print('v = ', v)
+                '''
+                if v > len(regions):
+                    break
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(160 - cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        '''
+                        print('i: ', i)
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        print('v: ', v)
+                        print('\n')
+                        '''
+                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            for k in range(i, len(regions)):
+                v = regions[k].label
+                '''
+                print('k = ', k)
+                print('v = ', v)
+                '''
+                cx, cy = regions[k].centroid  # centroid coordinates
+                ax.scatter(160 - cy, cx, c='white', marker='o')
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    exp_0 = self.exp[j][0]
+                    if exp_0 == 0:
+                        exp_0 = len(regions)
+                    if 99 == regions[k].label + 10 * (exp_0):
+                        '''
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        '''
+                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                k = k + 1
 
         # Save segments with nice numbering as a picture
         fig.savefig(path_core + '/weighted_segments_flipped.png')
@@ -1347,11 +1380,12 @@ class ExplainRobotNavigation:
         #    round(self.cmd_vel_original_tmp.iloc[1], 2)))
         
         #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
+        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
+        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(255, 255, 0))
         marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
         
         # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.imshow(marked_boundaries_flipped.astype('float64'), aspect='auto')  # , aspect='auto')
+        ax.imshow(marked_boundaries_flipped.astype(np.uint8), aspect='auto')  # , aspect='auto')
         fig.savefig(path_core + '/explanation_flipped.png', transparent=False)
         fig.clf()
         #fig.close()
@@ -1361,6 +1395,103 @@ class ExplainRobotNavigation:
         print('plotExplanation starts')
 
         path_core = os.getcwd()
+
+        # plot segments with centroids and labels/weights
+        #print('segments_1.shape: ', segments_1.shape)
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.segments, aspect='auto')
+        
+        if self.semantic_seg == False:
+            regions = regionprops(self.segments)
+            i = 0
+            for props in regions:
+                if i == len(regions) - 1:
+                    break
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
+            ax.scatter(cy, cx, c='white', marker='o')
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == 0:
+                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                    break
+
+        elif self.semantic_seg == True:
+            regions = regionprops(self.segments)
+            i = 0
+            '''
+            print('self.exp: ', self.exp)
+            print('len(regions): ', len(regions))
+            print('np.unique(self.segments): ', np.unique(self.segments))
+            '''
+            for props in regions:
+                v = props.label  # value of label
+                if v == len(regions):
+                    v = 0
+                '''    
+                print('i = ', i)
+                print('v = ', v)
+                '''
+                if v > len(regions):
+                    break
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        '''
+                        print('i: ', i)
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        print('v: ', v)
+                        print('\n')
+                        '''
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            for k in range(i, len(regions)):
+                v = regions[k].label
+                '''
+                print('k = ', k)
+                print('v = ', v)
+                '''
+                cx, cy = regions[k].centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    exp_0 = self.exp[j][0]
+                    if exp_0 == 0:
+                        exp_0 = len(regions)
+                    if 99 == regions[k].label + 10 * (exp_0):
+                        '''
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        '''
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                k = k + 1
+
+        # Save segments with nice numbering as a picture
+        fig.savefig(path_core + '/weighted_segments.png')
+        fig.clf()
 
         # plot local costmap
         fig = plt.figure(frameon=False)
@@ -1522,8 +1653,9 @@ class ExplainRobotNavigation:
         ax.set_axis_off()
         fig.add_axes(ax)
         #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
-        ax.imshow(marked_boundaries, aspect='auto')
+        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
+        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(1, 1, 0))
+        ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')
         ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
@@ -1538,6 +1670,104 @@ class ExplainRobotNavigation:
         print('plotExplanationFlipped starts')
 
         path_core = os.getcwd()
+
+
+        # plot segments with centroids and labels/weights
+        #print('segments_1.shape: ', segments_1.shape)
+        fig = plt.figure(frameon=False)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.matrixFlip(self.segments, 'h').astype('uint8'), aspect='auto')
+        
+        if self.semantic_seg == False:
+            regions = regionprops(self.segments)
+            i = 0
+            for props in regions:
+                if i == len(regions) - 1:
+                    break
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(160 - cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
+            ax.scatter(160 - cy, cx, c='white', marker='o')
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == 0:
+                    ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                    break
+
+        elif self.semantic_seg == True:
+            regions = regionprops(self.segments)
+            i = 0
+            '''
+            print('self.exp: ', self.exp)
+            print('len(regions): ', len(regions))
+            print('np.unique(self.segments): ', np.unique(self.segments))
+            '''
+            for props in regions:
+                v = props.label  # value of label
+                if v == len(regions):
+                    v = 0
+                '''    
+                print('i = ', i)
+                print('v = ', v)
+                '''
+                if v > len(regions):
+                    break
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(160 - cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v:
+                        '''
+                        print('i: ', i)
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        print('v: ', v)
+                        print('\n')
+                        '''
+                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            for k in range(i, len(regions)):
+                v = regions[k].label
+                '''
+                print('k = ', k)
+                print('v = ', v)
+                '''
+                cx, cy = regions[k].centroid  # centroid coordinates
+                ax.scatter(160 - cy, cx, c='white', marker='o')
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    exp_0 = self.exp[j][0]
+                    if exp_0 == 0:
+                        exp_0 = len(regions)
+                    if 99 == regions[k].label + 10 * (exp_0):
+                        '''
+                        print('j: ', j)
+                        print('self.exp[j][0]: ', self.exp[j][0])
+                        print('self.exp[j][1]: ', self.exp[j][1])
+                        '''
+                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                k = k + 1
+
+        # Save segments with nice numbering as a picture
+        fig.savefig(path_core + '/weighted_segments_flipped.png')
+        fig.clf()
 
         # make a deepcopy of local costmap and flip it
         local_costmap = copy.deepcopy(self.image)
@@ -1729,15 +1959,16 @@ class ExplainRobotNavigation:
         #print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
         #ax.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_original_tmp.iloc[1], 2)))
         #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
-        marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
+        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
+        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(1, 1, 0))
+        marked_boundaries_flipped = self.matrixFlip(marked_boundaries.astype(np.uint8), 'h')
         
         # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
         ax.imshow(marked_boundaries_flipped) #, aspect='auto')
         fig.savefig(path_core + '/explanation_flipped.png', transparent=False)
         fig.clf()
 
-        print('plotExplanationFlipped ends')
+        print('\nplotExplanationFlipped ends')
 
 
         '''
