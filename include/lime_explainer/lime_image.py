@@ -200,53 +200,6 @@ class ImageExplanation(object):
             #print('get_image_and_mask ending')
             return temp, mask, exp
 
-    '''
-    else:
-    counter_local = 0
-    import pandas as pd
-    #pd.DataFrame(segments).to_csv('segments_lime_image.csv', index=False)
-    for f, w in exp[:num_features]:
-        #print('(f, w): ', (f, w))
-
-        #if f == 0:
-        #    print(image[segments == f])
-
-        if np.abs(w) < min_weight:
-            continue
-        c = 0 if w < 0 else 1
-        mask[segments == f] = -1 if w < 0 else 1
-        #temp[segments == f] = image[segments == f].copy()
-        # if free space
-        if image[segments == f].all() == 0.0:
-            # if positive weight
-            if c == 1:
-                temp[segments == f, 1] = float(np.max(image)) / 2**counter_local # c is channel, RGB - 012
-                temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
-                temp[segments == f, 2] = 0.0
-            # if negative weight
-            else:
-                temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
-                temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
-                temp[segments == f, 2] = 0.0
-        # if obstacle
-        else:
-            # if positive weight
-            if c == 1:
-                temp[segments == f, 1] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
-                temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
-                temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
-            # if negative weight
-            else:
-                temp[segments == f, 0] = float(np.max(image)) / 2**counter_local  # c is channel, RGB - 012
-                temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
-                temp[segments == f, 2] = float(np.max(image)) / 2**counter_local #1.0
-
-        counter_local += 1
-
-    #print('get_image_and_mask ending')
-    return temp, mask, exp
-    '''
-
 
 class LimeImageExplainer(object):
     """Explains predictions on Image (i.e. matrix) data.
@@ -533,6 +486,97 @@ class LimeImageExplainer(object):
 
         return segments_1
 
+    def mySlic2(self, image, img_rgb):
+        print('\nmySlic2 starts')
+
+        # import needed libraries
+        from skimage.segmentation import slic
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        from skimage.color import gray2rgb
+        import time
+
+        start = time.time()
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        free_space = np.zeros(image.shape, np.uint8)
+
+        if len(free_space.shape) == 2:
+            img_rgb = gray2rgb(free_space)
+
+        # segments_1 - good obstacles
+        # Find segments_1
+        #segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None, smultichannel=True, convert2lab=True, enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False, start_label=1, mask=None)
+        segments_1 = slic(img_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        print('np.unique(segments_1): ', np.unique(segments_1))                    
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1.astype('float64'), aspect='auto')
+        fig.savefig('segments1.png', transparent=False)
+        fig.clf()
+        '''
+
+
+        for f in np.unique(segments_2):
+            if np.all(image[segments_2 == f] == 99) == True:
+                segments_1[segments_2 == f] = 99 - f
+
+        # find segments_unique before nice segment numbering
+        segments_unique = np.unique(segments_1)
+        print('segments_unique: ', segments_unique)
+
+        end = time.time()
+
+        print("end - start: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments_1)
+        '''
+
+        print('\nmySlic2 ends')
+
+        return segments_1        
+
     def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_samples=1000,
@@ -595,7 +639,8 @@ class LimeImageExplainer(object):
                                                     random_seed=random_seed)
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
-            segments = self.mySlic(image)
+            #segments = self.mySlic(image)
+            segments = self.mySlic2(image_orig, image)
         elif segmentation_fn == 'semantic_segmentation':
             segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:

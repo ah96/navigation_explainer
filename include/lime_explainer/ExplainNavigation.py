@@ -203,10 +203,10 @@ class ExplainRobotNavigation:
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
                                                                            hide_rest=False, min_weight=0.0)
 
-            #self.plotExplanationMinimal()
+            self.plotExplanationMinimal()
             #self.plotExplanationMinimalFlipped()
             #self.plotExplanation()
-            self.plotExplanationFlipped()
+            #self.plotExplanationFlipped()
 
         '''
         elif self.explanation_mode == 'tabular':
