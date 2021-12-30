@@ -180,7 +180,7 @@ def LimeSingle():
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 78 #78 #144
+        expID = 84 #78 #84 #144
         print('\nexpID: ', expID)
 
     exp_nav.explain_instance(expID)

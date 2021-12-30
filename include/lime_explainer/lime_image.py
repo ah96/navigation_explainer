@@ -346,7 +346,10 @@ class LimeImageExplainer(object):
         for i in range(0, obstacles.shape[0]):
             #print('obstacles[i]: ', obstacles[i])
             semantic_segments[segments == obstacles[i]] = 99 - 10 * obstacles[i]
-            
+
+        for i in range(0, len(np.unique(segments))):
+            segments[segments == np.unique(segments)[i]] = i
+
         end = time.time()
         print('\nsemantic_segment runtime: ', end-start)
         
@@ -462,7 +465,7 @@ class LimeImageExplainer(object):
             for j in range(0, segments_1.shape[1]):
                 for k in range(0, segments_unique.shape[0]):
                     if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k+1 # k+1 must be in order for regionprops() function to work correctly
+                        segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly # k mora da bi perturbacija radila za obstacles
         # find segments_unique after nice segment numbering
         
         '''
@@ -743,7 +746,7 @@ class LimeImageExplainer(object):
         data[-1, :] = 0 # only if I use my perturbation
         #print("data after: ", data)
         #import pandas as pd
-        #pd.DataFrame(data).to_csv('~/amar_ws/data.csv', index=False, header=False)
+        #pd.DataFrame(data).to_csv('data.csv', index=False, header=False)
 
         imgs = []
         rows = tqdm(data) if progress_bar else data
