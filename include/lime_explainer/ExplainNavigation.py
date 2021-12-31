@@ -107,7 +107,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = False
+            self.manual_instance_loading = True
 
             if self.manual_instance_loading == False:
                 # Get local costmap
@@ -198,7 +198,7 @@ class ExplainRobotNavigation:
                 segm_fn = 'custom_segmentation'
 
             self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map, 
-                                                                        hide_color=perturb_hide_color_value, batch_size=1024, segmentation_fn=segm_fn, top_labels=10)
+                                                                        hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
             
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
                                                                            hide_rest=False, min_weight=0.0)
@@ -364,7 +364,7 @@ class ExplainRobotNavigation:
 
         # DETERMINE THE DEVIATION TYPE
         # a new way of deviation logic
-        local_plan_gap_threshold = 48
+        local_plan_gap_threshold = 48 #48 #32
         small_deviation_threshold = 7
         big_deviation_threshold = 14
 
@@ -377,9 +377,6 @@ class ExplainRobotNavigation:
         if max(local_plan_gaps) > local_plan_gap_threshold:
             local_plan_original_gap = True
 
-        #print('\nmax(local_plan_original_gaps): ', max(local_plan_gaps))
-        #print('len(local_plan_xs_orig): ', len(local_plan_xs_orig))      
-        
         if local_plan_original_gap == True or len(local_plan_xs_orig) == 0:
             deviation_type = 'stop'
         else:
@@ -387,25 +384,29 @@ class ExplainRobotNavigation:
             diff_y = 0
             
             big_deviation = False
+            devs = []
             for j in range( 0, len(local_plan_xs_orig)):
-                #diffs = []
+                diffs = []
                 deviation_local = True  
                 for k in range(0, len(transformed_plan_xs)):
                     diff_x = (local_plan_xs_orig[j] - transformed_plan_xs[k]) ** 2
                     diff_y = (local_plan_ys_orig[j] - transformed_plan_ys[k]) ** 2
                     diff = math.sqrt(diff_x + diff_y)
-                    #diffs.append(diff)
+                    diffs.append(diff)
                     if diff <= big_deviation_threshold:
                         deviation_local = False
-                        break
+                        #break
                 #print('j = ', j)
-                #print('min(diffs): ', min(diffs))    
+                #print('min(diffs): ', min(diffs))
+                devs.append(min(diffs))    
                 if deviation_local == True:
                     big_deviation = True
-                    break
+                    #break
             
             if big_deviation == True:
                 deviation_type = 'big_deviation'
+                print('max dev: ', max(devs))
+                #big_deviation_threshold = max(devs)
             else:
                 diff_x = 0
                 diff_y = 0
@@ -431,18 +432,15 @@ class ExplainRobotNavigation:
                     deviation_type = 'small_deviation'
                 else:
                     deviation_type = 'no_deviation'        
-                    
-                    
-
+                                               
         print('\nself.expID: ', self.expID)
-
         print('\ndeviation_type: ', deviation_type)
+        print('\nlocal_plan_original_gap: ', local_plan_original_gap)
+        #print('command velocities original - lin_x: ' + str(self.cmd_vel_original_tmp.iloc[0]) + ', ang_z: ' + str(self.cmd_vel_original_tmp.iloc[1]) + '\n')
 
-        '''
-        print('\ndeviation_type: ', deviation_type)
-        print('local_plan_original_gap: ', local_plan_original_gap)
-        print('command velocities original - lin_x: ' + str(self.cmd_vel_original_tmp.iloc[0]) + ', ang_z: ' + str(self.cmd_vel_original_tmp.iloc[1]) + '\n')
-        '''
+        if local_plan_original_gap == True:
+            print('\nmax(local_plan_original_gaps): ', max(local_plan_gaps))
+            print('\nlen(local_plan_orig): ', len(local_plan_xs_orig))
         
         # deviation of local plan from global plan
         self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
@@ -528,13 +526,19 @@ class ExplainRobotNavigation:
                             local_plan_xs.append(x_temp)
                             local_plan_ys.append(y_temp)
                             local_plan_found = True
+                    
+                    # POSSIBLE SPEED-UP
+                    '''
+                    if self.local_plans.iloc[j+1, -1] == i+1 and i != sampled_instance.shape[0] - 1 and j != self.local_plans.shape[0] - 1:
+                        break
+                    '''        
 
                 local_plan_point_in_obstacle = False    
                 if local_plan_found == True:
                     # test if any part of the local plan is in the obstacle region
                     for j in range(0, len(local_plan_xs)):
                         if sampled_instance[i][local_plan_ys[j], local_plan_xs[j], 0] == 99:
-                            local_plan_point_in_obstacle = True
+                            local_plan_point_in_obstacle = False #True
                             break
 
                     if local_plan_point_in_obstacle == True:
@@ -552,28 +556,30 @@ class ExplainRobotNavigation:
                             local_plan_gap = True
                         
                         if local_plan_gap == True:
-                            self.local_plan_deviation.iloc[i, 0] = 1.0
+                            self.local_plan_deviation.iloc[i, 0] = 0.0
                         else:
                             diff_x = 0
                             diff_y = 0
                             real_deviation = False
+                            devs = []
                             for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
-                                #diffs = []
+                                local_diffs = []
                                 deviation_local = True  
                                 for k in range(0, len(transformed_plan_xs)):
                                     diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
                                     diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
                                     diff = math.sqrt(diff_x + diff_y)
-                                    #diffs.append(diff)
+                                    local_diffs.append(diff)
                                     if diff <= big_deviation_threshold:
                                         deviation_local = False
-                                        break
+                                        #break
                                 #print('j = ', j)
                                 #print('min(diffs): ', min(diffs))
                                 #print('diffs: ', diffs)
+                                devs.append(min(local_diffs))
                                 if deviation_local == True:
                                     real_deviation = True
-                                    break
+                                    #break
                             
                             if real_deviation == True:
                                 self.local_plan_deviation.iloc[i, 0] = 1.0
@@ -592,7 +598,7 @@ class ExplainRobotNavigation:
                         print('max(local_plan_gaps): ', max(local_plan_gaps))
                         if local_plan_gap == False:
                             print('deviation: ', real_deviation)
-                            #print('minimal diff: ', min(diffs))
+                            print('max dev: ', max(devs))
                     print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                     print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
             
@@ -976,7 +982,7 @@ class ExplainRobotNavigation:
         ax.imshow(self.segments, aspect='auto')
         
         if self.semantic_seg == False:
-            regions = regionprops(self.segments)
+            regions = regionprops(self.segments.astype(int))
             i = 0
             for props in regions:
                 if i == len(regions) - 1:
@@ -1000,7 +1006,7 @@ class ExplainRobotNavigation:
                     break
 
         elif self.semantic_seg == True:
-            regions = regionprops(self.segments)
+            regions = regionprops(self.segments.astype(int))
             i = 0
             '''
             print('self.exp: ', self.exp)

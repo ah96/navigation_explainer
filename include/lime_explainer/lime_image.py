@@ -143,7 +143,7 @@ class ImageExplanation(object):
                 #print('(f, w, c): ', (f, w, c))
                 mask[segments == f] = 120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
                 #temp[segments == f] = image[segments == f].copy()
-                val_low = 5.0
+                val_low = 0.0
                 val_high = 200.0
                 # if free space
                 if image[segments == f].all() == 0.0:
@@ -466,8 +466,7 @@ class LimeImageExplainer(object):
                 for k in range(0, segments_unique.shape[0]):
                     if segments_1[i, j] == segments_unique[k]:
                         segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly # k mora da bi perturbacija radila za obstacles
-        # find segments_unique after nice segment numbering
-        
+                
         '''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
@@ -488,6 +487,212 @@ class LimeImageExplainer(object):
         print('\nmySlic ends')
 
         return segments_1
+
+    def mySlic_(self, img_rgb):
+        print('\nmySlic_ starts')
+
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+
+        # show original image
+        img = img_rgb[:, :, 0]
+
+        start = time.time()
+
+        # segments_1 - good obstacles
+        # Find segments_1
+        #'''
+        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        #'''
+        
+        '''
+        segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        '''
+
+        early_return = False
+        if early_return == True:
+            return segments_1                  
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1.astype('float64'), aspect='auto')
+        fig.savefig('segments1.png', transparent=False)
+        fig.clf()
+        '''
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+
+        # make obstacles on segments_2 nice - not needed
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 99:
+                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
+        
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        
+        # Add/Sum segments_1 and segments_2
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
+                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
+                else:
+                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
+        
+        # find segments_unique before nice segment numbering
+        segments_unique = np.unique(segments_1)
+        
+        # Get nice segments' numbering
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                for k in range(0, segments_unique.shape[0]):
+                    if segments_1[i, j] == segments_unique[k]:
+                        segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly # k mora da bi perturbacija radila za obstacles
+        
+        val_max = len(np.unique(segments_1))
+        for i in range(65, 95):
+            for j in range(65, 95):
+                if img[i, j] != 99:
+                    segments_1[i, j] = val_max
+        
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments_1)
+        '''
+        
+        end = time.time()
+        print('\nmySlic_ runtime: ', end-start)
+
+        print('\nmySlic_ ends')
+
+        return segments_1
+
+    def mySlic_1(self, img_rgb):
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+
+        image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
+        print(image.shape)
+        img_rgb = np.array(image.shape)
+        if len(image.shape) == 2:
+            img_rgb = gray2rgb(image)
+
+        # show original image
+        img = copy.deepcopy(image)
+
+        start = time.time()
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        ctr = 0
+        segments[0:95, 0:50] = ctr
+        ctr = ctr + 1
+        segments[0:95, 50:110] = ctr
+        ctr = ctr + 1
+        segments[0:95, 110:160] = ctr
+        ctr = ctr + 1
+        segments[95:160, :] = ctr
+        ctr = ctr + 1
+        segments[65:95, 65:95] = ctr
+        ctr = ctr + 1
+
+        #print('np.unique(segments_2): ', np.unique(segments_2))
+        for i in np.unique(segments_2):
+            if np.all(img[segments_2 == i] == 99):
+                #print('obstacle')
+                segments[segments_2 == i] = ctr
+                ctr = ctr + 1
+
+        pd.DataFrame(segments).to_csv("segments.csv")        
+
+        end = time.time()
+
+        print("end - start: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments)
+        '''
+
+        return segments
 
     def mySlic2(self, image, img_rgb):
         print('\nmySlic2 starts')
@@ -643,7 +848,9 @@ class LimeImageExplainer(object):
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
             #segments = self.mySlic(image)
-            segments = self.mySlic2(image_orig, image)
+            #segments = self.mySlic_(image)
+            segments = self.mySlic_1(image)
+            #segments = self.mySlic2(image_orig, image)
         elif segmentation_fn == 'semantic_segmentation':
             segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
@@ -774,6 +981,9 @@ class LimeImageExplainer(object):
         #print('labels: ', np.array(labels))
 
         return data, np.array(labels)
+
+
+
 
     def explain_instance_evaluation(self, image, classifier_fn, labels=(1,),
                          hide_color=None,
