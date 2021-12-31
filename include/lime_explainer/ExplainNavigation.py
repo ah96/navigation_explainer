@@ -364,7 +364,7 @@ class ExplainRobotNavigation:
 
         # DETERMINE THE DEVIATION TYPE
         # a new way of deviation logic
-        local_plan_gap_threshold = 48 #48 #32
+        local_plan_gap_threshold = 32 #48 #32
         small_deviation_threshold = 7
         big_deviation_threshold = 14
 
@@ -536,9 +536,9 @@ class ExplainRobotNavigation:
                 local_plan_point_in_obstacle = False    
                 if local_plan_found == True:
                     # test if any part of the local plan is in the obstacle region
-                    for j in range(0, len(local_plan_xs)):
+                    for j in range(len(local_plan_xs) - 1, len(local_plan_xs)):
                         if sampled_instance[i][local_plan_ys[j], local_plan_xs[j], 0] == 99:
-                            local_plan_point_in_obstacle = False #True
+                            local_plan_point_in_obstacle = True #False #True
                             break
 
                     if local_plan_point_in_obstacle == True:
