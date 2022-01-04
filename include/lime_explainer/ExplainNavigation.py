@@ -107,7 +107,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = True
+            self.manual_instance_loading = False
 
             if self.manual_instance_loading == False:
                 # Get local costmap
@@ -197,7 +197,18 @@ class ExplainRobotNavigation:
             elif self.semantic_seg == False:
                 segm_fn = 'custom_segmentation'
 
-            self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map, 
+            # save indices of robot's odometry location in local costmap to class variables
+            x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+            # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
+            y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+            # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
+
+            devDistance, sum = self.findDevDistance()
+            print('self.findDevDistance(): ', devDistance)
+            print('sum: ', sum)
+
+            self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                                                        x_odom, y_odom, devDistance, sum,
                                                                         hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
             
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
@@ -237,6 +248,75 @@ class ExplainRobotNavigation:
         '''
 
         print('\nexplain_instance ending')
+
+    def findDevDistance(self):
+        # indices of local plan's poses in local costmap
+        self.local_plan_x_list = []
+        self.local_plan_y_list = []
+        for i in range(1, self.local_plan_tmp.shape[0]):
+            x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                self.local_plan_x_list.append(x_temp)
+                self.local_plan_y_list.append(y_temp)
+
+        # transform global plan from /map to /odom frame
+        # rotation matrix
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat(
+            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
+             self.tf_map_odom_tmp.iloc[0, 6]])
+        # print('r: ', r.as_matrix())
+        r_array = np.asarray(r.as_matrix())
+        # print('r_array: ', r_array)
+        # print('r_array.shape: ', r_array.shape)
+        
+        # translation vector
+        t = np.array(
+            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
+        # print('t: ', t)
+        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+        for i in range(0, self.global_plan_tmp.shape[0]):
+            p = np.array(
+                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
+            # print('p: ', p)
+            pnew = p.dot(r_array) + t
+            # print('pnew: ', pnew)
+            plan_tmp_tmp.iloc[i, 0] = pnew[0]
+            plan_tmp_tmp.iloc[i, 1] = pnew[1]
+            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+    
+        # Get coordinates of the global plan in the local costmap
+        self.plan_x_list = []
+        self.plan_y_list = []
+        for i in range(0, plan_tmp_tmp.shape[0], 3):
+            x_temp = int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                self.plan_x_list.append(x_temp)
+                self.plan_y_list.append(y_temp)
+
+        devs = []
+        signs = []
+        for j in range( 0, len(self.local_plan_x_list)):
+            diffs = []
+            sums = []
+            for k in range(0, len(self.plan_x_list)):
+                '''
+                diff_x = (self.local_plan_x_list[j] - self.plan_x_list[k]) ** 2
+                diff_y = (self.local_plan_y_list[j] - self.plan_y_list[k]) ** 2
+                diff = math.sqrt(diff_x + diff_y)
+                diffs.append(diff)
+                '''
+
+                diff = self.local_plan_x_list[j] - self.plan_x_list[k]
+                sums.append(diff)
+                diffs.append(abs(diff))
+            devs.append(min(diffs))
+            signs.append(sums[diffs.index(devs[-1])])
+
+        return max(devs), np.sign(signs[devs.index(max(devs))])    
+
 
     def classifier_fn_image(self, sampled_instance):
 
@@ -315,7 +395,7 @@ class ExplainRobotNavigation:
         # plot perturbation of local costmap
         #self.classifier_fn_image_plot()
 
-        print_iterations = True
+        print_iterations = False
   
         import math
 
@@ -354,18 +434,13 @@ class ExplainRobotNavigation:
                     min_diff = diff
                     closest_to_robot_index = len(transformed_plan_xs) - 1
 
-        #print('\nlen(transformed_plan_xs): ', len(transformed_plan_xs))
-        #print('len(transformed_plan_ys): ', len(transformed_plan_ys))
-
-        #print('\nclosest_to_robot_index_original: ', closest_to_robot_index)                    
-
         transformed_plan_xs = np.array(transformed_plan_xs)
         transformed_plan_ys = np.array(transformed_plan_ys)
 
         # DETERMINE THE DEVIATION TYPE
         # a new way of deviation logic
-        local_plan_gap_threshold = 32 #48 #32
-        small_deviation_threshold = 7
+        local_plan_gap_threshold = 48 #60 #48 #32
+        small_deviation_threshold = 5 #7
         big_deviation_threshold = 14
 
         local_plan_original_gap = False
@@ -379,6 +454,7 @@ class ExplainRobotNavigation:
 
         if local_plan_original_gap == True or len(local_plan_xs_orig) == 0:
             deviation_type = 'stop'
+            local_plan_gap_threshold = 48
         else:
             diff_x = 0
             diff_y = 0
@@ -396,8 +472,6 @@ class ExplainRobotNavigation:
                     if diff <= big_deviation_threshold:
                         deviation_local = False
                         #break
-                #print('j = ', j)
-                #print('min(diffs): ', min(diffs))
                 devs.append(min(diffs))    
                 if deviation_local == True:
                     big_deviation = True
@@ -405,26 +479,23 @@ class ExplainRobotNavigation:
             
             if big_deviation == True:
                 deviation_type = 'big_deviation'
-                print('max dev: ', max(devs))
-                #big_deviation_threshold = max(devs)
+                local_plan_gap_threshold = 48
+                print('max_dev: ', max(devs))
+                big_deviation_threshold = max(devs) * 0.8
             else:
                 diff_x = 0
                 diff_y = 0
             
                 small_deviation = False
                 for j in range( 0, len(local_plan_xs_orig)):
-                    #diffs = []
                     deviation_local = True  
                     for k in range(0, len(transformed_plan_xs)):
                         diff_x = (local_plan_xs_orig[j] - transformed_plan_xs[k]) ** 2
                         diff_y = (local_plan_ys_orig[j] - transformed_plan_ys[k]) ** 2
                         diff = math.sqrt(diff_x + diff_y)
-                        #diffs.append(diff)
                         if diff <= small_deviation_threshold:
                             deviation_local = False
                             break
-                    #print('j = ', j)
-                    #print('min(diffs): ', min(diffs))    
                     if deviation_local == True:
                         small_deviation = True
                         break
@@ -511,8 +582,6 @@ class ExplainRobotNavigation:
             # fill in deviation dataframe
             for i in range(0, sampled_instance.shape[0]):
                 print('i = ', i)
-                #if i == 0 or i == 64 or i == 127:
-                #    pd.DataFrame(sampled_instance[i][:,:,0]).to_csv(str(i) + ".csv")
                 # test if there is local plan
                 local_plan_xs = []
                 local_plan_ys = []
@@ -527,18 +596,12 @@ class ExplainRobotNavigation:
                             local_plan_ys.append(y_temp)
                             local_plan_found = True
                     
-                    # POSSIBLE SPEED-UP
-                    '''
-                    if self.local_plans.iloc[j+1, -1] == i+1 and i != sampled_instance.shape[0] - 1 and j != self.local_plans.shape[0] - 1:
-                        break
-                    '''        
-
                 local_plan_point_in_obstacle = False    
                 if local_plan_found == True:
                     # test if any part of the local plan is in the obstacle region
                     for j in range(len(local_plan_xs) - 1, len(local_plan_xs)):
                         if sampled_instance[i][local_plan_ys[j], local_plan_xs[j], 0] == 99:
-                            local_plan_point_in_obstacle = True #False #True
+                            local_plan_point_in_obstacle = True
                             break
 
                     if local_plan_point_in_obstacle == True:
@@ -547,7 +610,9 @@ class ExplainRobotNavigation:
                         # test if there is local plan gap
                         diff = 0
                         local_plan_gap = False
+                        
                         local_plan_gaps = []
+                        
                         for j in range(0, len(local_plan_xs) - 1):
                             diff = math.sqrt( (local_plan_xs[j]-local_plan_xs[j+1])**2 + (local_plan_ys[j]-local_plan_ys[j+1])**2 )
                             local_plan_gaps.append(diff)
@@ -573,9 +638,6 @@ class ExplainRobotNavigation:
                                     if diff <= big_deviation_threshold:
                                         deviation_local = False
                                         #break
-                                #print('j = ', j)
-                                #print('min(diffs): ', min(diffs))
-                                #print('diffs: ', diffs)
                                 devs.append(min(local_diffs))
                                 if deviation_local == True:
                                     real_deviation = True
@@ -910,6 +972,13 @@ class ExplainRobotNavigation:
             plt.scatter(self.footprint_x_list, self.footprint_y_list, c='green', marker='x')
 
             '''
+            print(self.footprint_x_list)
+            print(self.footprint_y_list)
+            for j in range(0, len(self.footprint_x_list)):
+                print("footprint_distance: ", np.sqrt((self.footprint_x_list[j] - self.x_odom_index[0])**2 + abs(self.footprint_y_list[j] - self.y_odom_index[0])**2))
+            '''
+
+            '''
             # plot footprints for first five points of local plan
             # indices of local plan's poses in local costmap
             self.footprint_local_plan_x_list = []
@@ -982,45 +1051,48 @@ class ExplainRobotNavigation:
         ax.imshow(self.segments, aspect='auto')
         
         if self.semantic_seg == False:
+            #'''
+            self.segments += 1
+            print('self.exp: ', self.exp)
+            print('np.unique(self.segments): ', np.unique(self.segments))
+            #'''
             regions = regionprops(self.segments.astype(int))
+            #'''
+            labels = []
+            for props in regions:
+                labels.append(props.label)
+            print('labels: ', labels)
+            #'''    
             i = 0
             for props in regions:
-                if i == len(regions) - 1:
-                    break
                 v = props.label  # value of label
                 cx, cy = props.centroid  # centroid coordinates
                 ax.scatter(cy, cx, c='white', marker='o')   
                 # printing/plotting explanation weights
                 for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
+                    if self.exp[j][0] == v - 1:
                         ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
                         break
-                i = i + 1
-
-            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
-            ax.scatter(cy, cx, c='white', marker='o')
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == 0:
-                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                    break
+                i = i + 1            
 
         elif self.semantic_seg == True:
-            regions = regionprops(self.segments.astype(int))
-            i = 0
             '''
+            self.segments += 1
             print('self.exp: ', self.exp)
-            print('len(regions): ', len(regions))
             print('np.unique(self.segments): ', np.unique(self.segments))
             '''
+            regions = regionprops(self.segments.astype(int))
+            '''
+            labels = []
+            for props in regions:
+                labels.append(props.label)
+            print('labels: ', labels)
+            '''
+            i = 0
             for props in regions:
                 v = props.label  # value of label
                 if v == len(regions):
                     v = 0
-                '''    
-                print('i = ', i)
-                print('v = ', v)
-                '''
                 if v > len(regions):
                     break
                 cx, cy = props.centroid  # centroid coordinates
@@ -1028,14 +1100,6 @@ class ExplainRobotNavigation:
                 # printing/plotting explanation weights
                 for j in range(0, len(self.exp)):
                     if self.exp[j][0] == v:
-                        '''
-                        print('i: ', i)
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        print('v: ', v)
-                        print('\n')
-                        '''
                         ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
                         break
                 i = i + 1
