@@ -107,7 +107,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = False
+            self.manual_instance_loading = True
 
             if self.manual_instance_loading == False:
                 # Get local costmap
@@ -191,7 +191,7 @@ class ExplainRobotNavigation:
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            self.semantic_seg = False
+            self.semantic_seg = True
             if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
             elif self.semantic_seg == False:
@@ -206,6 +206,8 @@ class ExplainRobotNavigation:
             devDistance, sum = self.findDevDistance()
             print('self.findDevDistance(): ', devDistance)
             print('sum: ', sum)
+
+            #self.costmap2Map()
 
             self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
                                                                         x_odom, y_odom, devDistance, sum,
@@ -317,6 +319,44 @@ class ExplainRobotNavigation:
 
         return max(devs), np.sign(signs[devs.index(max(devs))])    
 
+    def costmap2Map(self):
+        # transform global plan from /map to /odom frame
+        # rotation matrix
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat(
+            [self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4], self.tf_odom_map_tmp.iloc[0, 5],
+             self.tf_odom_map_tmp.iloc[0, 6]])
+        # print('r: ', r.as_matrix())
+        r_array = np.asarray(r.as_matrix())
+        # print('r_array: ', r_array)
+        # print('r_array.shape: ', r_array.shape)
+        
+        # translation vector
+        t = np.array(
+            [self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
+        # print('t: ', t)
+
+        map_sem = np.ones((304, 201), np.uint8)
+        
+        for i in range(0, 160):
+            for j in range(0, 160):
+            
+                x = j * self.localCostmapResolution + self.localCostmapOriginX
+                y = i * self.localCostmapResolution + self.localCostmapOriginY
+
+                p = np.array([x, y, 0])
+                # print('p: ', p)
+                pnew = p.dot(r_array) + t
+                # print('pnew: ', pnew)
+                x = pnew[0]
+                y = pnew[1]
+
+                j_map = int((x - self.mapOriginX) / self.mapResolution)
+                i_map = int((y - self.mapOriginY) / self.mapResolution)
+            
+                map_sem[i_map, j_map] = self.image[i, j]
+
+        pd.DataFrame(map_sem).to_csv('map_sem.csv', index=False, header=False)
 
     def classifier_fn_image(self, sampled_instance):
 

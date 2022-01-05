@@ -488,128 +488,6 @@ class LimeImageExplainer(object):
 
         return segments_1
 
-    def mySlic_(self, img_rgb):
-        print('\nmySlic_ starts')
-
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-
-        # show original image
-        img = img_rgb[:, :, 0]
-
-        start = time.time()
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        #'''
-        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        #'''
-        
-        '''
-        segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        '''
-
-        early_return = False
-        if early_return == True:
-            return segments_1                  
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1.astype('float64'), aspect='auto')
-        fig.savefig('segments1.png', transparent=False)
-        fig.clf()
-        '''
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
-        fig.clf()
-        '''
-
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-
-        # make obstacles on segments_2 nice - not needed
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 99:
-                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
-        
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        
-        # find segments_unique before nice segment numbering
-        segments_unique = np.unique(segments_1)
-        
-        # Get nice segments' numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly # k mora da bi perturbacija radila za obstacles
-        
-        val_max = len(np.unique(segments_1))
-        for i in range(65, 95):
-            for j in range(65, 95):
-                if img[i, j] != 99:
-                    segments_1[i, j] = val_max
-        
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
-        fig.clf()
-        segments_unique = np.unique(segments_1)
-        '''
-        
-        end = time.time()
-        print('\nmySlic_ runtime: ', end-start)
-
-        print('\nmySlic_ ends')
-
-        return segments_1
-
     def sm2(self, image, img_rgb, x_odom, y_odom):
         # import needed libraries
         from skimage.segmentation import slic
@@ -971,78 +849,61 @@ class LimeImageExplainer(object):
 
         return segments
 
-    def mySlic2(self, image, img_rgb):
-        print('\nmySlic2 starts')
+    def semantic(self, image, img_rgb, costmap_info, map_info, tf_odom_map):
+        print('\nsemantic_segment starts')
 
-        # import needed libraries
         from skimage.segmentation import slic
         import matplotlib.pyplot as plt
         import numpy as np
         import pandas as pd
-        from skimage.color import gray2rgb
         import time
+
+        semantic_map = np.array(pd.read_csv('~/amar_ws/map_sem.csv'))
 
         start = time.time()
 
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                            multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                            start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
-        fig.clf()
-        '''
-
-        free_space = np.zeros(image.shape, np.uint8)
-
-        if len(free_space.shape) == 2:
-            img_rgb = gray2rgb(free_space)
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        #segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None, smultichannel=True, convert2lab=True, enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False, start_label=1, mask=None)
-        segments_1 = slic(img_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+        # Find segments
+        segments_slic = slic(img_rgb, n_segments=4, compactness=100, max_iter=1000, sigma=0, spacing=None,
                             multichannel=True, convert2lab=True,
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                             start_label=1, mask=None)
 
-        print('np.unique(segments_1): ', np.unique(segments_1))                    
+        localCostmapOriginX = costmap_info.iloc[0, 3]
+        localCostmapOriginY = costmap_info.iloc[0, 4]
+        localCostmapResolution = costmap_info.iloc[0, 0]
 
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1.astype('float64'), aspect='auto')
-        fig.savefig('segments1.png', transparent=False)
-        fig.clf()
-        '''
+        mapOriginX = map_info.iloc[0, 4]
+        mapOriginY = map_info.iloc[0, 5]
+        mapResolution = map_info.iloc[0, 1]
 
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat([tf_odom_map.iloc[0, 3], tf_odom_map.iloc[0, 4], tf_odom_map.iloc[0, 5], tf_odom_map.iloc[0, 6]])
+        r_array = np.asarray(r.as_matrix())
+        t = np.array([tf_odom_map.iloc[0, 0], tf_odom_map.iloc[0, 1], tf_odom_map.iloc[0, 2]])
 
-        for f in np.unique(segments_2):
-            if np.all(image[segments_2 == f] == 99) == True:
-                segments_1[segments_2 == f] = 99 - f
+        segments = np.zeros((160, 160), np.uint8)
+        
+        for i in range(0, 160):
+            for j in range(0, 160):            
+                x = j * localCostmapResolution + localCostmapOriginX
+                y = i * localCostmapResolution + localCostmapOriginY
 
-        # find segments_unique before nice segment numbering
-        segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
+                p = np.array([x, y, 0])
+                # print('p: ', p)
+                pnew = p.dot(r_array) + t
+                # print('pnew: ', pnew)
+                x = pnew[0]
+                y = pnew[1]
+
+                j_map = int((x - mapOriginX) / mapResolution)
+                i_map = int((y - mapOriginY) / mapResolution)
+            
+                segments[i, j] = semantic_map[i_map, j_map]
 
         end = time.time()
-
-        print("end - start: ", end - start)
+        print('\nsemantic_segment runtime: ', end-start)
+        
+        #pd.DataFrame(semantic_segments).to_csv('semantic_segments.csv')
 
         '''
         fig = plt.figure(frameon=False)
@@ -1052,15 +913,14 @@ class LimeImageExplainer(object):
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.imshow(segments_1.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
+        ax.imshow(semantic_segments.astype('float64'), aspect='auto')
+        fig.savefig('semantic_segments.png', transparent=False)
         fig.clf()
-        segments_unique = np.unique(segments_1)
         '''
 
-        print('\nmySlic2 ends')
+        print('\nsemantic_segment end')
 
-        return segments_1        
+        return np.array(segments)        
 
     def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance, sum, labels=(1,),
                          hide_color=None,
@@ -1125,14 +985,13 @@ class LimeImageExplainer(object):
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
             #segments = self.sm1(image)
-            #segments = self.mySlic_(image)
             #segments = self.sm2(image_orig, image, x_odom, y_odom)
             #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm4(image_orig, image, x_odom, y_odom, devDistance, sum)
             segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
-            #segments = self.mySlic2(image_orig, image)
         elif segmentation_fn == 'semantic_segmentation':
-            segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
+            segments = self.semantic(image_orig, image, costmap_info, map_info, tf_odom_map)
+            #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
             segments = segmentation_fn(image)
 
