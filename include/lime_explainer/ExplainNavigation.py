@@ -41,7 +41,7 @@ from skimage.measure import regionprops
 perturb_hide_color_value = 50
 
 class ExplainRobotNavigation:
-
+    # constructor
     def __init__(self, cmd_vel, odom, plan, global_plan, local_plan, current_goal, local_costmap_data,
                  local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, tabular_mode, explanation_mode,
                  num_of_first_rows_to_delete, footprints, costmap_size):
@@ -98,6 +98,7 @@ class ExplainRobotNavigation:
 
         print('\nConstructor ending')
 
+    # explain instance
     def explain_instance(self, expID):
         print('\nexplain_instance starting')
 
@@ -108,6 +109,7 @@ class ExplainRobotNavigation:
             self.index = self.expID
 
             self.manual_instance_loading = False
+            self.manually_make_semantic_map = False
 
             if self.manual_instance_loading == False:
                 # Get local costmap
@@ -188,40 +190,34 @@ class ExplainRobotNavigation:
             # Saving data to .csv files for C++ node - local navigation planner
             self.limeImageSaveDataForLocalPlanner()
 
+            # Saving important data to class variables
+            self.saveImportantData2ClassVars()
+
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            self.semantic_seg = True
+            self.semantic_seg = False
             if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
             elif self.semantic_seg == False:
                 segm_fn = 'custom_segmentation'
 
-            # save indices of robot's odometry location in local costmap to class variables
-            x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
-            # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
-            y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
-            # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
-
             devDistance, sum = self.findDevDistance()
-            print('self.findDevDistance(): ', devDistance)
-            print('sum: ', sum)
+            #print('self.findDevDistance(): ', devDistance)
+            #print('sum: ', sum)
 
-            #self.costmap2Map()
-            
-            #'''
-            self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                                                        x_odom, y_odom, devDistance, sum,
-                                                                        hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
-            
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
-                                                                           hide_rest=False, min_weight=0.0)
-            #'''
-            
-            self.plotExplanationMinimal()
-            #self.plotExplanationMinimalFlipped()
-            #self.plotExplanation()
-            #self.plotExplanationFlipped()
+            if self.manually_make_semantic_map == True:
+                # manually make semantic map
+                self.costmap2Map()
+            else:
+                self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                                                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance, sum,
+                                                                            hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
+                
+                self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
+                                                                            hide_rest=False, min_weight=0.0)            
+                
+                self.plotExplanation()
 
         '''
         elif self.explanation_mode == 'tabular':
@@ -251,6 +247,7 @@ class ExplainRobotNavigation:
 
         print('\nexplain_instance ending')
 
+    # helper function for lime image
     def findDevDistance(self):
         # indices of local plan's poses in local costmap
         self.local_plan_x_list = []
@@ -319,6 +316,7 @@ class ExplainRobotNavigation:
 
         return max(devs), np.sign(signs[devs.index(max(devs))])    
 
+    # helper function for creating manual semantic maps
     def costmap2Map(self):
         # transform global plan from /map to /odom frame
         # rotation matrix
@@ -367,6 +365,7 @@ class ExplainRobotNavigation:
         #pd.DataFrame(indices_x).to_csv('INDICES_X.csv', index=False, header=False)
         #pd.DataFrame(indices_y).to_csv('INDICES_Y.csv', index=False, header=False)
 
+    # classifier function for lime image
     def classifier_fn_image(self, sampled_instance):
 
         print('\nclassifier_fn_image started')
@@ -974,6 +973,7 @@ class ExplainRobotNavigation:
 
         return np.array(self.cmd_vel_perturb.iloc[:, 3:])
 
+    # function for plotting lime image perturbations
     def classifier_fn_image_plot(self):
         #'''
         # indices of transformed plan's poses in local costmap
@@ -1081,72 +1081,14 @@ class ExplainRobotNavigation:
 
 
     # plot explanation picture and segments
-    def plotExplanationMinimal(self):
+    def plotExplanation(self):
         path_core = os.getcwd()
 
         # import needed libraries
         from skimage.measure import regionprops
         import matplotlib.pyplot as plt
 
-                # indices of local plan's poses in local costmap
-        self.local_plan_x_list = []
-        self.local_plan_y_list = []
-        for i in range(1, self.local_plan_tmp.shape[0]):
-            self.local_plan_x_list.append(int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        
-        # save indices of robot's odometry location in local costmap to class variables
-        self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
-        self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
-        
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(
-            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
-             self.tf_map_odom_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        
-        # translation vector
-        t = np.array(
-            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
-        # print('t: ', t)
-        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
-        for i in range(0, self.global_plan_tmp.shape[0]):
-            p = np.array(
-                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
-    
-        # Get coordinates of the global plan in the local costmap
-        self.plan_x_list = []
-        self.plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            if 0 <= x_temp <= 159:
-                self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(
-                    int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-                    
-                
-        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-        self.x_odom_index = [self.localCostmapIndex_x_odom]
-        # print('self.x_odom_index: ', self.x_odom_index)
-        self.y_odom_index = [self.localCostmapIndex_y_odom]
-        # print('self.y_odom_index: ', self.y_odom_index)
-
-
-        # plot segments with centroids and labels/weights
-        #print('segments_1.shape: ', segments_1.shape)
+        # plot costmap
         fig = plt.figure(frameon=False)
         w = 1.6*3
         h = 1.6*3
@@ -1154,20 +1096,69 @@ class ExplainRobotNavigation:
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.imshow(self.segments, aspect='auto')
+        ax.imshow(self.image, aspect='auto')
+        fig.savefig(path_core + '/costmap.png')
+        fig.clf()
+
+
+        # plot explanation
+        fig = plt.figure(frameon=True)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        #ax = plt.Axes(fig, [0., 0., 1., 0.95])
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
         
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
+        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(255, 255, 0))
+        ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        fig.savefig(path_core + '/explanation.png', transparent=False)
+        fig.clf()
+        #fig.close()
+
+        # plot costmap with plans
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
+        ax.imshow(self.image, aspect='auto')
+        fig.savefig(path_core + '/input.png')
+        fig.clf()
+                        
         if self.semantic_seg == False:
+            # plot segments with centroids and labels/weights
+            fig = plt.figure(frameon=False)
+            w = 1.6*3
+            h = 1.6*3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.segments, aspect='auto')
+
             #'''
             self.segments += 1
-            print('self.exp: ', self.exp)
-            print('np.unique(self.segments): ', np.unique(self.segments))
+            #print('self.exp: ', self.exp)
+            #print('np.unique(self.segments): ', np.unique(self.segments))
             #'''
             regions = regionprops(self.segments.astype(int))
             #'''
             labels = []
             for props in regions:
                 labels.append(props.label)
-            print('labels: ', labels)
+            #print('labels: ', labels)
             #'''    
             i = 0
             for props in regions:
@@ -1192,15 +1183,15 @@ class ExplainRobotNavigation:
 
             #'''
             self.segments += 1
-            print('self.exp: ', self.exp)
-            print('np.unique(self.segments): ', np.unique(self.segments))
+            #print('self.exp: ', self.exp)
+            #print('np.unique(self.segments): ', np.unique(self.segments))
             #'''
             regions = regionprops(self.segments.astype(int))
             #'''
             labels = []
             for props in regions:
                 labels.append(props.label)
-            print('labels: ', labels)
+            #print('labels: ', labels)
             #'''    
             i = 0
             for props in regions:
@@ -1249,24 +1240,6 @@ class ExplainRobotNavigation:
                            
             pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap.csv')               
 
-            '''
-            pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap_before.csv')
-            for i in range(semantic_local_costmap.shape[0]):
-                for j in range(semantic_local_costmap.shape[1]):
-                    if semantic_local_costmap[i, j] >= 90:
-                        if self.image[i, j] == 0:
-                            print('IN IN IN')
-                            if 0 <= i - 1 < 160:
-                                if semantic_local_costmap[i-1, j] < 90:
-                                    semantic_local_costmap[i-1, j] = semantic_local_costmap[i-1, j]
-                            elif 0 <= j - 1 < 160:
-                                if semantic_local_costmap[i, j-1] < 90:   
-                                    semantic_local_costmap[i, j] = semantic_local_costmap[i, j-1]
-                            elif 0 <= i - 1 < 160 and 0 <= j - 1 < 160:
-                                if semantic_local_costmap[i-1, j-1] < 90:   
-                                    semantic_local_costmap[i, j] = semantic_local_costmap[i-1, j-1]
-            pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap_after.csv')
-            '''    
         
             unknown_obstacles_vals = []
             self.segments -= 1
@@ -1276,30 +1249,30 @@ class ExplainRobotNavigation:
                     semantic_num = np.bincount(semantic_local_costmap[self.segments == val]).argmax()
                     if semantic_num >= 90:
                         print('\nSTATIC KNOWN OBSTACLE!')
-                        print('val: ', val)
-                        print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
-                        print('semantic_num: ', semantic_num)
+                        #print('val: ', val)
+                        #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
+                        #print('semantic_num: ', semantic_num)
                     
                     else:
                         print('\nSTATIC UNKNOWN OBSTACLE!')
                         unknown_obstacles_vals.append(val)
-                        print('val: ', val)
-                        print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
-                        print('semantic_num: ', semantic_num)
+                        #print('val: ', val)
+                        #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
+                        #print('semantic_num: ', semantic_num)
 
                 # free space    
                 else:
                     print('\nFREE SPACE')
-                    print('val: ', val)
-                    print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
-                    print('semantic_num: ', np.bincount(semantic_local_costmap[self.segments == val]).argmax())
+                    #print('val: ', val)
+                    #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
+                    #print('semantic_num: ', np.bincount(semantic_local_costmap[self.segments == val]).argmax())
 
             regions = regionprops(semantic_local_costmap.astype(int))
             #'''
             labels = []
             for props in regions:
                 labels.append(props.label)
-            print('labels: ', labels)
+            #print('labels: ', labels)
             #'''    
             i = 0
             for props in regions:
@@ -1348,7 +1321,7 @@ class ExplainRobotNavigation:
             labels = []
             for props in regions:
                 labels.append(props.label)
-            print('labels_semantic: ', labels)
+            #print('labels_semantic: ', labels)
             #'''    
             i = 0
             for props in regions:
@@ -1370,902 +1343,7 @@ class ExplainRobotNavigation:
             #fig.close()
 
 
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.image, aspect='auto')
-        fig.savefig(path_core + '/costmap.png')
-        fig.clf()
-
-        
-
-        # save robot odometry orientation to class variables
-        #self.odom_z = self.odom_tmp.iloc[0, 2] # minus je upitan
-        #self.odom_w = self.odom_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        #[self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
-        # print('roll_odom: ', roll_odom)
-        # print('pitch_odom: ', pitch_odom)
-        # print('self.yaw_odom: ', self.yaw_odom)
-        # find yaw angles projections on x and y axes and save them to class variables
-        #self.yaw_odom_x = math.cos(self.yaw_odom)
-        #self.yaw_odom_y = math.sin(self.yaw_odom)
-        
-        # plot robots' location and orientation
-        #print('self.x_odom_index: ', self.x_odom_index)
-        #print('self.y_odom_index: ', self.y_odom_index)
-        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
-
-        
-        # '''
-        # plot explanation
-        # print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
-        #ax.text(0.0, -4.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(
-        #    round(self.cmd_vel_original_tmp.iloc[1], 2)))
-
-        # plot explanation
-        fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        #ax = plt.Axes(fig, [0., 0., 1., 0.95])
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-
-
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(255, 255, 0))
-        
-        # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
-        fig.savefig(path_core + '/explanation.png', transparent=False)
-        fig.clf()
-        #fig.close()
-
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        ax.imshow(self.image, aspect='auto')
-        fig.savefig(path_core + '/input.png')
-        fig.clf()
-
-    # plot explanation picture and segments flipped
-    def plotExplanationMinimalFlipped(self):
-        path_core = os.getcwd()    
-
-        # import needed libraries
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-
-
-        # plot segments with centroids and labels/weights
-        #print('segments_1.shape: ', segments_1.shape)
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.matrixFlip(self.segments, 'h').astype('uint8'), aspect='auto')
-        
-        if self.semantic_seg == False:
-            regions = regionprops(self.segments)
-            i = 0
-            for props in regions:
-                if i == len(regions) - 1:
-                    break
-                v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(160 - cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
-                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
-            ax.scatter(160 - cy, cx, c='white', marker='o')
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == 0:
-                    ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                    break
-
-        elif self.semantic_seg == True:
-            regions = regionprops(self.segments)
-            i = 0
-            '''
-            print('self.exp: ', self.exp)
-            print('len(regions): ', len(regions))
-            print('np.unique(self.segments): ', np.unique(self.segments))
-            '''
-            for props in regions:
-                v = props.label  # value of label
-                if v == len(regions):
-                    v = 0
-                '''    
-                print('i = ', i)
-                print('v = ', v)
-                '''
-                if v > len(regions):
-                    break
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(160 - cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
-                        '''
-                        print('i: ', i)
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        print('v: ', v)
-                        print('\n')
-                        '''
-                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            for k in range(i, len(regions)):
-                v = regions[k].label
-                '''
-                print('k = ', k)
-                print('v = ', v)
-                '''
-                cx, cy = regions[k].centroid  # centroid coordinates
-                ax.scatter(160 - cy, cx, c='white', marker='o')
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    exp_0 = self.exp[j][0]
-                    if exp_0 == 0:
-                        exp_0 = len(regions)
-                    if 99 == regions[k].label + 10 * (exp_0):
-                        '''
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        '''
-                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                k = k + 1
-
-        # Save segments with nice numbering as a picture
-        fig.savefig(path_core + '/weighted_segments_flipped.png')
-        fig.clf()
-
-
-        # plot explanation
-        fig = plt.figure(frameon=True)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-
-        # indices of local plan's poses in local costmap
-        self.local_plan_x_list = []
-        self.local_plan_y_list = []
-        for i in range(1, self.local_plan_tmp.shape[0]):
-            self.local_plan_x_list.append(160 - int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-
-        # save indices of robot's odometry location in local costmap to class variables
-        self.localCostmapIndex_x_odom = 160 - int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
-        self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
-        
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(
-            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
-             self.tf_map_odom_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        
-        # translation vector
-        t = np.array(
-            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
-        # print('t: ', t)
-        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
-        for i in range(0, self.global_plan_tmp.shape[0]):
-            p = np.array(
-                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
-        
-        # Get coordinates of the global plan in the local costmap
-        # '''
-        self.plan_x_list = []
-        self.plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            if 0 <= x_temp <= 159:
-                self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(
-                    int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-
-        # plot robots' local plan
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-        
-        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-        self.x_odom_index = [self.localCostmapIndex_x_odom]
-        # print('self.x_odom_index: ', self.x_odom_index)
-        self.y_odom_index = [self.localCostmapIndex_y_odom]
-        # print('self.y_odom_index: ', self.y_odom_index)
-
-        # save robot odometry orientation to class variables
-        #self.odom_z = self.odom_tmp.iloc[0, 2] # minus je upitan
-        #self.odom_w = self.odom_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        #[self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
-        #yaw_sign = math.copysign(1, self.yaw_odom)
-        #self.yaw_odom = yaw_sign * (math.pi - abs(self.yaw_odom)) 
-        # print('roll_odom: ', roll_odom)
-        # print('pitch_odom: ', pitch_odom)
-        # print('self.yaw_odom: ', self.yaw_odom)
-        # find yaw angles projections on x and y axes and save them to class variables
-        #self.yaw_odom_x = math.cos(self.yaw_odom)
-        #self.yaw_odom_y = math.sin(self.yaw_odom)
-
-        # plot robots' location and orientation
-        #print('self.x_odom_index: ', self.x_odom_index)
-        #print('self.y_odom_index: ', self.y_odom_index)
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
-
-        
-        # '''
-        # plot explanation
-        # print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
-        #ax.text(0.0, -4.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(
-        #    round(self.cmd_vel_original_tmp.iloc[1], 2)))
-        
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
-        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(255, 255, 0))
-        marked_boundaries_flipped = self.matrixFlip(marked_boundaries, 'h')
-        
-        # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.imshow(marked_boundaries_flipped.astype(np.uint8), aspect='auto')  # , aspect='auto')
-        fig.savefig(path_core + '/explanation_flipped.png', transparent=False)
-        fig.clf()
-        #fig.close()
-
-    # plot explanation picture, segments, global map, mask and temp
-    def plotExplanation(self):
-        print('plotExplanation starts')
-
-        path_core = os.getcwd()
-
-        # plot segments with centroids and labels/weights
-        #print('segments_1.shape: ', segments_1.shape)
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.segments, aspect='auto')
-        
-        if self.semantic_seg == False:
-            regions = regionprops(self.segments)
-            i = 0
-            for props in regions:
-                if i == len(regions) - 1:
-                    break
-                v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
-            ax.scatter(cy, cx, c='white', marker='o')
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == 0:
-                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                    break
-
-        elif self.semantic_seg == True:
-            regions = regionprops(self.segments)
-            i = 0
-            '''
-            print('self.exp: ', self.exp)
-            print('len(regions): ', len(regions))
-            print('np.unique(self.segments): ', np.unique(self.segments))
-            '''
-            for props in regions:
-                v = props.label  # value of label
-                if v == len(regions):
-                    v = 0
-                '''    
-                print('i = ', i)
-                print('v = ', v)
-                '''
-                if v > len(regions):
-                    break
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
-                        '''
-                        print('i: ', i)
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        print('v: ', v)
-                        print('\n')
-                        '''
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            for k in range(i, len(regions)):
-                v = regions[k].label
-                '''
-                print('k = ', k)
-                print('v = ', v)
-                '''
-                cx, cy = regions[k].centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    exp_0 = self.exp[j][0]
-                    if exp_0 == 0:
-                        exp_0 = len(regions)
-                    if 99 == regions[k].label + 10 * (exp_0):
-                        '''
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        '''
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                k = k + 1
-
-        # Save segments with nice numbering as a picture
-        fig.savefig(path_core + '/weighted_segments.png')
-        fig.clf()
-
-        # plot local costmap
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(
-            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
-             self.tf_map_odom_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        
-        # translation vector
-        t = np.array(
-            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
-        # print('t: ', t)
-        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
-        for i in range(0, self.global_plan_tmp.shape[0]):
-            p = np.array(
-                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
-    
-        # Get coordinates of the global plan in the local costmap
-        self.plan_x_list = []
-        self.plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(y_temp)
-                    
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-
-        # indices of local plan's poses in local costmap
-        self.local_plan_x_list = []
-        self.local_plan_y_list = []
-        # print('self.local_plan_tmp.shape: ', self.local_plan_tmp.shape)
-        for i in range(0, self.local_plan_tmp.shape[0]):
-            x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp <= 160 and 0 <= y_temp <= 160:
-                self.local_plan_x_list.append(x_temp)
-                self.local_plan_y_list.append(y_temp)
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-
-        # plot robot odometry location
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        # robot's odometry orientation
-        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
-        
-        # plot local costmap
-        ax.imshow(self.image.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/local_costmap.png')
-        fig.clf()
-
-
-        # plot global map
-        fig = plt.figure(frameon=False)
-        w = 4.0
-        h = 6.0
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-
-        # global plan from teb algorithm
-        self.global_plan_x_list = []
-        self.global_plan_y_list = []
-        for i in range(19, self.global_plan_tmp.shape[0], 20):
-            self.global_plan_x_list.append(
-                int((self.global_plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
-            self.global_plan_y_list.append(
-                int((self.global_plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
-        ax.scatter(self.global_plan_x_list, self.global_plan_y_list, c='blue', marker='>')
-
-        # plan from global planner
-        self.plan_map_x_list = []
-        self.plan_map_y_list = []
-        for i in range(19, self.plan_tmp.shape[0], 20):
-            self.plan_map_x_list.append(int((self.plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
-            self.plan_map_y_list.append(int((self.plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
-        ax.scatter(self.plan_map_x_list, self.plan_map_y_list, c='red', marker='<')
-
-        # indices of robot's odometry location in map
-        self.mapIndex_x_amcl = int((self.amcl_x - self.mapOriginX) / self.mapResolution)
-        # print('self.mapIndex_x_amcl: ', self.mapIndex_x_amcl)
-        self.mapIndex_y_amcl = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
-        # print('self.mapIndex_y_amcl: ', self.mapIndex_y_amcl)
-
-        # indices of robot's amcl location in map in a list - suitable for plotting
-        self.x_amcl_index = [self.mapIndex_x_amcl]
-        self.y_amcl_index = [self.mapIndex_y_amcl]
-        ax.scatter(self.x_amcl_index, self.y_amcl_index, c='black', marker='o')
-
-        #self.yaw_amcl_x = math.cos(self.yaw_amcl)
-        #self.yaw_amcl_y = math.sin(self.yaw_amcl)
-        #ax.quiver(self.x_amcl_index, self.y_amcl_index, self.yaw_amcl_x, self.yaw_amcl_y, color='black')
-
-        # plot robot's location in the map
-        x_map = int((self.amcl_x - self.mapOriginX) / self.mapResolution)
-        y_map = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
-        #ax.scatter(x_map, y_map, c='red', marker='o')
-
-        # plot map, fill -1 with 100
-        map_tmp = self.map_data
-        for i in range(0, map_tmp.shape[0]):
-            for j in range(0, map_tmp.shape[1]):
-                if map_tmp.iloc[i, j] == -1:
-                    map_tmp.iloc[i, j] = 100
-        ax.imshow(map_tmp.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/global_map.png')
-        fig.clf()
-
-        # plot image_temp
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.temp_img, aspect='auto')
-        fig.savefig(path_core + '/temp_img.png')
-        fig.clf()
-
-        # plot mask
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.mask.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/mask.png')
-        fig.clf()
-
-        # plot explanation - srediti nekad granice
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
-        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(1, 1, 0))
-        ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
-        fig.savefig(path_core + '/explanation.png')
-        fig.clf()
-
-        print('plotExplanation ends')
-
-    # plot explanation picture, segments, global map, mask and temp all flipped
-    def plotExplanationFlipped(self):
-        print('plotExplanationFlipped starts')
-
-        path_core = os.getcwd()
-
-
-        # plot segments with centroids and labels/weights
-        #print('segments_1.shape: ', segments_1.shape)
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.matrixFlip(self.segments, 'h').astype('uint8'), aspect='auto')
-        
-        if self.semantic_seg == False:
-            regions = regionprops(self.segments)
-            i = 0
-            for props in regions:
-                if i == len(regions) - 1:
-                    break
-                v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(160 - cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
-                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            cx, cy = regions[len(regions)-1].centroid  # centroid coordinates
-            ax.scatter(160 - cy, cx, c='white', marker='o')
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == 0:
-                    ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                    break
-
-        elif self.semantic_seg == True:
-            regions = regionprops(self.segments)
-            i = 0
-            '''
-            print('self.exp: ', self.exp)
-            print('len(regions): ', len(regions))
-            print('np.unique(self.segments): ', np.unique(self.segments))
-            '''
-            for props in regions:
-                v = props.label  # value of label
-                if v == len(regions):
-                    v = 0
-                '''    
-                print('i = ', i)
-                print('v = ', v)
-                '''
-                if v > len(regions):
-                    break
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(160 - cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
-                        '''
-                        print('i: ', i)
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        print('v: ', v)
-                        print('\n')
-                        '''
-                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            for k in range(i, len(regions)):
-                v = regions[k].label
-                '''
-                print('k = ', k)
-                print('v = ', v)
-                '''
-                cx, cy = regions[k].centroid  # centroid coordinates
-                ax.scatter(160 - cy, cx, c='white', marker='o')
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    exp_0 = self.exp[j][0]
-                    if exp_0 == 0:
-                        exp_0 = len(regions)
-                    if 99 == regions[k].label + 10 * (exp_0):
-                        '''
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        '''
-                        ax.text(160 - cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                k = k + 1
-
-        # Save segments with nice numbering as a picture
-        fig.savefig(path_core + '/weighted_segments_flipped.png')
-        fig.clf()
-
-        # make a deepcopy of local costmap and flip it
-        local_costmap = copy.deepcopy(self.image)
-        local_costmap_flipped = self.matrixFlip(local_costmap, 'h')
-
-        # plot flipped local costmap
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(
-            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
-             self.tf_map_odom_tmp.iloc[0, 6]])
-        #print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        #print('r_array: ', r_array)
-        #print('r_array.shape: ', r_array.shape)
-        
-        # translation vector
-        t = np.array(
-            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
-        #print('t: ', t)
-        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
-        for i in range(0, self.global_plan_tmp.shape[0]):
-            p = np.array([self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
-        
-        # Get coordinates of the global plan in the local costmap
-        #'''
-        self.plan_x_list = []
-        self.plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(y_temp)
-        plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-
-        
-        # indices of local plan's poses in local costmap
-        self.local_plan_x_list = []
-        self.local_plan_y_list = []
-        for i in range(1, self.local_plan_tmp.shape[0]):
-            x_temp = 160 - int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp <= 150 and 0 <= x_temp <= 150:
-                self.local_plan_x_list.append(x_temp)
-                self.local_plan_y_list.append(y_temp)
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-
-        # plot robot odometry location
-        self.x_odom_index = [160 - self.localCostmapIndex_x_odom]
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-
-        # find yaw angles projections on x and y axes and save them to class variables
-        #yaw_sign = math.copysign(1, self.yaw_odom)
-        #self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
-        #self.yaw_odom_x = math.cos(self.yaw_odom)
-        #self.yaw_odom_y = math.sin(self.yaw_odom)
-
-        # robot's odometry orientation
-        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
-
-        ax.imshow(local_costmap_flipped, aspect='auto')
-        fig.savefig(path_core + '/local_costmap_flipped.png')
-        fig.clf()
-
-
-        # plot flipped map
-        fig = plt.figure(frameon=False)
-        w = 4.0
-        h = 6.0
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-
-        # indices of robot's odometry location in map
-        self.mapIndex_x_amcl = 160 - int((self.amcl_x - self.mapOriginX) / self.mapResolution)
-        # print('self.mapIndex_x_amcl: ', self.mapIndex_x_amcl)
-        self.mapIndex_y_amcl = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
-        # print('self.mapIndex_y_amcl: ', self.mapIndex_y_amcl)
-
-        # plan from global planner
-        self.plan_map_x_list = []
-        self.plan_map_y_list = []
-        for i in range(19, self.plan_tmp.shape[0], 20):
-            self.plan_map_x_list.append(160 - int((self.plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
-            self.plan_map_y_list.append(int((self.plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
-        ax.scatter(self.plan_map_x_list, self.plan_map_y_list, c='blue', marker='<')
-
-        # global plan from teb algorithm
-        self.global_plan_x_list = []
-        self.global_plan_y_list = []
-        for i in range(19, self.global_plan_tmp.shape[0], 20):
-            self.global_plan_x_list.append(
-                160 - int((self.global_plan_tmp.iloc[i, 0] - self.mapOriginX) / self.mapResolution))
-            self.global_plan_y_list.append(
-                int((self.global_plan_tmp.iloc[i, 1] - self.mapOriginY) / self.mapResolution))
-        ax.scatter(self.global_plan_x_list, self.global_plan_y_list, c='red', marker='>')
-
-        # indices of robot's amcl location in map in a list - suitable for plotting
-        self.x_amcl_index = [self.mapIndex_x_amcl]
-        self.y_amcl_index = [self.mapIndex_y_amcl]
-        ax.scatter(self.x_amcl_index, self.y_amcl_index, c='black', marker='o')
-
-        # find yaw angles projections on x and y axes and save them to class variables
-        #yaw_sign = math.copysign(1, self.yaw_amcl)
-        #self.yaw_amcl = -1 * yaw_sign * (math.pi - abs(self.yaw_amcl))
-        #self.yaw_amcl_x = math.cos(self.yaw_amcl)
-        #self.yaw_amcl_y = math.sin(self.yaw_amcl)
-        #ax.quiver(self.x_amcl_index, self.y_amcl_index, self.yaw_amcl_x, self.yaw_amcl_y, color='black')
-
-        # plot robot's location in the map
-        x_map = 160 - int((self.amcl_x - self.mapOriginX) / self.mapResolution)
-        y_map = int((self.amcl_y - self.mapOriginY) / self.mapResolution)
-        #ax.scatter(x_map, y_map, c='red', marker='o')
-
-        # plot map, fill -1 with 100
-        map_tmp = self.map_data
-        for i in range(0, map_tmp.shape[0]):
-            for j in range(0, map_tmp.shape[1]):
-                if map_tmp.iloc[i, j] == -1:
-                    map_tmp.iloc[i, j] = 100
-        map_tmp_flipped = self.matrixFlip(map_tmp, 'h')
-        ax.imshow(map_tmp_flipped, aspect='auto')
-        fig.savefig('global_map_flipped.png')
-        fig.clf()
-
-        # plot image_temp
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        temp_img_flipped = self.matrixFlip(self.temp_img, 'h')
-        ax.imshow(temp_img_flipped, aspect='auto')
-        fig.savefig(path_core + '/temp_img_flipped.png')
-        fig.clf()
-        #pd.DataFrame(self.temp_img_flipped[:,:,0]).to_csv('~/amar_ws/temp_img_flipped.csv', index=False, header=False)
-
-        # plot mask
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        mask_flipped = self.matrixFlip(self.mask, 'h')
-        plt.imshow(mask_flipped, aspect='auto')
-        plt.savefig(path_core + '/mask_flipped.png')
-        plt.clf()
-        #pd.DataFrame(self.mask_flipped[:,:,0]).to_csv('~/amar_ws/mask_flipped.csv', index=False, header=False)
-
-        # plot explanation
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-     
-        plt.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-
-        # plot robots' location, orientation and local plan
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='black')
-          
-        #'''
-        # plot explanation
-        #print('self.cmd_vel_original_tmp.shape: ', self.cmd_vel_original_tmp.shape)
-        #ax.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_original_tmp.iloc[0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_original_tmp.iloc[1], 2)))
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask)
-        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(1, 1, 0))
-        marked_boundaries_flipped = self.matrixFlip(marked_boundaries.astype(np.uint8), 'h')
-        
-        # marked_boundaries_flipped = marked_boundaries_flipped[0:125, 0:100]
-        ax.imshow(marked_boundaries_flipped) #, aspect='auto')
-        fig.savefig(path_core + '/explanation_flipped.png', transparent=False)
-        fig.clf()
-
-        print('\nplotExplanationFlipped ends')
-
-
-        '''
-        # plot for the HARL Workshop 2021 paper
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        from matplotlib.patches import Ellipse
-        ellipse = Ellipse(xy=(37.00, 52.00), width=30, height=70, edgecolor='orange', fc='None', lw=2, alpha=80.0)
-        ax.add_patch(ellipse)
-        from matplotlib.patches import Circle
-        circle = Circle(xy=(160 - self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom),
-                        radius=round(0.275 / self.localCostmapResolution) - 4, edgecolor='blue', fc='blue', lw=2,
-                        alpha=100.0)
-        ax.add_patch(circle)
-        ax.text(35, 72, 'H', fontsize=12, fontweight=700)
-        ax.text(34, 32, 'PS', fontsize=12, fontweight=700)
-        ax.text(34, 10, 'FV', fontsize=12, fontweight=700)
-        ax.text(160 - self.localCostmapIndex_x_odom - 1, self.localCostmapIndex_y_odom + 2, 'R', fontsize=12,
-                fontweight=700)
-        # https://stackoverflow.com/questions/8218608/scipy-savefig-without-frames-axes-only-content        
-        '''
-
-
+    # flip matrix horizontally or vertically
     def matrixFlip(self, m, d):
         myl = np.array(m)
         if d == 'v':
@@ -2273,6 +1351,7 @@ class ExplainRobotNavigation:
         elif d == 'h':
             return np.flip(myl, axis=1)
 
+    # convert orientation quaternion to euler angles
     def quaternion_to_euler(self, x, y, z, w):
         # roll (x-axis rotation)
         t0 = +2.0 * (w * x + y * z)
@@ -2292,6 +1371,7 @@ class ExplainRobotNavigation:
 
         return [yaw, pitch, roll]
 
+    # convert euler angles to orientation quaternion
     def euler_to_quaternion(self, yaw, pitch, roll):
         qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
         qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
@@ -2303,6 +1383,7 @@ class ExplainRobotNavigation:
         
         return [qx, qy, qz, qw]
 
+    # save data for local planner in lime image
     def limeImageSaveDataForLocalPlanner(self):
         if self.manual_instance_loading == False:
             # Saving data to .csv files for C++ node - local navigation planner
@@ -2391,6 +1472,8 @@ class ExplainRobotNavigation:
             # Save odometry instance to file
             self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
+    # Saving important data to class variables
+    def saveImportantData2ClassVars(self):
         # Take original command speed
         self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
         self.cmd_vel_original_tmp = pd.DataFrame(self.cmd_vel_original_tmp).transpose()
@@ -2469,6 +1552,65 @@ class ExplainRobotNavigation:
         # calculate Euler angles based on orientation quaternion
         [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
 
+        #save indices of robot's odometry location in local costmap to class variables
+        self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+        # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
+        self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+        # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
+
+        # indices of local plan's poses in local costmap
+        self.local_plan_x_list = []
+        self.local_plan_y_list = []
+        for i in range(1, self.local_plan_tmp.shape[0]):
+            self.local_plan_x_list.append(int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+
+        # transform global plan from /map to /odom frame
+        # rotation matrix
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat(
+            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
+             self.tf_map_odom_tmp.iloc[0, 6]])
+        # print('r: ', r.as_matrix())
+        r_array = np.asarray(r.as_matrix())
+        # print('r_array: ', r_array)
+        # print('r_array.shape: ', r_array.shape)
+        
+        # translation vector
+        t = np.array(
+            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
+        # print('t: ', t)
+
+        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+        for i in range(0, self.global_plan_tmp.shape[0]):
+            p = np.array(
+                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
+            # print('p: ', p)
+            pnew = p.dot(r_array) + t
+            # print('pnew: ', pnew)
+            plan_tmp_tmp.iloc[i, 0] = pnew[0]
+            plan_tmp_tmp.iloc[i, 1] = pnew[1]
+            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+    
+        # Get coordinates of the global plan in the local costmap
+        self.plan_x_list = []
+        self.plan_y_list = []
+        for i in range(0, plan_tmp_tmp.shape[0], 3):
+            x_temp = int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159:
+                self.plan_x_list.append(x_temp)
+                self.plan_y_list.append(
+                    int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+                    
+                
+        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
+        self.x_odom_index = [self.localCostmapIndex_x_odom]
+        # print('self.x_odom_index: ', self.x_odom_index)
+        self.y_odom_index = [self.localCostmapIndex_y_odom]
+        # print('self.y_odom_index: ', self.y_odom_index)
+
+
+    # turn inflated costmap to static costmap
     def inflatedToFree(self):
         #'''
         # Turn inflated area to free space and 100s to 99s
@@ -2479,289 +1621,6 @@ class ExplainRobotNavigation:
                 elif self.image[i, j] == 100:
                     self.image[i, j] = 99
         #'''
-
-
-    def testSegmentation(self, expID):
-
-        print('Test segmentation function beginning')
-
-        # Make image a np.array deepcopy of local_costmap_original
-        img_ = copy.deepcopy(self.image)
-
-        '''
-        # Save local costmap as gray image
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(img_, aspect='auto')
-        fig.savefig('local_costmap_gray_test_segmentation.png')
-        fig.clf()
-        '''
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
-        '''
-        # Save local costmap as rgb image
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(rgb, aspect='auto')
-        fig.savefig('local_costmap_rgb_test_segmentation.png')
-        fig.clf()
-        '''
-
-        # Superpixel segmentation with skimage functions
-
-        # felzenszwalb
-        #segments = felzenszwalb(rgb, scale=100, sigma=5, min_size=30, multichannel=True)
-        #segments = felzenszwalb(rgb, scale=1, sigma=0.8, min_size=20, multichannel=True)  # default
-
-        # quickshift
-        #segments = quickshift(rgb, ratio=0.0001, kernel_size=8, max_dist=10, return_tree=False, sigma=0.0, convert2lab=True, random_seed=42)
-        #segments = quickshift(rgb, ratio=1.0, kernel_size=5, max_dist=10, return_tree=False, sigma=0, convert2lab=True, random_seed=42) # default
-
-        # slic
-        #segments = slic(rgb, n_segments=6, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=5, slic_zero=False, start_label=None, mask=None)
-        #segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
-
-        # Turn segments gray image to rgb image
-        #segments_rgb = gray2rgb(segments)
-
-        # Generate segments - superpixels with my slic function
-        segments = self.mySlicTest(rgb)
-
-        # Save segments to .csv file
-        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
-
-        print('Test segmentation function ending')
-
-    def mySlicTest(self, img_rgb):
-
-        print('mySlic for testSegmentation starts')
-
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-
-        # show original image
-        img = img_rgb[:, :, 0]
-        # Save picture for segmenting
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(img, aspect='auto')
-        fig.savefig('local_costmap_test_segmentation.png')
-        fig.clf()
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        # plot segments_1 with centroids and labels
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1, aspect='auto')
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            ax.text(centers[i][0], centers[i][1], str(v))
-            ax.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        # Save segments_1 as a picture
-        fig.savefig('segments_1_test_segmentation.png')
-        fig.clf()
-        # find segments_unique_1
-        segments_unique_1 = np.unique(segments_1)
-        print('segments_unique_1: ', segments_unique_1)
-        print('segments_unique_1.shape: ', segments_unique_1.shape)
-
-
-        # Find segments_2
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        
-        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        '''
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        print('segments_unique_2: ', segments_unique_2)
-        print('segments_unique_2.shape: ', segments_unique_2.shape)
-        # make obstacles on segments_2 nice - not needed
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 99:
-                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
-        '''
-        # plot segments_2 with centroids and labels
-        regions = regionprops(segments_2)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            ax.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        # Save segments_2 as a picture
-        ax.imshow(segments_2, aspect='auto')
-        fig.savefig('segments_2_test_segmentation.png')
-        fig.clf()
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        print('segments_unique_2: ', segments_unique_2)
-        print('segments_unique_2.shape: ', segments_unique_2.shape)
-
-        # Creating segments using segments_1 and segments_2
-        #'''
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        #'''
-        
-        # plot segments with centroids and labels/weights
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1, aspect='auto')
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            ax.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        # Save segments as a picture before nice segment numbering
-        fig.savefig('segments_beforeNiceNumbering_test_segmentation.png')
-        fig.clf()
-        # find segments_unique before nice segment numbering
-        segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
-
-        # Get nice segments' numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k + 1
-        # find segments_unique after nice segment numbering
-        segments_unique = np.unique(segments_1)
-        print('segments_unique (with nice numbering): ', segments_unique)
-        print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
-
-        # plot segments with nice numbering with centroids and labels/weights
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1, aspect='auto')
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            ax.text(centers[i][0], centers[i][1], str(v))
-            i = i + 1
-        # Save segments as a picture before nice segment numbering
-        fig.savefig('segments_afterNiceNumbering_test_segmentation.png')
-        fig.clf()
-        
-        # plot segments with centroids and labels/weights
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #ax.imshow(self.matrixFlip(segments_1, 'h'), aspect='auto')
-        ax.imshow(segments_1, aspect='auto')
-        regions = regionprops(segments_1)
-        centers = []
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            centers.append([cy, cx])
-            ax.scatter(centers[i][0], centers[i][1], c='white', marker='o')
-            # plt.text(centers[i][0], centers[i][1], str(v))
-            # '''
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == i:
-                    # print('i: ', i)
-                    # print('j: ', j)
-                    # print('self.exp[j][0]: ', self.exp[j][0])
-                    # print('self.exp[j][1]: ', self.exp[j][1])
-                    # print('v: ', v)
-                    # print('\n')
-                    ax.text(centers[i][0], centers[i][1], str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                    break
-            # '''
-            i = i + 1
-        # Save segments with nice numbering as a picture
-        fig.savefig('segments_with_explanation_weights_test_segmentation.png')
-        fig.clf()
-
-        # print explanation
-        #print('self.exp: ', self.exp)
-        #print('len(self.exp): ', len(self.exp))
-
-        print('mySlic for testSegmentation ends')
-
-        return segments_1
 
 
 
@@ -3978,7 +2837,6 @@ class ExplainRobotNavigation:
         fig.clf()
 
 
-
     def getSegmentsForGanLimeEval(self, image):
 
         print('Test segmentation function beginning')
@@ -4062,120 +2920,6 @@ class ExplainRobotNavigation:
         return segments_1
 
 
-    # functions that I currently do not use:
-    def slic_help(self, image_rgb, n_segments=100, compactness=10., max_iter=10, sigma=0, spacing=None,
-                  multichannel=True, convert2lab=None,
-                  enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, start_label=None, mask=None, channel_axis=-1):
-        slic_zero = False
-        image_rgb = img_as_float(image_rgb)
-        float_dtype = _supported_float_type(image_rgb.dtype)
-        image_rgb = image_rgb.astype(float_dtype, copy=False)
-
-        use_mask = mask is not None
-        dtype = image_rgb.dtype
-
-        is_2d = False
-
-        multichannel = channel_axis is not None
-        if image_rgb.ndim == 2:
-            # 2D grayscale image
-            image_rgb = image_rgb[np.newaxis, ..., np.newaxis]
-            is_2d = True
-        elif image_rgb.ndim == 3 and multichannel:
-            # Make 2D multichannel image 3D with depth = 1
-            image_rgb = image_rgb[np.newaxis, ...]
-            is_2d = True
-        elif image_rgb.ndim == 3 and not multichannel:
-            # Add channel as single last dimension
-            image_rgb = image_rgb[..., np.newaxis]
-
-        if multichannel and (convert2lab or convert2lab is None):
-            if image_rgb.shape[channel_axis] != 3 and convert2lab:
-                raise ValueError("Lab colorspace conversion requires a RGB image.")
-            elif image_rgb.shape[channel_axis] == 3:
-                image_rgb = rgb2lab(image_rgb)
-
-        if start_label is None:
-            if use_mask:
-                start_label = 1
-            else:
-                import warnings
-                warnings.warn("skimage.measure.label's indexing starts from 0. " +
-                              "In future version it will start from 1. " +
-                              "To disable this warning, explicitely " +
-                              "set the `start_label` parameter to 1.",
-                              FutureWarning, stacklevel=2)
-                start_label = 0
-
-        if start_label not in [0, 1]:
-            raise ValueError("start_label should be 0 or 1.")
-
-        # initialize cluster centroids for desired number of segments
-        update_centroids = False
-        if use_mask:
-            mask = np.ascontiguousarray(mask, dtype=bool).view('uint8')
-            if mask.ndim == 2:
-                mask = np.ascontiguousarray(mask[np.newaxis, ...])
-            if mask.shape != image_rgb.shape[:3]:
-                raise ValueError("image and mask should have the same shape.")
-            centroids, steps = _get_mask_centroids(mask, n_segments, multichannel)
-            update_centroids = True
-        else:
-            centroids, steps = _get_grid_centroids(image_rgb, n_segments)
-
-        if spacing is None:
-            spacing = np.ones(3, dtype=dtype)
-        elif isinstance(spacing, (list, tuple)):
-            spacing = np.ascontiguousarray(spacing, dtype=dtype)
-
-        if not isinstance(sigma, Iterable):
-            sigma = np.array([sigma, sigma, sigma], dtype=dtype)
-            sigma /= spacing.astype(dtype)
-        elif isinstance(sigma, (list, tuple)):
-            sigma = np.array(sigma, dtype=dtype)
-        if (sigma > 0).any():
-            # add zero smoothing for multichannel dimension
-            sigma = list(sigma) + [0]
-            from scipy import ndimage as ndi
-            image = ndi.gaussian_filter(image_rgb, sigma)
-
-        n_centroids = centroids.shape[0]
-        segments = np.ascontiguousarray(np.concatenate(
-            [centroids, np.zeros((n_centroids, image_rgb.shape[3]))],
-            axis=-1), dtype=dtype)
-
-        # Scaling of ratio in the same way as in the SLIC paper so the
-        # values have the same meaning
-        step = max(steps)
-        ratio = 1.0 / compactness
-
-        image = np.ascontiguousarray(image_rgb * ratio, dtype=dtype)
-
-        if update_centroids:
-            # Step 2 of the algorithm [3]_
-            _slic_cython(image_rgb, mask, segments, step, max_iter, spacing,
-                         slic_zero, ignore_color=True,
-                         start_label=start_label)
-
-        labels = _slic_cython(image_rgb, mask, segments, step, max_iter,
-                              spacing, slic_zero, ignore_color=False,
-                              start_label=start_label)
-
-        if enforce_connectivity:
-            if use_mask:
-                segment_size = mask.sum() / n_centroids
-            else:
-                segment_size = np.prod(image.shape[:3]) / n_centroids
-            min_size = int(min_size_factor * segment_size)
-            max_size = int(max_size_factor * segment_size)
-            labels = _enforce_label_connectivity_cython(
-                labels, min_size, max_size, start_label=start_label)
-
-        if is_2d:
-            labels = labels[0]
-
-        return labels, centroids
-
     def classifier_fn_tabular(self, sampled_instance):
 
         print('classifier_fn_tabular started')
@@ -4248,7 +2992,6 @@ class ExplainRobotNavigation:
 
         return np.array(cmd_vel.iloc[:, 2])  # srediti index ovdje
 
-    # Treba sample input_data pretvoriti u ispravne formate i publishati na ispravne topice da bi ih local_planner node mogao koristiti
     def classifier_fn_tabular_costmap(self, sampled_instance):
 
         print('classifier_fn_tabular_costmap started')
@@ -4345,7 +3088,7 @@ class ExplainRobotNavigation:
 
         return np.array(cmd_vel.iloc[:, 2])
 
-        '''
+        
         
 
 
@@ -4354,7 +3097,7 @@ class ExplainRobotNavigation:
 
 
 
-
+'''
 # Other code for dealing with calling other ROS node from this one
 import roslaunch
 package = 'teb_local_planner'
@@ -4362,16 +3105,17 @@ executable = 'perturb_node_image'
 node = roslaunch.core.Node(package, executable)
 launch = roslaunch.scriptapi.ROSLaunch()
 launch.start()
-
-#process = launch.launch(node)
-#print(process.is_alive())
+'''
+'''
+process = launch.launch(node)
+print(process.is_alive())
 # Ovdje uvesti ros services
-#rospy.sleep(20)
-#process.stop()
+rospy.sleep(20)
+process.stop()
 # stop ROS node
-#node_process.terminate()
+node_process.terminate()
 # finish killing node proces
-#node_process.terminate()
-
+node_process.terminate()
+'''
 #node_process = Popen(shlex.split('rosnode kill /perturb_node_image'))
-'''       
+       

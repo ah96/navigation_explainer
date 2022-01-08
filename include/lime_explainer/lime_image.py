@@ -241,6 +241,502 @@ class LimeImageExplainer(object):
         self.feature_selection = feature_selection
         self.base = lime_base.LimeBase(kernel_fn, verbose, random_state=self.random_state)
 
+    def sm1(self, img_rgb):
+        print('\nsm1 starts')
+
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+
+        # show original image
+        img = img_rgb[:, :, 0]
+
+        start = time.time()
+
+        # segments_1 - good obstacles
+        # Find segments_1
+        #'''
+        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        #'''
+        
+        '''
+        segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+        '''
+
+        early_return = False
+        if early_return == True:
+            return segments_1                  
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1.astype('float64'), aspect='auto')
+        fig.savefig('segments1.png', transparent=False)
+        fig.clf()
+        '''
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+
+        # make obstacles on segments_2 nice - not needed
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 99:
+                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
+        
+        # find segments_unique_2
+        segments_unique_2 = np.unique(segments_2)
+        
+        # Add/Sum segments_1 and segments_2
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
+                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
+                else:
+                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
+        
+        # find segments_unique before nice segment numbering
+        segments_unique = np.unique(segments_1)
+        
+        # Get nice segments' numbering
+        for i in range(0, segments_1.shape[0]):
+            for j in range(0, segments_1.shape[1]):
+                for k in range(0, segments_unique.shape[0]):
+                    if segments_1[i, j] == segments_unique[k]:
+                        segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly # k mora da bi perturbacija radila za obstacles
+                
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_1.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments_1)
+        '''
+        
+        end = time.time()
+        print('\nsm1 runtime: ', end-start)
+
+        print('\nsm1 ends')
+
+        return segments_1
+
+    def sm2(self, image, img_rgb, x_odom, y_odom):
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        start = time.time()
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        ctr = 0
+        segments[0:(y_odom + 25), 0:(x_odom - 25)] = ctr
+        ctr = ctr + 1
+        segments[0:(y_odom + 25), (x_odom - 25):(x_odom + 25)] = ctr
+        ctr = ctr + 1
+        segments[0:(y_odom + 25), (x_odom + 25):160] = ctr
+        ctr = ctr + 1
+        segments[(y_odom + 25):160, :] = ctr
+        ctr = ctr + 1
+        #segments[65:95, 65:95] = ctr
+        #ctr = ctr + 1
+
+        #print('np.unique(segments_2): ', np.unique(segments_2))
+        for i in np.unique(segments_2):
+            if np.all(img[segments_2 == i] == 99):
+                #print('obstacle')
+                segments[segments_2 == i] = ctr
+                ctr = ctr + 1
+
+        end = time.time()
+
+        print("\sm2 runtime: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments)
+        '''
+
+        return segments
+
+    def sm3(self, image, img_rgb, x_odom, y_odom, devDistance, sign):
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        start = time.time()
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        devDistance = int(devDistance)
+
+        footprint_radius = 13
+        add = 15
+
+        if sign < 0:
+            ctr = 0
+            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance - add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance - add):(x_odom + footprint_radius + add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
+            ctr = ctr + 1
+            segments[(y_odom + 25):160, :] = ctr
+            ctr = ctr + 1
+        elif sign > 0:
+            ctr = 0
+            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance + add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom + footprint_radius + devDistance + add):160] = ctr
+            ctr = ctr + 1
+            segments[(y_odom + 25):160, :] = ctr
+            ctr = ctr + 1
+
+
+        #print('np.unique(segments_2): ', np.unique(segments_2))
+        for i in np.unique(segments_2):
+            if np.all(img[segments_2 == i] == 99):
+                #print('obstacle')
+                segments[segments_2 == i] = ctr
+                ctr = ctr + 1
+
+        end = time.time()
+
+        print("\sm3 runtime: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments)
+        '''
+
+        return segments
+
+    def sm4(self, image, img_rgb, x_odom, y_odom, devDistance, sign):
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        start = time.time()
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        devDistance = int(devDistance)
+
+        footprint_radius = 13
+        add = 15
+
+        if sign < 0:
+            ctr = 0
+            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance - add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance - add):(x_odom - footprint_radius - devDistance)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance):(x_odom + footprint_radius + add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
+            ctr = ctr + 1
+            segments[(y_odom + 25):160, :] = ctr
+            ctr = ctr + 1
+        elif sign > 0:
+            ctr = 0
+            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance + add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom + footprint_radius + devDistance + add):160] = ctr
+            ctr = ctr + 1
+            segments[(y_odom + 25):160, :] = ctr
+            ctr = ctr + 1
+
+
+        #print('np.unique(segments_2): ', np.unique(segments_2))
+        for i in np.unique(segments_2):
+            if np.all(img[segments_2 == i] == 99):
+                #print('obstacle')
+                segments[segments_2 == i] = ctr
+                ctr = ctr + 1
+
+        end = time.time()
+
+        print("\sm4 runtime: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments)
+        '''
+
+        return segments
+
+    def sm5(self, image, img_rgb, x_odom, y_odom, devDistance, sign):
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        start = time.time()
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        devDistance = int(devDistance)
+
+        footprint_radius = 13
+        add = 15
+
+        if sign < 0:
+            ctr = 0
+            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance)] = ctr
+            ctr = ctr + 1
+            #segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance - add):(x_odom - footprint_radius - devDistance)] = ctr
+            #ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance):(x_odom + footprint_radius + add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
+            ctr = ctr + 1
+            segments[(y_odom + 25):160, :] = ctr
+            ctr = ctr + 1
+        elif sign > 0:
+            ctr = 0
+            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance + add)] = ctr
+            ctr = ctr + 1
+            segments[0:(y_odom + 25), (x_odom + footprint_radius + devDistance + add):160] = ctr
+            ctr = ctr + 1
+            segments[(y_odom + 25):160, :] = ctr
+            ctr = ctr + 1
+
+
+        #print('np.unique(segments_2): ', np.unique(segments_2))
+        for i in np.unique(segments_2):
+            if np.all(img[segments_2 == i] == 99):
+                #print('obstacle')
+                segments[segments_2 == i] = ctr
+                ctr = ctr + 1
+
+        pd.DataFrame(segments).to_csv("segments.csv")        
+
+        end = time.time()
+
+        print("\sm5 runtime: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments)
+        '''
+
+        return segments
+
+    def semantic(self, image, img_rgb, x_odom, y_odom, devDistance, sign, costmap_info, map_info, tf_odom_map):
+        print('\nsemantic starts')
+
+        from skimage.segmentation import slic
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        import time
+
+        #semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
+        #semantic_map = np.array(pd.read_csv('~/amar_ws/map_sem.csv'))
+
+        #start = time.time()
+
+        # Find segments
+        #segments = self.sm1(img_rgb)
+        #segments = self.sm2(image, img_rgb, x_odom, y_odom)
+        segments = self.sm3(image, img_rgb, x_odom, y_odom, devDistance, sign)
+        #segments = self.sm4(image, img_rgb, x_odom, y_odom, devDistance, sign)
+        #segments = self.sm5(image, img_rgb, x_odom, y_odom, devDistance, sign)
+        
+        print('\nsemantic ends')
+
+        return segments        
+
     def semantic_segment(self, image, img_rgb, costmap_info, map_info, tf_odom_map):
         print('\nsemantic_segment starts')
 
@@ -368,556 +864,9 @@ class LimeImageExplainer(object):
         fig.clf()
         '''
 
-        print('\nsemantic_segment end')
+        print('\nsemantic_segment ends')
 
         return np.array(semantic_segments)        
-
-    def sm1(self, img_rgb):
-        print('\nmySlic starts')
-
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-
-        # show original image
-        img = img_rgb[:, :, 0]
-
-        start = time.time()
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        #'''
-        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        #'''
-        
-        '''
-        segments_1 = slic(img_rgb, n_segments=8, compactness=0.1, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        '''
-
-        early_return = False
-        if early_return == True:
-            return segments_1                  
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1.astype('float64'), aspect='auto')
-        fig.savefig('segments1.png', transparent=False)
-        fig.clf()
-        '''
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
-        fig.clf()
-        '''
-
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-
-        # make obstacles on segments_2 nice - not needed
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 99:
-                   segments_2[i, j] = segments_1[i, j] + segments_unique_2.shape[0]
-        
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        
-        # find segments_unique before nice segment numbering
-        segments_unique = np.unique(segments_1)
-        
-        # Get nice segments' numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k # k+1 must be in order for regionprops() function to work correctly # k mora da bi perturbacija radila za obstacles
-                
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_1.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
-        fig.clf()
-        segments_unique = np.unique(segments_1)
-        '''
-        
-        end = time.time()
-        print('\nmySlic runtime: ', end-start)
-
-        print('\nmySlic ends')
-
-        return segments_1
-
-    def sm2(self, image, img_rgb, x_odom, y_odom):
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import pandas as pd
-        from skimage.color import gray2rgb
-        import copy
-        import time
-        
-        # show original image
-        img = copy.deepcopy(image)
-
-        start = time.time()
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                            multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                            start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
-        fig.clf()
-        '''
-
-        segments = np.zeros(img.shape, np.uint8)
-
-        ctr = 0
-        segments[0:(y_odom + 25), 0:(x_odom - 25)] = ctr
-        ctr = ctr + 1
-        segments[0:(y_odom + 25), (x_odom - 25):(x_odom + 25)] = ctr
-        ctr = ctr + 1
-        segments[0:(y_odom + 25), (x_odom + 25):160] = ctr
-        ctr = ctr + 1
-        segments[(y_odom + 25):160, :] = ctr
-        ctr = ctr + 1
-        #segments[65:95, 65:95] = ctr
-        #ctr = ctr + 1
-
-        #print('np.unique(segments_2): ', np.unique(segments_2))
-        for i in np.unique(segments_2):
-            if np.all(img[segments_2 == i] == 99):
-                #print('obstacle')
-                segments[segments_2 == i] = ctr
-                ctr = ctr + 1
-
-        pd.DataFrame(segments).to_csv("segments.csv")        
-
-        end = time.time()
-
-        print("end - start: ", end - start)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
-        fig.clf()
-        segments_unique = np.unique(segments)
-        '''
-
-        return segments
-
-    def sm3(self, image, img_rgb, x_odom, y_odom, devDistance, sign):
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import pandas as pd
-        from skimage.color import gray2rgb
-        import copy
-        import time
-        
-        # show original image
-        img = copy.deepcopy(image)
-
-        start = time.time()
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                            multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                            start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
-        fig.clf()
-        '''
-
-        segments = np.zeros(img.shape, np.uint8)
-
-        devDistance = int(devDistance)
-
-        footprint_radius = 13
-        add = 15
-
-        if sign < 0:
-            ctr = 0
-            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance - add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance - add):(x_odom + footprint_radius + add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
-            ctr = ctr + 1
-            segments[(y_odom + 25):160, :] = ctr
-            ctr = ctr + 1
-        elif sign > 0:
-            ctr = 0
-            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance + add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom + footprint_radius + devDistance + add):160] = ctr
-            ctr = ctr + 1
-            segments[(y_odom + 25):160, :] = ctr
-            ctr = ctr + 1
-
-
-        #print('np.unique(segments_2): ', np.unique(segments_2))
-        for i in np.unique(segments_2):
-            if np.all(img[segments_2 == i] == 99):
-                #print('obstacle')
-                segments[segments_2 == i] = ctr
-                ctr = ctr + 1
-
-        pd.DataFrame(segments).to_csv("segments.csv")        
-
-        end = time.time()
-
-        print("end - start: ", end - start)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
-        fig.clf()
-        segments_unique = np.unique(segments)
-        '''
-
-        return segments
-
-    def sm4(self, image, img_rgb, x_odom, y_odom, devDistance, sign):
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import pandas as pd
-        from skimage.color import gray2rgb
-        import copy
-        import time
-        
-        # show original image
-        img = copy.deepcopy(image)
-
-        start = time.time()
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                            multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                            start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
-        fig.clf()
-        '''
-
-        segments = np.zeros(img.shape, np.uint8)
-
-        devDistance = int(devDistance)
-
-        footprint_radius = 13
-        add = 15
-
-        if sign < 0:
-            ctr = 0
-            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance - add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance - add):(x_odom - footprint_radius - devDistance)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance):(x_odom + footprint_radius + add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
-            ctr = ctr + 1
-            segments[(y_odom + 25):160, :] = ctr
-            ctr = ctr + 1
-        elif sign > 0:
-            ctr = 0
-            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance + add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom + footprint_radius + devDistance + add):160] = ctr
-            ctr = ctr + 1
-            segments[(y_odom + 25):160, :] = ctr
-            ctr = ctr + 1
-
-
-        #print('np.unique(segments_2): ', np.unique(segments_2))
-        for i in np.unique(segments_2):
-            if np.all(img[segments_2 == i] == 99):
-                #print('obstacle')
-                segments[segments_2 == i] = ctr
-                ctr = ctr + 1
-
-        pd.DataFrame(segments).to_csv("segments.csv")        
-
-        end = time.time()
-
-        print("end - start: ", end - start)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
-        fig.clf()
-        segments_unique = np.unique(segments)
-        '''
-
-        return segments
-
-    def sm5(self, image, img_rgb, x_odom, y_odom, devDistance, sign):
-        # import needed libraries
-        from skimage.segmentation import slic
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import pandas as pd
-        from skimage.color import gray2rgb
-        import copy
-        import time
-        
-        # show original image
-        img = copy.deepcopy(image)
-
-        start = time.time()
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                            multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                            start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
-        fig.clf()
-        '''
-
-        segments = np.zeros(img.shape, np.uint8)
-
-        devDistance = int(devDistance)
-
-        footprint_radius = 13
-        add = 15
-
-        if sign < 0:
-            ctr = 0
-            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance)] = ctr
-            ctr = ctr + 1
-            #segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance - add):(x_odom - footprint_radius - devDistance)] = ctr
-            #ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance):(x_odom + footprint_radius + add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
-            ctr = ctr + 1
-            segments[(y_odom + 25):160, :] = ctr
-            ctr = ctr + 1
-        elif sign > 0:
-            ctr = 0
-            segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance + add)] = ctr
-            ctr = ctr + 1
-            segments[0:(y_odom + 25), (x_odom + footprint_radius + devDistance + add):160] = ctr
-            ctr = ctr + 1
-            segments[(y_odom + 25):160, :] = ctr
-            ctr = ctr + 1
-
-
-        #print('np.unique(segments_2): ', np.unique(segments_2))
-        for i in np.unique(segments_2):
-            if np.all(img[segments_2 == i] == 99):
-                #print('obstacle')
-                segments[segments_2 == i] = ctr
-                ctr = ctr + 1
-
-        pd.DataFrame(segments).to_csv("segments.csv")        
-
-        end = time.time()
-
-        print("end - start: ", end - start)
-
-        '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
-        fig.clf()
-        segments_unique = np.unique(segments)
-        '''
-
-        return segments
-
-    def semantic(self, image, img_rgb, x_odom, y_odom, devDistance, sign, costmap_info, map_info, tf_odom_map):
-        print('\nsemantic starts')
-
-        from skimage.segmentation import slic
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import pandas as pd
-        import time
-
-        #semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
-        #semantic_map = np.array(pd.read_csv('~/amar_ws/map_sem.csv'))
-
-        #start = time.time()
-
-        # Find segments
-        segments = self.sm3(image, img_rgb, x_odom, y_odom, devDistance, sign)
-
-        '''
-        semantic_local_costmap = np.zeros(segments.shape, np.uint8)
-        
-        localCostmapOriginX = costmap_info.iloc[0, 3]
-        localCostmapOriginY = costmap_info.iloc[0, 4]
-        localCostmapResolution = costmap_info.iloc[0, 0]
-
-        mapOriginX = map_info.iloc[0, 4]
-        mapOriginY = map_info.iloc[0, 5]
-        mapResolution = map_info.iloc[0, 1]
-
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat([tf_odom_map.iloc[0, 3], tf_odom_map.iloc[0, 4], tf_odom_map.iloc[0, 5], tf_odom_map.iloc[0, 6]])
-        r_array = np.asarray(r.as_matrix())
-        t = np.array([tf_odom_map.iloc[0, 0], tf_odom_map.iloc[0, 1], tf_odom_map.iloc[0, 2]])
-
-        semantic_local_costmap = np.zeros((160, 160), np.uint8)
-        
-        for i in range(0, 160):
-            for j in range(0, 160):            
-                x = j * localCostmapResolution + localCostmapOriginX
-                y = i * localCostmapResolution + localCostmapOriginY
-
-                p = np.array([x, y, 0])
-                # print('p: ', p)
-                pnew = p.dot(r_array) + t
-                # print('pnew: ', pnew)
-                x = pnew[0]
-                y = pnew[1]
-
-                j_map = int((x - mapOriginX) / mapResolution)
-                i_map = int((y - mapOriginY) / mapResolution)
-            
-                semantic_local_costmap[i, j] = semantic_map[i_map, j_map]       
-
-        end = time.time()
-        print('\nsemantic runtime: ', end-start)
-
-        pd.DataFrame(semantic_local_costmap).to_csv('SEMANTIC.csv')
-
-        semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
-
-        for val in np.unique(segments):
-            print('val: ', val)
-            print('bincount: ', np.bincount(semantic_local_costmap[segments == val]))
-            semantic_num = np.bincount(semantic_local_costmap[segments == val]).argmax()
-            print('semantic_num: ', semantic_num)
-            print('semantic_tag: ', semantic_tags.loc[semantic_tags.number == semantic_num,'label'].values[0])
-        '''
-        print('\nsemantic end')
-
-        return segments        
 
     def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance, sum, labels=(1,),
                          hide_color=None,
@@ -983,9 +932,9 @@ class LimeImageExplainer(object):
         elif segmentation_fn == 'custom_segmentation':
             #segments = self.sm1(image)
             #segments = self.sm2(image_orig, image, x_odom, y_odom)
-            #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
+            segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm4(image_orig, image, x_odom, y_odom, devDistance, sum)
-            segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
+            #segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
         elif segmentation_fn == 'semantic_segmentation':
             segments = self.semantic(image_orig, image, x_odom, y_odom, devDistance, sum, costmap_info, map_info, tf_odom_map)
             #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
