@@ -107,7 +107,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = True
+            self.manual_instance_loading = False
 
             if self.manual_instance_loading == False:
                 # Get local costmap
@@ -208,16 +208,16 @@ class ExplainRobotNavigation:
             print('sum: ', sum)
 
             #self.costmap2Map()
-
+            
+            #'''
             self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
                                                                         x_odom, y_odom, devDistance, sum,
                                                                         hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
             
             self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
                                                                            hide_rest=False, min_weight=0.0)
-
-            #self.segments += 1 
-
+            #'''
+            
             self.plotExplanationMinimal()
             #self.plotExplanationMinimalFlipped()
             #self.plotExplanation()
@@ -323,24 +323,27 @@ class ExplainRobotNavigation:
         # transform global plan from /map to /odom frame
         # rotation matrix
         from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(
-            [self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4], self.tf_odom_map_tmp.iloc[0, 5],
-             self.tf_odom_map_tmp.iloc[0, 6]])
+        r = R.from_quat([self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4], self.tf_odom_map_tmp.iloc[0, 5], self.tf_odom_map_tmp.iloc[0, 6]])
         # print('r: ', r.as_matrix())
         r_array = np.asarray(r.as_matrix())
         # print('r_array: ', r_array)
         # print('r_array.shape: ', r_array.shape)
         
         # translation vector
-        t = np.array(
-            [self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
+        t = np.array([self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
         # print('t: ', t)
 
-        map_sem = np.ones((304, 201), np.uint8)
+        costmap_segmented = pd.read_csv('costmap_segmented.csv')
+
+        map_sem = np.zeros((304, 201), np.uint8)
+
+        #indices_x = np.zeros((160, 160), np.uint8)
+        #indices_y = np.zeros((160, 160), np.uint8)
+
+        map_pairs = []
         
         for i in range(0, 160):
             for j in range(0, 160):
-            
                 x = j * self.localCostmapResolution + self.localCostmapOriginX
                 y = i * self.localCostmapResolution + self.localCostmapOriginY
 
@@ -353,10 +356,16 @@ class ExplainRobotNavigation:
 
                 j_map = int((x - self.mapOriginX) / self.mapResolution)
                 i_map = int((y - self.mapOriginY) / self.mapResolution)
-            
-                map_sem[i_map, j_map] = self.image[i, j]
 
-        pd.DataFrame(map_sem).to_csv('map_sem.csv', index=False, header=False)
+                if (i_map, j_map) not in map_pairs:
+                    map_pairs.append((i_map, j_map))
+                    map_sem[i_map, j_map] = costmap_segmented.iloc[i, j]
+                    #indices_x[i, j] = j_map
+                    #indices_y[i, j] = i_map
+
+        pd.DataFrame(map_sem).to_csv('semantic_map.csv', index=False, header=False)
+        #pd.DataFrame(indices_x).to_csv('INDICES_X.csv', index=False, header=False)
+        #pd.DataFrame(indices_y).to_csv('INDICES_Y.csv', index=False, header=False)
 
     def classifier_fn_image(self, sampled_instance):
 
@@ -1079,111 +1088,7 @@ class ExplainRobotNavigation:
         from skimage.measure import regionprops
         import matplotlib.pyplot as plt
 
-        # plot segments with centroids and labels/weights
-        #print('segments_1.shape: ', segments_1.shape)
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.segments, aspect='auto')
-        
-        if self.semantic_seg == False:
-            #'''
-            self.segments += 1
-            print('self.exp: ', self.exp)
-            print('np.unique(self.segments): ', np.unique(self.segments))
-            #'''
-            regions = regionprops(self.segments.astype(int))
-            #'''
-            labels = []
-            for props in regions:
-                labels.append(props.label)
-            print('labels: ', labels)
-            #'''    
-            i = 0
-            for props in regions:
-                v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v - 1:
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1            
-
-        elif self.semantic_seg == True:
-            '''
-            self.segments += 1
-            print('self.exp: ', self.exp)
-            print('np.unique(self.segments): ', np.unique(self.segments))
-            '''
-            regions = regionprops(self.segments.astype(int))
-            '''
-            labels = []
-            for props in regions:
-                labels.append(props.label)
-            print('labels: ', labels)
-            '''
-            i = 0
-            for props in regions:
-                v = props.label  # value of label
-                if v == len(regions):
-                    v = 0
-                if v > len(regions):
-                    break
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v:
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            for k in range(i, len(regions)):
-                v = regions[k].label
-                '''
-                print('k = ', k)
-                print('v = ', v)
-                '''
-                cx, cy = regions[k].centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    exp_0 = self.exp[j][0]
-                    if exp_0 == 0:
-                        exp_0 = len(regions)
-                    if 99 == regions[k].label + 10 * (exp_0):
-                        '''
-                        print('j: ', j)
-                        print('self.exp[j][0]: ', self.exp[j][0])
-                        print('self.exp[j][1]: ', self.exp[j][1])
-                        '''
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                k = k + 1
-
-        # Save segments with nice numbering as a picture
-        fig.savefig(path_core + '/weighted_segments.png')
-        fig.clf()
-
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.image, aspect='auto')
-        fig.savefig(path_core + '/costmap.png')
-        fig.clf()
-
-        
-        # indices of local plan's poses in local costmap
+                # indices of local plan's poses in local costmap
         self.local_plan_x_list = []
         self.local_plan_y_list = []
         for i in range(1, self.local_plan_tmp.shape[0]):
@@ -1232,14 +1137,251 @@ class ExplainRobotNavigation:
                 self.plan_y_list.append(
                     int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
                     
-        
-        # plot robots' local plan
                 
         # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
         self.x_odom_index = [self.localCostmapIndex_x_odom]
         # print('self.x_odom_index: ', self.x_odom_index)
         self.y_odom_index = [self.localCostmapIndex_y_odom]
         # print('self.y_odom_index: ', self.y_odom_index)
+
+
+        # plot segments with centroids and labels/weights
+        #print('segments_1.shape: ', segments_1.shape)
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.segments, aspect='auto')
+        
+        if self.semantic_seg == False:
+            #'''
+            self.segments += 1
+            print('self.exp: ', self.exp)
+            print('np.unique(self.segments): ', np.unique(self.segments))
+            #'''
+            regions = regionprops(self.segments.astype(int))
+            #'''
+            labels = []
+            for props in regions:
+                labels.append(props.label)
+            print('labels: ', labels)
+            #'''    
+            i = 0
+            for props in regions:
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v - 1:
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            # Save segments with nice numbering as a picture
+            fig.savefig(path_core + '/weighted_segments.png')
+            fig.clf()                
+
+        elif self.semantic_seg == True:
+            semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
+            semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
+            #costmap_segmented = pd.read_csv('~/amar_ws/costmap_segmented.csv')
+
+            #'''
+            self.segments += 1
+            print('self.exp: ', self.exp)
+            print('np.unique(self.segments): ', np.unique(self.segments))
+            #'''
+            regions = regionprops(self.segments.astype(int))
+            #'''
+            labels = []
+            for props in regions:
+                labels.append(props.label)
+            print('labels: ', labels)
+            #'''    
+            i = 0
+            for props in regions:
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v - 1:
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1  
+
+            from scipy.spatial.transform import Rotation as R
+            r = R.from_quat([self.tf_odom_map.iloc[0, 3], self.tf_odom_map.iloc[0, 4], self.tf_odom_map.iloc[0, 5], self.tf_odom_map.iloc[0, 6]])
+            r_array = np.asarray(r.as_matrix())
+            t = np.array([self.tf_odom_map.iloc[0, 0], self.tf_odom_map.iloc[0, 1], self.tf_odom_map.iloc[0, 2]])
+
+            map_pairs = []
+
+            semantic_local_costmap = np.zeros(self.segments.shape, np.uint8) + 10
+
+            for i in range(0, 160):
+                for j in range(0, 160):            
+                    x = j * self.localCostmapResolution + self.localCostmapOriginX
+                    y = i * self.localCostmapResolution + self.localCostmapOriginY
+
+                    p = np.array([x, y, 0])
+                    # print('p: ', p)
+                    pnew = p.dot(r_array) + t
+                    # print('pnew: ', pnew)
+                    x = pnew[0]
+                    y = pnew[1]
+
+                    j_map = int((x - self.mapOriginX) / self.mapResolution)
+                    i_map = int((y - self.mapOriginY) / self.mapResolution)
+
+                    if (i_map, j_map) not in map_pairs:
+                        map_pairs.append((i_map, j_map))
+                        semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
+                    else:
+                        if j != 0:
+                            semantic_local_costmap[i, j] = semantic_local_costmap[i, j-1]
+                        elif i != 0:
+                            semantic_local_costmap[i, j] = semantic_local_costmap[i-1, j]
+                           
+            pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap.csv')               
+
+            '''
+            pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap_before.csv')
+            for i in range(semantic_local_costmap.shape[0]):
+                for j in range(semantic_local_costmap.shape[1]):
+                    if semantic_local_costmap[i, j] >= 90:
+                        if self.image[i, j] == 0:
+                            print('IN IN IN')
+                            if 0 <= i - 1 < 160:
+                                if semantic_local_costmap[i-1, j] < 90:
+                                    semantic_local_costmap[i-1, j] = semantic_local_costmap[i-1, j]
+                            elif 0 <= j - 1 < 160:
+                                if semantic_local_costmap[i, j-1] < 90:   
+                                    semantic_local_costmap[i, j] = semantic_local_costmap[i, j-1]
+                            elif 0 <= i - 1 < 160 and 0 <= j - 1 < 160:
+                                if semantic_local_costmap[i-1, j-1] < 90:   
+                                    semantic_local_costmap[i, j] = semantic_local_costmap[i-1, j-1]
+            pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap_after.csv')
+            '''    
+        
+            unknown_obstacles_vals = []
+            self.segments -= 1
+            for val in np.unique(self.segments):
+                # static known obstacle
+                if np.all(self.image[self.segments == val] == 99) == True:
+                    semantic_num = np.bincount(semantic_local_costmap[self.segments == val]).argmax()
+                    if semantic_num >= 90:
+                        print('\nSTATIC KNOWN OBSTACLE!')
+                        print('val: ', val)
+                        print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
+                        print('semantic_num: ', semantic_num)
+                    
+                    else:
+                        print('\nSTATIC UNKNOWN OBSTACLE!')
+                        unknown_obstacles_vals.append(val)
+                        print('val: ', val)
+                        print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
+                        print('semantic_num: ', semantic_num)
+
+                # free space    
+                else:
+                    print('\nFREE SPACE')
+                    print('val: ', val)
+                    print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
+                    print('semantic_num: ', np.bincount(semantic_local_costmap[self.segments == val]).argmax())
+
+            regions = regionprops(semantic_local_costmap.astype(int))
+            #'''
+            labels = []
+            for props in regions:
+                labels.append(props.label)
+            print('labels: ', labels)
+            #'''    
+            i = 0
+            for props in regions:
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(semantic_tags)):
+                    if semantic_tags.iloc[j, 0] == v:
+                        #ax.text(cy, cx, semantic_tags.iloc[j, 1])  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            # Save segments with nice numbering as a picture
+            fig.savefig(path_core + '/weighted_segments.png')
+            fig.clf()
+
+            
+
+            fig = plt.figure(frameon=False)
+            w = 1.6*3
+            h = 1.6*3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+
+            for i in range(0, len(unknown_obstacles_vals)):
+                x_s = []
+                y_s = []
+                ctr = 0
+                for j in range(0, self.segments.shape[0]):
+                    for k in range(0, self.segments.shape[1]):
+                        if self.segments[j, k] == unknown_obstacles_vals[i]:
+                            x_s.append(k)
+                            y_s.append(j)
+                ax.scatter(x_s, y_s, c='white', marker='x', alpha = 0.15)
+
+            ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
+            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
+            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+            #regions = regionprops(np.array(costmap_segmented).astype(int))
+            regions = regionprops(np.array(semantic_local_costmap).astype(int))
+            #'''
+            labels = []
+            for props in regions:
+                labels.append(props.label)
+            print('labels_semantic: ', labels)
+            #'''    
+            i = 0
+            for props in regions:
+                v = props.label  # value of label
+                cx, cy = props.centroid  # centroid coordinates
+                #ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(semantic_tags)):
+                    if semantic_tags.iloc[j, 0] == v:
+                        ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+                i = i + 1
+
+            #marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
+            marked_boundaries = mark_boundaries(self.temp_img, np.array(semantic_local_costmap), color=(255, 255, 0))
+            ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
+            fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
+            fig.clf()
+            #fig.close()
+
+
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.image, aspect='auto')
+        fig.savefig(path_core + '/costmap.png')
+        fig.clf()
+
+        
 
         # save robot odometry orientation to class variables
         #self.odom_z = self.odom_tmp.iloc[0, 2] # minus je upitan

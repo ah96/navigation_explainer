@@ -849,8 +849,8 @@ class LimeImageExplainer(object):
 
         return segments
 
-    def semantic(self, image, img_rgb, costmap_info, map_info, tf_odom_map):
-        print('\nsemantic_segment starts')
+    def semantic(self, image, img_rgb, x_odom, y_odom, devDistance, sign, costmap_info, map_info, tf_odom_map):
+        print('\nsemantic starts')
 
         from skimage.segmentation import slic
         import matplotlib.pyplot as plt
@@ -858,16 +858,17 @@ class LimeImageExplainer(object):
         import pandas as pd
         import time
 
-        semantic_map = np.array(pd.read_csv('~/amar_ws/map_sem.csv'))
+        #semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
+        #semantic_map = np.array(pd.read_csv('~/amar_ws/map_sem.csv'))
 
-        start = time.time()
+        #start = time.time()
 
         # Find segments
-        segments_slic = slic(img_rgb, n_segments=4, compactness=100, max_iter=1000, sigma=0, spacing=None,
-                            multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                            start_label=1, mask=None)
+        segments = self.sm3(image, img_rgb, x_odom, y_odom, devDistance, sign)
 
+        '''
+        semantic_local_costmap = np.zeros(segments.shape, np.uint8)
+        
         localCostmapOriginX = costmap_info.iloc[0, 3]
         localCostmapOriginY = costmap_info.iloc[0, 4]
         localCostmapResolution = costmap_info.iloc[0, 0]
@@ -881,7 +882,7 @@ class LimeImageExplainer(object):
         r_array = np.asarray(r.as_matrix())
         t = np.array([tf_odom_map.iloc[0, 0], tf_odom_map.iloc[0, 1], tf_odom_map.iloc[0, 2]])
 
-        segments = np.zeros((160, 160), np.uint8)
+        semantic_local_costmap = np.zeros((160, 160), np.uint8)
         
         for i in range(0, 160):
             for j in range(0, 160):            
@@ -898,29 +899,25 @@ class LimeImageExplainer(object):
                 j_map = int((x - mapOriginX) / mapResolution)
                 i_map = int((y - mapOriginY) / mapResolution)
             
-                segments[i, j] = semantic_map[i_map, j_map]
+                semantic_local_costmap[i, j] = semantic_map[i_map, j_map]       
 
         end = time.time()
-        print('\nsemantic_segment runtime: ', end-start)
-        
-        #pd.DataFrame(semantic_segments).to_csv('semantic_segments.csv')
+        print('\nsemantic runtime: ', end-start)
 
+        pd.DataFrame(semantic_local_costmap).to_csv('SEMANTIC.csv')
+
+        semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
+
+        for val in np.unique(segments):
+            print('val: ', val)
+            print('bincount: ', np.bincount(semantic_local_costmap[segments == val]))
+            semantic_num = np.bincount(semantic_local_costmap[segments == val]).argmax()
+            print('semantic_num: ', semantic_num)
+            print('semantic_tag: ', semantic_tags.loc[semantic_tags.number == semantic_num,'label'].values[0])
         '''
-        fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(semantic_segments.astype('float64'), aspect='auto')
-        fig.savefig('semantic_segments.png', transparent=False)
-        fig.clf()
-        '''
+        print('\nsemantic end')
 
-        print('\nsemantic_segment end')
-
-        return np.array(segments)        
+        return segments        
 
     def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance, sum, labels=(1,),
                          hide_color=None,
@@ -990,7 +987,7 @@ class LimeImageExplainer(object):
             #segments = self.sm4(image_orig, image, x_odom, y_odom, devDistance, sum)
             segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
         elif segmentation_fn == 'semantic_segmentation':
-            segments = self.semantic(image_orig, image, costmap_info, map_info, tf_odom_map)
+            segments = self.semantic(image_orig, image, x_odom, y_odom, devDistance, sum, costmap_info, map_info, tf_odom_map)
             #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
             segments = segmentation_fn(image)
