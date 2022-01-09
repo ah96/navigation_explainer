@@ -71,6 +71,7 @@ class ExplainRobotNavigation:
         self.y_train = y_train
         self.y_test = y_test
         self.num_samples = num_samples
+        self.output_class_name = output_class_name
 
         # manually modified LIME image
         if self.explanation_mode == 'image':
@@ -79,27 +80,13 @@ class ExplainRobotNavigation:
         elif self.explanation_mode == 'tabular':
             self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.X_train),
                                                                     feature_names=self.X_train.columns, mode=self.tabular_mode,
-                                                                    class_names=[output_class_name],
+                                                                    class_names=[self.output_class_name],
                                                                     verbose=True, feature_selection='none',
                                                                     discretize_continuous=False,
                                                                     sample_around_instance=False, random_state=None)
-        '''
         elif self.explanation_mode == 'tabular_costmap':
-            self.index = self.expID
-            img = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * 160, :]
-            lista = []
-            for i in range(0, img.shape[0]):
-                for j in range(0, img.shape[1]):
-                    lista.append(img.iloc[i, j])
-            self.tabular_costmap = pd.DataFrame(lista)
-            self.tabular_costmap = pd.DataFrame(self.tabular_costmap).transpose()
-            self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.tabular_costmap),
-                                                                    feature_names=self.tabular_costmap.columns,
-                                                                    mode=modeParam, class_names=[output_class_name],
-                                                                    verbose=True, feature_selection='none',
-                                                                    discretize_continuous=False)
-        '''
-
+            pass
+        
         print('\nConstructor ending')
 
     # explain instance
@@ -237,8 +224,21 @@ class ExplainRobotNavigation:
             fig = self.explanation.as_pyplot_figure()
             plt.savefig('explanation.png')
 
-        '''
         elif self.explanation_mode == 'tabular_costmap':
+            self.index = self.expID
+            img = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
+            lista = []
+            for i in range(0, img.shape[0]):
+                for j in range(0, img.shape[1]):
+                    lista.append(img.iloc[i, j])
+            self.tabular_costmap = pd.DataFrame(lista)
+            self.tabular_costmap = pd.DataFrame(self.tabular_costmap).transpose()
+            self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.tabular_costmap),
+                                                                    feature_names=self.tabular_costmap.columns,
+                                                                    mode=self.tabular_mode, class_names=[self.output_class_name],
+                                                                    verbose=True, feature_selection='none',
+                                                                    discretize_continuous=False)
+
             self.explanation = self.explainer.explain_instance(data_row=self.tabular_costmap,
                                                                predict_fn=self.classifier_fn_tabular_costmap,
                                                                num_samples=self.num_samples,
@@ -246,8 +246,7 @@ class ExplainRobotNavigation:
             # print(self.explanation.as_list())
             fig = self.explanation.as_pyplot_figure()
             plt.savefig('explanation.png')
-        '''
-
+        
         print('\nexplain_instance ending')
 
     # helper function for lime image
@@ -2930,66 +2929,77 @@ class ExplainRobotNavigation:
         # Save sampled_instance to self.sampled_instance
         self.sampled_instance = sampled_instance
 
-        # Save local plan instance to a file
-        local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index]
-        local_plan_tmp = local_plan_tmp.iloc[:, 1:]
-        local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+        # Save footprint instance to a file
+        self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
+        self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
+        self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
-        # Save plan instance to a file
-        plan_tmp = self.plan.loc[self.plan['ID'] == self.index]
-        plan_tmp = plan_tmp.iloc[:, 1:]
-        plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+        # Save local plan instance to a file
+        self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
+        self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
+        self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+
+        # Save plan (from global planner) instance to a file
+        self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
+        self.plan_tmp = self.plan_tmp.iloc[:, 1:]
+        self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
         # Save costmap_data to file
-        costmap_tmp = self.costmap_data.iloc[(self.index - self.offset) * 160:(self.index - self.offset + 1) * 160,
-                      :]  # doraditi ovo 160
-        costmap_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', index=False, header=False)
+        self.costmap_tmp = self.costmap_data.iloc[(self.index) * 160:(self.index + 1) * self.costmap_size,:]
+        self.costmap_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', index=False, header=False)
 
-        # Save costmap_info to file
-        costmap_info_tmp = self.costmap_info.iloc[self.index - self.offset, :]
-        costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
-        costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
-        costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
+        # Save costmap_info instance to file
+        self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
+        self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
+        self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
+        self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
-        # Save amcl_pose to file
-        amcl_pose_tmp = self.amcl_pose.iloc[self.index - self.offset, :]
-        amcl_pose_tmp = pd.DataFrame(amcl_pose_tmp).transpose()
-        amcl_pose_tmp = amcl_pose_tmp.iloc[:, 1:]
-        amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+        # Save amcl_pose instance to file
+        self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
+        self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
+        self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
+        self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
-        # Save tf_odom_map to file
-        tf_odom_map_tmp = self.tf_odom_map.iloc[self.index - self.offset, :]
-        tf_odom_map_tmp = pd.DataFrame(tf_odom_map_tmp).transpose()
-        tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
+        # Save tf_odom_map instance to file
+        self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
+        self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
+        self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
 
-        # Save tf_map_odom to file
-        tf_map_odom_tmp = self.tf_map_odom.iloc[self.index - self.offset, :]
-        tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
-        tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
+        # Save tf_map_odom instance to file
+        self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
+        self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
+        self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
 
         # Save sampled odom to file
-        odom_tmp = pd.concat([self.odom.iloc[self.index - self.offset, :], self.odom.iloc[self.index - self.offset, :]],
-                             join='outer', axis=1, sort=False)
+        self.odom_tmp = pd.concat([self.odom.iloc[self.index, :], self.odom.iloc[self.index, :]], join='outer', axis=1, sort=False)
         for i in range(0, self.num_samples - 2):
-            odom_tmp = pd.concat([odom_tmp, self.odom.iloc[self.index - self.offset, :]], join='outer', axis=1,
-                                 sort=False)
-        odom_tmp = odom_tmp.transpose()
-        odom_tmp = odom_tmp.iloc[:, 2:]
+            self.odom_tmp = pd.concat([self.odom_tmp, self.odom.iloc[self.index, :]], join='outer', axis=1, sort=False)
+        self.odom_tmp = self.odom_tmp.transpose()
+        self.odom_tmp = self.odom_tmp.iloc[:, 2:]
         for i in range(0, self.num_samples):
-            odom_tmp.iloc[i, -2] = sampled_instance[i, 0]
-            odom_tmp.iloc[i, -1] = sampled_instance[i, 1]
+            self.odom_tmp.iloc[i, -2] = sampled_instance[i, 0]
+            self.odom_tmp.iloc[i, -1] = sampled_instance[i, 1]
 
-        odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+        self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
-        # start ROS node
-        node_process = Popen(shlex.split('rosrun teb_local_planner perturb_node_tabular'))
+        print('\nstarting C++ node')
 
-        rospy.sleep(7)
+        # start perturbed_node_image ROS C++ node
+        Popen(shlex.split('rosrun teb_local_planner perturb_node_tabular'))
 
-        # stop ROS node
-        node_process.terminate()
+        # Wait until perturb_node_image is finished
+        rospy.wait_for_service("/perturb_node_tabular/finished")
+        #print('perturb_node_image finishedn from python')
+
+        # kill ROS node
+        Popen(shlex.split('rosnode kill /perturb_node_tabular'))
+
+        #rospy.sleep(1)
+
+        print('\nC++ node ended')
 
         cmd_vel = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
+        print('cmd_vel: ', cmd_vel)
 
         print('classifier_fn_tabular ended')
 
@@ -3003,71 +3013,81 @@ class ExplainRobotNavigation:
         # Save sampled_instance to self.sampled_instance
         self.sampled_instance = sampled_instance
 
+        # Save footprint instance to a file
+        self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
+        self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
+        self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+
         # Save local plan instance to a file
-        local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
-        local_plan_tmp = local_plan_tmp.iloc[:, 1:]
-        local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+        self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
+        self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
+        self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
         # Save plan instance to a file
-        plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
-        plan_tmp = plan_tmp.iloc[:, 1:]
-        plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+        self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
+        self.plan_tmp = self.plan_tmp.iloc[:, 1:]
+        self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
         # Save costmap_info to file
-        costmap_info_tmp = self.costmap_info.iloc[self.index, :]
-        costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
-        costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
-        costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
+        self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
+        self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
+        self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
+        self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
         # Save amcl_pose to file
-        amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
-        amcl_pose_tmp = pd.DataFrame(amcl_pose_tmp).transpose()
-        amcl_pose_tmp = amcl_pose_tmp.iloc[:, 1:]
-        amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+        self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
+        self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
+        self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
+        self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
         # Save tf_odom_map to file
-        tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
-        tf_odom_map_tmp = pd.DataFrame(tf_odom_map_tmp).transpose()
-        tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
+        self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
+        self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
+        self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
 
         # Save tf_map_odom to file
-        tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
-        tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
-        tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
+        self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
+        self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
+        self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
 
         # Save sampled odom to file
-        odom_tmp = self.odom.iloc[self.index, :]
-        odom_tmp = pd.DataFrame(odom_tmp).transpose()
-        odom_tmp = odom_tmp.iloc[:, 2:]
-        odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+        self.odom_tmp = self.odom.iloc[self.index, :]
+        self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
+        self.odom_tmp = self.odom_tmp.iloc[:, 2:]
+        self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
-        # Save costmap_data to file - srediti ove 160-ke
-        costmap_tmp = pd.DataFrame(sampled_instance[0][0:160]).transpose()
-        for j in range(1, 160):
-            costmap_tmp = pd.concat(
-                [costmap_tmp, pd.DataFrame(sampled_instance[0][160 * j: 160 * (j + 1)]).transpose()], join='outer',
-                axis=0, sort=False)
+        # Save costmap_data to file
+        self.costmap_tmp = pd.DataFrame(sampled_instance[0][0:self.costmap_size]).transpose()
+        for j in range(1, self.costmap_size):
+            self.costmap_tmp = pd.concat([self.costmap_tmp, pd.DataFrame(sampled_instance[0][self.costmap_size * j: self.costmap_size * (j + 1)]).transpose()], join='outer', axis=0, sort=False)
         for i in range(1, self.num_samples):
             if i % 100 == 0:
                 print('Current sample: ', i)
             img = pd.DataFrame(sampled_instance[i][0:160]).transpose()
             for j in range(1, 160):
-                img = pd.concat([img, pd.DataFrame(sampled_instance[i][160 * j: 160 * (j + 1)]).transpose()],
-                                join='outer', axis=0, sort=False)
-            costmap_tmp = pd.concat([costmap_tmp, img], join='outer', axis=0, sort=False)
-        print(costmap_tmp.shape)
-        costmap_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', index=False, header=False)
+                img = pd.concat([img, pd.DataFrame(sampled_instance[i][self.costmap_size * j: self.costmap_size * (j + 1)]).transpose()], join='outer', axis=0, sort=False)
+            self.costmap_tmp = pd.concat([self.costmap_tmp, img], join='outer', axis=0, sort=False)
+        print('self.costmap_tmp.shape: ', self.costmap_tmp.shape)
+        self.costmap_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', index=False, header=False)
 
-        # start ROS node
-        node_process = Popen(shlex.split('rosrun teb_local_planner perturb_node_tabular_costmap'))
+        print('\nstarting C++ node')
 
-        rospy.sleep(20)
+        # start perturbed_node_image ROS C++ node
+        Popen(shlex.split('rosrun teb_local_planner perturb_node_tabular_costmap'))
 
-        # stop ROS node
-        node_process.terminate()
+        # Wait until perturb_node_image is finished
+        rospy.wait_for_service("/perturb_node_tabular_costmap/finished")
+        #print('perturb_node_image finishedn from python')
+
+        # kill ROS node
+        Popen(shlex.split('rosnode kill /perturb_node_tabular_costmap'))
+
+        #rospy.sleep(1)
+
+        print('\nC++ node ended')
 
         cmd_vel = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
-        print(cmd_vel)
+        print('cmd_vel: ', cmd_vel)
 
         '''
         # classification with one-hot encoding

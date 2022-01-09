@@ -5,7 +5,7 @@
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = ''
 
-# possible explanation modes: 'tabular', 'image', 'tabular_costmap'
+# possible explanation modes: 'tabular', 'image', 'costmap'
 explanation_mode = ''
 
 # tabular explanation modes: 'regression', 'classification'
@@ -168,14 +168,14 @@ def LimeSingle():
     # preprocess data
     num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
         
-    if explanation_mode == 'tabular':
+    if explanation_mode == 'tabular' or explanation_mode == 'tabular_costmap':
         from lime_explainer import DatasetCreator
     
         # Select input for explanation algorithm
         X = odom.iloc[:, 6:8]  # input for explanation are odometry velocities
         # print(X)
 
-        one_hot_encoding = False
+        one_hot_encoding = True
 
         if tabular_mode == 'regression':
             import numpy as np
@@ -213,8 +213,8 @@ def LimeSingle():
             # random forest classification - one-hot encoding        
             # left-right-straight logic
             conditions = [
-                (cmd_vel[' cmd_vel_ang_z'] >= 0),
-                (cmd_vel[' cmd_vel_ang_z'] < 0)
+                (cmd_vel['cmd_vel_ang_z'] >= 0),
+                (cmd_vel['cmd_vel_ang_z'] < 0)
                 ]
 
             # one-hot left-right coding
