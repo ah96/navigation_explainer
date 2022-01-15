@@ -193,7 +193,7 @@ class ExplainRobotNavigation:
             elif self.semantic_seg == False:
                 segm_fn = 'custom_segmentation'
 
-            devDistance, sum = self.findDevDistance()
+            devDistance_x, sum_x, devDistance_y, sum_y = self.findDevDistance()
             #print('self.findDevDistance(): ', devDistance)
             #print('sum: ', sum)
 
@@ -202,7 +202,8 @@ class ExplainRobotNavigation:
                 self.costmap2Map()
             else:
                 self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                                                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance, sum,
+                                                                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y,
+                                                                            self.plan_x_list, self.plan_y_list,
                                                                             hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
                 
                 self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
@@ -297,11 +298,15 @@ class ExplainRobotNavigation:
                 self.plan_x_list.append(x_temp)
                 self.plan_y_list.append(y_temp)
 
-        devs = []
-        signs = []
+        devs_x = []
+        signs_x = []
+        devs_y = []
+        signs_y = []
         for j in range( 0, len(self.local_plan_x_list)):
-            diffs = []
-            sums = []
+            diffs_x = []
+            sums_x = []
+            diffs_y = []
+            sums_y = []
             for k in range(0, len(self.plan_x_list)):
                 '''
                 diff_x = (self.local_plan_x_list[j] - self.plan_x_list[k]) ** 2
@@ -310,13 +315,20 @@ class ExplainRobotNavigation:
                 diffs.append(diff)
                 '''
 
-                diff = self.local_plan_x_list[j] - self.plan_x_list[k]
-                sums.append(diff)
-                diffs.append(abs(diff))
-            devs.append(min(diffs))
-            signs.append(sums[diffs.index(devs[-1])])
+                diff_x = self.local_plan_x_list[j] - self.plan_x_list[k]
+                sums_x.append(diff_x)
+                diffs_x.append(abs(diff_x))
 
-        return max(devs), np.sign(signs[devs.index(max(devs))])    
+                diff_y = self.local_plan_y_list[j] - self.plan_y_list[k]
+                sums_y.append(diff_y)
+                diffs_y.append(abs(diff_y))
+            devs_x.append(min(diffs_x))
+            signs_x.append(sums_x[diffs_x.index(devs_x[-1])])
+
+            devs_y.append(min(diffs_y))
+            signs_y.append(sums_y[diffs_y.index(devs_y[-1])])
+
+        return max(devs_x), np.sign(signs_x[devs_x.index(max(devs_x))]), max(devs_y), np.sign(signs_y[devs_y.index(max(devs_y))])    
 
     # helper function for creating manual semantic maps
     def costmap2Map(self):
@@ -443,9 +455,9 @@ class ExplainRobotNavigation:
         self.sampled_instance = sampled_instance
 
         # plot perturbation of local costmap
-        #self.classifier_fn_image_plot()
+        self.classifier_fn_image_plot()
 
-        print_iterations = False
+        print_iterations = True
   
         import math
 
@@ -490,7 +502,7 @@ class ExplainRobotNavigation:
         # DETERMINE THE DEVIATION TYPE
         # a new way of deviation logic
         local_plan_gap_threshold = 48 #60 #48 #32
-        small_deviation_threshold = 5 #7
+        small_deviation_threshold = 6.5 #5 #7
         big_deviation_threshold = 14
 
         local_plan_original_gap = False
@@ -1342,7 +1354,7 @@ class ExplainRobotNavigation:
             ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
             fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
             fig.clf()
-            #fig.close()
+            
 
 
     # flip matrix horizontally or vertically
@@ -1525,10 +1537,8 @@ class ExplainRobotNavigation:
         self.footprint_x_list = []
         self.footprint_y_list = []
         for j in range(0, self.footprint_tmp.shape[0]):
-            self.footprint_x_list.append(
-                int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.footprint_y_list.append(
-                int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+            self.footprint_x_list.append(int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+            self.footprint_y_list.append(int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
 
         # map info
         self.mapOriginX = self.map_info.iloc[0, 4]
@@ -1554,18 +1564,15 @@ class ExplainRobotNavigation:
         # calculate Euler angles based on orientation quaternion
         [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
 
-        #save indices of robot's odometry location in local costmap to class variables
-        self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
-        self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
-
         # indices of local plan's poses in local costmap
         self.local_plan_x_list = []
         self.local_plan_y_list = []
         for i in range(1, self.local_plan_tmp.shape[0]):
-            self.local_plan_x_list.append(int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.local_plan_y_list.append(int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+            x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                self.local_plan_x_list.append(x_temp)
+                self.local_plan_y_list.append(y_temp)
 
         # transform global plan from /map to /odom frame
         # rotation matrix
@@ -1604,17 +1611,9 @@ class ExplainRobotNavigation:
                 self.plan_y_list.append(
                     int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
                     
-                
-        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-        self.x_odom_index = [self.localCostmapIndex_x_odom]
-        # print('self.x_odom_index: ', self.x_odom_index)
-        self.y_odom_index = [self.localCostmapIndex_y_odom]
-        # print('self.y_odom_index: ', self.y_odom_index)
-
 
     # turn inflated costmap to static costmap
     def inflatedToFree(self):
-        #'''
         # Turn inflated area to free space and 100s to 99s
         for i in range(0, self.image.shape[0]):
             for j in range(0, self.image.shape[1]):
@@ -1622,8 +1621,7 @@ class ExplainRobotNavigation:
                     self.image[i, j] = 0
                 elif self.image[i, j] == 100:
                     self.image[i, j] = 99
-        #'''
-
+        
 
 
     def explain_instance_dataset(self, expID, iteration_ID):
@@ -3111,7 +3109,98 @@ class ExplainRobotNavigation:
 
         return np.array(cmd_vel.iloc[:, 2])
 
-        
+    def testSegmentation(self, expID):
+
+        print('Test segmentation function beginning')
+
+        # Get local costmap
+        index = expID
+        # Original costmap will be saved to self.local_costmap_original
+        local_costmap_original = self.costmap_data.iloc[(index) * self.costmap_size:(index + 1) * self.costmap_size, :]
+
+        # Make image a np.array deepcopy of local_costmap_original
+        image = np.array(copy.deepcopy(local_costmap_original))
+
+        # Turn inflated area to free space and 100s to 99s
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if 99 > image[i, j] > 0:
+                    image[i, j] = 0
+                elif image[i, j] == 100:
+                    image[i, j] = 99
+
+        # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+        image = image * 1.0
+
+        # Make image a np.array deepcopy of local_costmap_original
+        img_ = copy.deepcopy(image)
+
+        #'''
+        # Save local costmap as gray image
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(img_, aspect='auto')
+        fig.savefig('costmap.png')
+        fig.clf()
+        #'''
+
+        # Turn gray image to rgb image
+        rgb = gray2rgb(img_)
+
+        '''
+        # Save local costmap as rgb image
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(rgb, aspect='auto')
+        fig.savefig('local_costmap_rgb_test_segmentation.png')
+        fig.clf()
+        '''
+
+        # Superpixel segmentation with skimage functions
+
+        # felzenszwalb
+        #segments = felzenszwalb(rgb, scale=100, sigma=5, min_size=1500, multichannel=True)
+        #segments = felzenszwalb(rgb, scale=1, sigma=0.8, min_size=20, multichannel=True)  # default
+
+        # quickshift
+        #segments = quickshift(rgb, ratio=1.0, kernel_size=8, max_dist=800, return_tree=False, sigma=0.0, convert2lab=True, random_seed=42)
+        #segments = quickshift(rgb, ratio=1.0, kernel_size=5, max_dist=10, return_tree=False, sigma=0, convert2lab=True, random_seed=42) # default
+
+        # slic
+        segments = slic(rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=5, slic_zero=False, start_label=None, mask=None)
+        #segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
+
+        # Turn segments gray image to rgb image
+        #segments_rgb = gray2rgb(segments)
+
+        # Save segments to .csv file
+        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
+
+        #'''
+        # Save local costmap as rgb image
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments, aspect='auto')
+        fig.savefig('segments.png')
+        fig.clf()
+        #'''
+
+        print('Test segmentation function ending')    
         
 
 

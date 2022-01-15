@@ -276,10 +276,11 @@ def LimeSingle():
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 78 #DS1: #78 #84 #144
+        expID = 510 #DS1: #51 #78 #84 #144, #DS2: #260
         print('\nexpID: ', expID)
 
     exp_nav.explain_instance(expID)
+    #exp_nav.testSegmentation(expID)
 
     
 def CreateDataset():

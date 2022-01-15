@@ -712,6 +712,193 @@ class LimeImageExplainer(object):
 
         return segments
 
+    def sm6(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, plan_x_list, plan_y_list):
+        # import needed libraries
+        from skimage.segmentation import slic
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        start = time.time()
+
+        # Find segments_2
+        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_2.astype('float64'), aspect='auto')
+        fig.savefig('segments2.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        devDistance_x = int(devDistance_x)
+        devDistance_y = int(devDistance_y)
+
+        footprint_radius = 13
+        add = 15
+
+        k = (-plan_y_list[-1] + y_odom) / (plan_x_list[-1] - x_odom)
+        print('k = ', k)
+        print('plan_x_list: ', plan_x_list)
+        print('plan_y_list: ', plan_y_list)
+
+        delta_y = plan_y_list[-1] - y_odom
+        delta_x = plan_x_list[-1] - x_odom  
+
+        #'''
+        if abs(k) >= 1:
+            print('VODORAVNO!')
+            if delta_y <= 0:
+                print('GORE!')
+                if sign_x <= 0:
+                    ctr = 0
+                    segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance_x - add)] = ctr
+                    ctr = ctr + 1
+                    segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance_x - add):(x_odom + footprint_radius + add)] = ctr
+                    ctr = ctr + 1
+                    segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom + 25):160, :] = ctr
+                    ctr = ctr + 1
+                elif sign_x > 0:
+                    ctr = 0
+                    segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
+                    ctr = ctr + 1
+                    segments[0:(y_odom + 25), (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance_x + add)] = ctr
+                    ctr = ctr + 1
+                    segments[0:(y_odom + 25), (x_odom + footprint_radius + devDistance_x + add):160] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom + 25):160, :] = ctr
+                    ctr = ctr + 1
+            else:
+                print('DOLJE!')
+                if sign_x <= 0:
+                    ctr = 0
+                    segments[(y_odom - 25):160, 0:(x_odom - footprint_radius - devDistance_x - add)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - 25):160, (x_odom - footprint_radius - devDistance_x - add):(x_odom + footprint_radius + add)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - 25):160, (x_odom + footprint_radius + add):160] = ctr
+                    ctr = ctr + 1
+                    segments[0:(y_odom - 25), :] = ctr
+                    ctr = ctr + 1
+                elif sign_x > 0:
+                    ctr = 0
+                    segments[(y_odom - 25):160, 0:(x_odom - footprint_radius - add)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - 25):160, (x_odom - footprint_radius - add):(x_odom + footprint_radius + devDistance_x + add)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - 25):160, (x_odom + footprint_radius + devDistance_x + add):160] = ctr
+                    ctr = ctr + 1
+                    segments[0:(y_odom - 25), :] = ctr
+                    ctr = ctr + 1    
+        else:    
+            print('HORIZONTALNO!')
+            if delta_x <= 0:
+                print('LIJEVO!')
+                if sign_y <= 0:
+                    ctr = 0
+                    segments[0:(y_odom - footprint_radius - devDistance_y - add), 0:(x_odom + 25)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - footprint_radius - devDistance_y - add):(y_odom + footprint_radius + add), 0:(x_odom + 25)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom + footprint_radius + add):160, 0:(x_odom + 25)] = ctr
+                    ctr = ctr + 1
+                    segments[:, (x_odom + 25):160] = ctr
+                    ctr = ctr + 1
+                elif sign_y > 0:
+                    ctr = 0
+                    segments[0:(y_odom - footprint_radius - add), 0:(x_odom + 25)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - footprint_radius - add):(y_odom + footprint_radius + devDistance_y + add), 0:(x_odom + 25)] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom + footprint_radius + devDistance_y + add):160, 0:(x_odom + 25)] = ctr
+                    ctr = ctr + 1
+                    segments[:, (x_odom + 25):160] = ctr
+                    ctr = ctr + 1
+            else:
+                print('DESNO!')
+                if sign_y <= 0:
+                    ctr = 0
+                    segments[0:(y_odom - footprint_radius - devDistance_y - add), (x_odom - 25):160] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - footprint_radius - devDistance_y - add):(y_odom + footprint_radius + add), (x_odom - 25):160] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom + footprint_radius + add):160, (x_odom - 25):160] = ctr
+                    ctr = ctr + 1
+                    segments[:, 0:(x_odom - 25)] = ctr
+                    ctr = ctr + 1
+                elif sign_y > 0:
+                    ctr = 0
+                    segments[0:(y_odom - footprint_radius - add), (x_odom - 25):160] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom - footprint_radius - add):(y_odom + footprint_radius + devDistance_y + add), (x_odom - 25):160] = ctr
+                    ctr = ctr + 1
+                    segments[(y_odom + footprint_radius + devDistance_y + add):160, (x_odom - 25):160] = ctr
+                    ctr = ctr + 1
+                    segments[:, 0:(x_odom - 25)] = ctr
+                    ctr = ctr + 1    
+        #'''
+
+
+        '''
+        fig = plt.figure(frameon=False)
+        w = 1.6 #* 3
+        h = 1.6 #* 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.scatter(x_, y_, c='r')
+        fig.savefig('HELP.png', transparent=False)
+        fig.clf()
+        '''
+                
+        #print('np.unique(segments_2): ', np.unique(segments_2))
+        for i in np.unique(segments_2):
+            if np.all(img[segments_2 == i] == 99):
+                #print('obstacle')
+                segments[segments_2 == i] = ctr
+                ctr = ctr + 1
+
+        end = time.time()
+
+        print("\sm3 runtime: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        #w = 1.6 #* 3
+        #h = 1.6 #* 3
+        #fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments12.png', transparent=False)
+        fig.clf()
+        segments_unique = np.unique(segments)
+        '''
+
+        return segments
+
     def semantic(self, image, img_rgb, x_odom, y_odom, devDistance, sign, costmap_info, map_info, tf_odom_map):
         print('\nsemantic starts')
 
@@ -868,7 +1055,7 @@ class LimeImageExplainer(object):
 
         return np.array(semantic_segments)        
 
-    def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance, sum, labels=(1,),
+    def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_samples=1000,
                          batch_size=10,
@@ -932,11 +1119,12 @@ class LimeImageExplainer(object):
         elif segmentation_fn == 'custom_segmentation':
             #segments = self.sm1(image)
             #segments = self.sm2(image_orig, image, x_odom, y_odom)
-            segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
+            #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm4(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
+            segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, plan_x_list, plan_y_list)
         elif segmentation_fn == 'semantic_segmentation':
-            segments = self.semantic(image_orig, image, x_odom, y_odom, devDistance, sum, costmap_info, map_info, tf_odom_map)
+            segments = self.semantic(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, costmap_info, map_info, tf_odom_map)
             #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
             segments = segmentation_fn(image)
