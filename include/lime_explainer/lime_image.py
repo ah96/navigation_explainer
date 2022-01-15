@@ -755,7 +755,15 @@ class LimeImageExplainer(object):
         footprint_radius = 13
         add = 15
 
-        k = (-plan_y_list[-1] + y_odom) / (plan_x_list[-1] - x_odom)
+        print('plan_x_list[-1]: ', plan_x_list[-1])
+        print('plan_y_list[-1]: ', plan_y_list[-1])
+        print('x_odom: ', x_odom)
+        print('y_odom: ', y_odom)
+
+        d_x = plan_x_list[-1] - x_odom
+        if d_x == 0:
+            d_x = 1
+        k = (-plan_y_list[-1] + y_odom) / (d_x)
         print('k = ', k)
         print('plan_x_list: ', plan_x_list)
         print('plan_y_list: ', plan_y_list)

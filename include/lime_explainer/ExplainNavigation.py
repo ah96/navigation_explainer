@@ -99,7 +99,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = False
+            self.manual_instance_loading = True
             self.manually_make_semantic_map = False
 
             if self.manual_instance_loading == False:
@@ -375,7 +375,7 @@ class ExplainRobotNavigation:
                     #indices_x[i, j] = j_map
                     #indices_y[i, j] = i_map
 
-        pd.DataFrame(map_sem).to_csv('semantic_map.csv', index=False, header=False)
+        pd.DataFrame(map_sem).to_csv('semantic_map_temporary.csv', index=False, header=False)
         #pd.DataFrame(indices_x).to_csv('INDICES_X.csv', index=False, header=False)
         #pd.DataFrame(indices_y).to_csv('INDICES_Y.csv', index=False, header=False)
 
@@ -455,9 +455,9 @@ class ExplainRobotNavigation:
         self.sampled_instance = sampled_instance
 
         # plot perturbation of local costmap
-        self.classifier_fn_image_plot()
+        #self.classifier_fn_image_plot()
 
-        print_iterations = True
+        print_iterations = False
   
         import math
 
@@ -1010,14 +1010,14 @@ class ExplainRobotNavigation:
             plt.imshow(self.sampled_instance[i][:, :, 0])
 
             # indices of local plan's poses in local costmap
-            self.local_plan_x_list = []
-            self.local_plan_y_list = []
+            local_plan_x_list = []
+            local_plan_y_list = []
             for j in range(0, self.local_plans.shape[0]):
                 if self.local_plans.iloc[j, -1] == i:
                     index_x = int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
                     index_y = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-                    self.local_plan_x_list.append(index_x)
-                    self.local_plan_y_list.append(index_y)
+                    local_plan_x_list.append(index_x)
+                    local_plan_y_list.append(index_y)
                     '''
                     [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans.iloc[j, 2], self.local_plans.iloc[j, 3])
                     yaw_x = math.cos(yaw)
@@ -1025,8 +1025,8 @@ class ExplainRobotNavigation:
                     plt.quiver(index_x, index_y, yaw_x, yaw_y, color='white')
                     '''
             # print('i: ', i)
-            # print('self.local_plan_x_list.size(): ', len(self.local_plan_x_list))
-            # print('self.local_plan_y_list.size(): ', len(self.local_plan_y_list))
+            # print('local_plan_x_list.size(): ', len(local_plan_x_list))
+            # print('local_plan_y_list.size(): ', len(local_plan_y_list))
 
             # plot transformed plan
             plt.scatter(self.transformed_plan_x_list, self.transformed_plan_y_list, c='blue', marker='x')
@@ -1075,11 +1075,11 @@ class ExplainRobotNavigation:
             '''
 
             # plot local plan
-            plt.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='x')
+            plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
 
             # plot local plan last point
-            #if len(self.local_plan_x_list) != 0:
-            #    plt.scatter([self.local_plan_x_list[-1]], [self.local_plan_y_list[-1]], c='black', marker='x')
+            #if len(local_plan_x_list) != 0:
+            #    plt.scatter([local_plan_x_list[-1]], [local_plan_y_list[-1]], c='black', marker='x')
 
             # plot robot's location and orientation
             plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
@@ -1125,7 +1125,9 @@ class ExplainRobotNavigation:
         ax.set_axis_off()
         fig.add_axes(ax)
         
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        print('self.local_plan_x_list: ', self.local_plan_x_list)
+        print('self.local_plan_y_list: ', self.local_plan_y_list)        
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
@@ -1400,6 +1402,11 @@ class ExplainRobotNavigation:
     # save data for local planner in lime image
     def limeImageSaveDataForLocalPlanner(self):
         if self.manual_instance_loading == False:
+            # Take original command speed
+            self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
+            self.cmd_vel_original_tmp = pd.DataFrame(self.cmd_vel_original_tmp).transpose()
+            self.cmd_vel_original_tmp = self.cmd_vel_original_tmp.iloc[:, 2:]
+
             # Saving data to .csv files for C++ node - local navigation planner
             # Save footprint instance to a file
             self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
@@ -1488,11 +1495,6 @@ class ExplainRobotNavigation:
 
     # Saving important data to class variables
     def saveImportantData2ClassVars(self):
-        # Take original command speed
-        self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
-        self.cmd_vel_original_tmp = pd.DataFrame(self.cmd_vel_original_tmp).transpose()
-        self.cmd_vel_original_tmp = self.cmd_vel_original_tmp.iloc[:, 2:]
-
         # save costmap info to class variables
         self.localCostmapOriginX = self.costmap_info_tmp.iloc[0, 3]
         #print('self.localCostmapOriginX: ', self.localCostmapOriginX)
