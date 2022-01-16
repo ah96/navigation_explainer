@@ -187,13 +187,13 @@ class ExplainRobotNavigation:
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            self.semantic_seg = False
+            self.semantic_seg = True
             if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
             elif self.semantic_seg == False:
                 segm_fn = 'custom_segmentation'
 
-            devDistance_x, sum_x, devDistance_y, sum_y = self.findDevDistance()
+            devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
             #print('self.findDevDistance(): ', devDistance)
             #print('sum: ', sum)
 
@@ -202,7 +202,7 @@ class ExplainRobotNavigation:
                 self.costmap2Map()
             else:
                 self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                                                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y,
+                                                                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
                                                                             self.plan_x_list, self.plan_y_list,
                                                                             hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
                 
@@ -302,19 +302,14 @@ class ExplainRobotNavigation:
         signs_x = []
         devs_y = []
         signs_y = []
+        devs = []
         for j in range( 0, len(self.local_plan_x_list)):
             diffs_x = []
             sums_x = []
             diffs_y = []
             sums_y = []
+            diffs = []
             for k in range(0, len(self.plan_x_list)):
-                '''
-                diff_x = (self.local_plan_x_list[j] - self.plan_x_list[k]) ** 2
-                diff_y = (self.local_plan_y_list[j] - self.plan_y_list[k]) ** 2
-                diff = math.sqrt(diff_x + diff_y)
-                diffs.append(diff)
-                '''
-
                 diff_x = self.local_plan_x_list[j] - self.plan_x_list[k]
                 sums_x.append(diff_x)
                 diffs_x.append(abs(diff_x))
@@ -322,13 +317,18 @@ class ExplainRobotNavigation:
                 diff_y = self.local_plan_y_list[j] - self.plan_y_list[k]
                 sums_y.append(diff_y)
                 diffs_y.append(abs(diff_y))
+
+                diff = math.sqrt(diff_x**2 + diff_y**2)
+                diffs.append(diff)                
             devs_x.append(min(diffs_x))
             signs_x.append(sums_x[diffs_x.index(devs_x[-1])])
 
             devs_y.append(min(diffs_y))
             signs_y.append(sums_y[diffs_y.index(devs_y[-1])])
 
-        return max(devs_x), np.sign(signs_x[devs_x.index(max(devs_x))]), max(devs_y), np.sign(signs_y[devs_y.index(max(devs_y))])    
+            devs.append(min(diffs))
+
+        return max(devs_x), np.sign(signs_x[devs_x.index(max(devs_x))]), max(devs_y), np.sign(signs_y[devs_y.index(max(devs_y))]), max(devs)    
 
     # helper function for creating manual semantic maps
     def costmap2Map(self):
@@ -1120,14 +1120,11 @@ class ExplainRobotNavigation:
         w = 1.6*3
         h = 1.6*3
         fig.set_size_inches(w, h)
-        #ax = plt.Axes(fig, [0., 0., 1., 0.95])
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
         
         ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        print('self.local_plan_x_list: ', self.local_plan_x_list)
-        print('self.local_plan_y_list: ', self.local_plan_y_list)        
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
@@ -1136,7 +1133,6 @@ class ExplainRobotNavigation:
         ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
         fig.savefig(path_core + '/explanation.png', transparent=False)
         fig.clf()
-        #fig.close()
 
         # plot costmap with plans
         fig = plt.figure(frameon=False)
@@ -1195,31 +1191,37 @@ class ExplainRobotNavigation:
         elif self.semantic_seg == True:
             semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
             semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
-            #costmap_segmented = pd.read_csv('~/amar_ws/costmap_segmented.csv')
+            costmap_segmented = np.array(pd.read_csv('~/amar_ws/costmap_segmented.csv'))
 
-            #'''
+            # plot segments with weights
             self.segments += 1
-            #print('self.exp: ', self.exp)
-            #print('np.unique(self.segments): ', np.unique(self.segments))
-            #'''
             regions = regionprops(self.segments.astype(int))
-            #'''
             labels = []
             for props in regions:
                 labels.append(props.label)
-            #print('labels: ', labels)
-            #'''    
+            fig = plt.figure(frameon=False)
+            w = 1.6*3
+            h = 1.6*3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)    
             i = 0
             for props in regions:
                 v = props.label  # value of label
                 cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')   
+                ax.scatter(cy, cx, c='black', marker='o')   
                 # printing/plotting explanation weights
                 for j in range(0, len(self.exp)):
                     if self.exp[j][0] == v - 1:
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)))  # str(round(self.exp[j][1],4)) #str(v))
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='white')  # str(round(self.exp[j][1],4)) #str(v))
                         break
-                i = i + 1  
+                i = i + 1
+            # Save segments with nice numbering as a picture
+            ax.imshow(self.segments, aspect='auto')
+            fig.savefig(path_core + '/weighted_segments.png')
+            fig.clf()
+
 
             from scipy.spatial.transform import Rotation as R
             r = R.from_quat([self.tf_odom_map.iloc[0, 3], self.tf_odom_map.iloc[0, 4], self.tf_odom_map.iloc[0, 5], self.tf_odom_map.iloc[0, 6]])
@@ -1254,7 +1256,7 @@ class ExplainRobotNavigation:
                         elif i != 0:
                             semantic_local_costmap[i, j] = semantic_local_costmap[i-1, j]
                            
-            pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap.csv')               
+            #pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap.csv')               
 
         
             unknown_obstacles_vals = []
@@ -1262,52 +1264,31 @@ class ExplainRobotNavigation:
             for val in np.unique(self.segments):
                 # static known obstacle
                 if np.all(self.image[self.segments == val] == 99) == True:
-                    semantic_num = np.bincount(semantic_local_costmap[self.segments == val]).argmax()
+                    #semantic_num = np.bincount(semantic_local_costmap[self.segments == val]).argmax()
+                    semantic_num = np.bincount(costmap_segmented[self.segments == val]).argmax()
                     if semantic_num >= 90:
-                        print('\nSTATIC KNOWN OBSTACLE!')
+                        pass
+                        #print('\nSTATIC KNOWN OBSTACLE!')
                         #print('val: ', val)
                         #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
                         #print('semantic_num: ', semantic_num)
                     
                     else:
-                        print('\nSTATIC UNKNOWN OBSTACLE!')
                         unknown_obstacles_vals.append(val)
+                        #print('\nSTATIC UNKNOWN OBSTACLE!')
                         #print('val: ', val)
                         #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
                         #print('semantic_num: ', semantic_num)
 
                 # free space    
                 else:
-                    print('\nFREE SPACE')
+                    pass
+                    #print('\nFREE SPACE')
                     #print('val: ', val)
                     #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
                     #print('semantic_num: ', np.bincount(semantic_local_costmap[self.segments == val]).argmax())
 
-            regions = regionprops(semantic_local_costmap.astype(int))
-            #'''
-            labels = []
-            for props in regions:
-                labels.append(props.label)
-            #print('labels: ', labels)
-            #'''    
-            i = 0
-            for props in regions:
-                v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(semantic_tags)):
-                    if semantic_tags.iloc[j, 0] == v:
-                        #ax.text(cy, cx, semantic_tags.iloc[j, 1])  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-
-            # Save segments with nice numbering as a picture
-            fig.savefig(path_core + '/weighted_segments.png')
-            fig.clf()
-
-            
-
+            # plot semantic map
             fig = plt.figure(frameon=False)
             w = 1.6*3
             h = 1.6*3
@@ -1319,20 +1300,50 @@ class ExplainRobotNavigation:
             for i in range(0, len(unknown_obstacles_vals)):
                 x_s = []
                 y_s = []
-                ctr = 0
+                color = []
                 for j in range(0, self.segments.shape[0]):
                     for k in range(0, self.segments.shape[1]):
                         if self.segments[j, k] == unknown_obstacles_vals[i]:
                             x_s.append(k)
                             y_s.append(j)
-                ax.scatter(x_s, y_s, c='white', marker='x', alpha = 0.15)
+                            R = self.temp_img[x_s[0], y_s[0]][0] / 255
+                            G = self.temp_img[x_s[0], y_s[0]][1] / 255
+                            B = self.temp_img[x_s[0], y_s[0]][2] / 255
+                            color.append(np.array([R, G, B]))
+
+                x_center = sum(x_s) / len(x_s)
+                y_center = sum(y_s) / len(y_s)
+                deltas = []
+
+                for j in range(0, len(x_s)):
+                    delta = (x_s[j] - x_center)**2 + (y_s[j] - y_center)**2
+                    delta = math.sqrt(delta)
+                    deltas.append(delta)
+
+                max_delta = max(deltas)
+
+                points_to_plot_x = []
+                points_to_plot_y = []    
+
+                for j in range(0, len(x_s)):
+                    if deltas[j] >= 0.8 * max_delta:
+                        points_to_plot_x.append(x_s[j])
+                        points_to_plot_y.append(y_s[j])
+
+                ax.scatter(points_to_plot_x, points_to_plot_y, c='yellow', marker='.')
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == unknown_obstacles_vals[i]:
+                        print('\nUnknown obstacle ' + str(i+1) + ' has a weight ' + str(self.exp[j][1]))
+                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+                        break
+                
 
             ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
             ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
             ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
-            #regions = regionprops(np.array(costmap_segmented).astype(int))
-            regions = regionprops(np.array(semantic_local_costmap).astype(int))
+            regions = regionprops(np.array(costmap_segmented).astype(int))
+            #regions = regionprops(np.array(semantic_local_costmap).astype(int))
             #'''
             labels = []
             for props in regions:
@@ -1351,14 +1362,50 @@ class ExplainRobotNavigation:
                         break
                 i = i + 1
 
-            #marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
-            marked_boundaries = mark_boundaries(self.temp_img, np.array(semantic_local_costmap), color=(255, 255, 0))
+            marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
+            #marked_boundaries = mark_boundaries(self.temp_img, np.array(semantic_local_costmap), color=(255, 255, 0))
             ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
             fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
             fig.clf()
+
+            #print('unknown_obstacles_vals: ', unknown_obstacles_vals)
+
+            for i in range(0, semantic_tags.shape[0]):
+                segments_label = np.unique(self.segments[costmap_segmented == semantic_tags.iloc[i, 0]])
+                '''
+                print('\n')
+                print('i = ', i)
+                print('segments_label: ', segments_label)
+                print('semantic_tags.iloc[i, 1]: ', semantic_tags.iloc[i, 1])
+                print('semantic_tags.iloc[i, 0]: ', semantic_tags.iloc[i, 0])
+                '''
+                weights_unique = []
+                for label in segments_label:
+                    if label in unknown_obstacles_vals:
+                        #print('label pass: ', label)
+                        continue
+                    for j in range(0, len(self.exp)):
+                        if self.exp[j][0] == label:
+                            rounded = str(round(self.exp[j][1], 4))
+                            if rounded not in weights_unique:
+                                '''
+                                print('label:', label)
+                                print('rounded: ', rounded)
+                                print('weights_unique: ', weights_unique)
+                                '''
+                                weights_unique.append(rounded)        
+                            break
+                #print('weights_unique: ', weights_unique)        
+                if len(weights_unique) == 1:        
+                    print(semantic_tags.iloc[i, 1] + " has a weight " + weights_unique[0])
+                else:
+                    weights_string = ""
+                    for j in range(0, len(weights_unique) - 1):
+                        weights_string += weights_unique[j] + ", "
+                    weights_string += weights_unique[-1] + " "    
+                    print(semantic_tags.iloc[i, 1] + " has weights " + weights_string)
+
             
-
-
     # flip matrix horizontally or vertically
     def matrixFlip(self, m, d):
         myl = np.array(m)

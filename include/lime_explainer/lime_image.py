@@ -712,7 +712,7 @@ class LimeImageExplainer(object):
 
         return segments
 
-    def sm6(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, plan_x_list, plan_y_list):
+    def sm6(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
         # import needed libraries
         from skimage.segmentation import slic
         from skimage.measure import regionprops
@@ -750,7 +750,10 @@ class LimeImageExplainer(object):
         segments = np.zeros(img.shape, np.uint8)
 
         devDistance_x = int(devDistance_x)
+        devDistance_x = abs(devDistance_x)
         devDistance_y = int(devDistance_y)
+        devDistance_y = abs(devDistance_y)
+        devDistance = int(devDistance)
 
         footprint_radius = 13
         add = 15
@@ -771,7 +774,6 @@ class LimeImageExplainer(object):
         delta_y = plan_y_list[-1] - y_odom
         delta_x = plan_x_list[-1] - x_odom  
 
-        #'''
         if abs(k) >= 1:
             print('VODORAVNO!')
             if delta_y <= 0:
@@ -864,8 +866,6 @@ class LimeImageExplainer(object):
                     ctr = ctr + 1
                     segments[:, 0:(x_odom - 25)] = ctr
                     ctr = ctr + 1    
-        #'''
-
 
         '''
         fig = plt.figure(frameon=False)
@@ -924,9 +924,10 @@ class LimeImageExplainer(object):
         # Find segments
         #segments = self.sm1(img_rgb)
         #segments = self.sm2(image, img_rgb, x_odom, y_odom)
-        segments = self.sm3(image, img_rgb, x_odom, y_odom, devDistance, sign)
+        #segments = self.sm3(image, img_rgb, x_odom, y_odom, devDistance, sign)
         #segments = self.sm4(image, img_rgb, x_odom, y_odom, devDistance, sign)
         #segments = self.sm5(image, img_rgb, x_odom, y_odom, devDistance, sign)
+        segments = self.sm6(image, img_rgb, x_odom, y_odom, devDistance, sign)
         
         print('\nsemantic ends')
 
@@ -1063,7 +1064,7 @@ class LimeImageExplainer(object):
 
         return np.array(semantic_segments)        
 
-    def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, plan_x_list, plan_y_list, labels=(1,),
+    def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_samples=1000,
                          batch_size=10,
@@ -1130,9 +1131,10 @@ class LimeImageExplainer(object):
             #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm4(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
-            segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, plan_x_list, plan_y_list)
+            segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
         elif segmentation_fn == 'semantic_segmentation':
-            segments = self.semantic(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, costmap_info, map_info, tf_odom_map)
+            segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.semantic(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, costmap_info, map_info, tf_odom_map)
             #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
             segments = segmentation_fn(image)
