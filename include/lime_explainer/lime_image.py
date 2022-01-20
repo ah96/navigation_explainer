@@ -149,14 +149,14 @@ class ImageExplanation(object):
                 if image[segments == f].all() == 0.0:
                     # if positive weight
                     if c == 1:
-                        temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
-                        temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
-                        temp[segments == f, 2] = 0.0
+                        temp[segments == f, 0] = 180.0  # c is channel, RGB - 012
+                        temp[segments == f, 1] = 180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
+                        temp[segments == f, 2] = 180.0
                     # if negative weight
                     else:
-                        temp[segments == f, 0] = val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
-                        temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
-                        temp[segments == f, 2] = 0.0
+                        temp[segments == f, 0] = 128.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
+                        temp[segments == f, 1] = 128.0  # c is channel, RGB - 012
+                        temp[segments == f, 2] = 128.0
                 # if obstacle
                 else:
                     # if positive weight
@@ -257,7 +257,7 @@ class LimeImageExplainer(object):
         # segments_1 - good obstacles
         # Find segments_1
         #'''
-        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+        segments_1 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
@@ -270,11 +270,9 @@ class LimeImageExplainer(object):
                           start_label=1, mask=None)
         '''
 
-        early_return = False
-        if early_return == True:
-            return segments_1                  
+        print('np.unique(segments_1): ', np.unique(segments_1))
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -285,15 +283,31 @@ class LimeImageExplainer(object):
         ax.imshow(segments_1.astype('float64'), aspect='auto')
         fig.savefig('segments1.png', transparent=False)
         fig.clf()
-        '''
+        #'''
+
+        early_return = True
+        if early_return == True:
+            end = time.time()
+            print('\nsm1 runtime: ', end-start)
+            print('\nsm1 ends')
+            return segments_1 - 1                  
 
         # Find segments_2
+        #'''
         segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                           multichannel=True, convert2lab=True,
                           enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
                           start_label=1, mask=None)
+        #'''
 
+        '''                  
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                          multichannel=True, convert2lab=True,
+                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                          start_label=1, mask=None)
         '''
+
+        #'''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -304,7 +318,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_2.astype('float64'), aspect='auto')
         fig.savefig('segments2.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         # find segments_unique_2
         segments_unique_2 = np.unique(segments_2)
@@ -729,12 +743,12 @@ class LimeImageExplainer(object):
         start = time.time()
 
         # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=4, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                             multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -745,7 +759,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_2.astype('float64'), aspect='auto')
         fig.savefig('segments2.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -780,15 +794,20 @@ class LimeImageExplainer(object):
                 print('GORE!')
                 if sign_x <= 0:
                     ctr = 0
-                    segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance_x - add)] = ctr
+                    segments[:, :] = ctr
                     ctr = ctr + 1
-                    segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance_x - add):(x_odom + footprint_radius + add)] = ctr
-                    ctr = ctr + 1
-                    segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
-                    ctr = ctr + 1
-                    segments[(y_odom + 25):160, :] = ctr
-                    ctr = ctr + 1
+                    #segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - devDistance_x - add)] = ctr
+                    #ctr = ctr + 1
+                    #segments[0:(y_odom + 25), (x_odom - footprint_radius - devDistance_x - add):(x_odom + footprint_radius + add)] = ctr
+                    #ctr = ctr + 1
+                    #segments[0:(y_odom + 25), (x_odom + footprint_radius + add):160] = ctr
+                    #ctr = ctr + 1
+                    #segments[(y_odom + 25):160, :] = ctr
+                    #ctr = ctr + 1
                 elif sign_x > 0:
+                    ctr = 0
+                    segments[:, :] = ctr
+                    '''
                     ctr = 0
                     segments[0:(y_odom + 25), 0:(x_odom - footprint_radius - add)] = ctr
                     ctr = ctr + 1
@@ -798,6 +817,7 @@ class LimeImageExplainer(object):
                     ctr = ctr + 1
                     segments[(y_odom + 25):160, :] = ctr
                     ctr = ctr + 1
+                    '''
             else:
                 print('DOLJE!')
                 if sign_x <= 0:
@@ -891,7 +911,7 @@ class LimeImageExplainer(object):
 
         print("\sm3 runtime: ", end - start)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         #w = 1.6 #* 3
         #h = 1.6 #* 3
@@ -900,10 +920,10 @@ class LimeImageExplainer(object):
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segments12.png', transparent=False)
+        fig.savefig('segmentsFINAL.png', transparent=False)
         fig.clf()
         segments_unique = np.unique(segments)
-        '''
+        #'''
 
         return segments
 

@@ -1334,7 +1334,7 @@ class ExplainRobotNavigation:
                 for j in range(0, len(self.exp)):
                     if self.exp[j][0] == unknown_obstacles_vals[i]:
                         print('\nUnknown obstacle ' + str(i+1) + ' has a weight ' + str(self.exp[j][1]))
-                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+                        ax.text(x_center, y_center - 10, 'Unknown obstacle ' + str(i+1), c='white')
                         break
                 
 
