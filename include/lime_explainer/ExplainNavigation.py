@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # import time tabular
+from selectors import EpollSelector
 import lime
 import lime.lime_tabular
 
@@ -101,6 +102,7 @@ class ExplainRobotNavigation:
 
             self.manual_instance_loading = True
             self.manually_make_semantic_map = False
+            self.test_segmentation = False 
 
             if self.manual_instance_loading == False:
                 # Get local costmap
@@ -201,15 +203,18 @@ class ExplainRobotNavigation:
                 # manually make semantic map
                 self.costmap2Map()
             else:
-                self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                                                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
-                                                                            self.plan_x_list, self.plan_y_list,
-                                                                            hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
-                
-                self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
-                                                                            hide_rest=False, min_weight=0.0)            
-                
-                self.plotExplanation()
+                if self.test_segmentation == True:
+                    self.testSegmentation(self.expID)
+                else:    
+                    self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                                                                self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
+                                                                                self.plan_x_list, self.plan_y_list,
+                                                                                hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
+                    
+                    self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
+                                                                                hide_rest=False, min_weight=0.0)            
+                    
+                    self.plotExplanation()
 
         elif self.explanation_mode == 'tabular':
             # search for instance queue index (original instance queue name in almost (haman) input data frames)
@@ -1333,7 +1338,7 @@ class ExplainRobotNavigation:
                 ax.scatter(points_to_plot_x, points_to_plot_y, c='yellow', marker='.')
                 for j in range(0, len(self.exp)):
                     if self.exp[j][0] == unknown_obstacles_vals[i]:
-                        print('\nUnknown obstacle ' + str(i+1) + ' has a weight ' + str(self.exp[j][1]))
+                        print('\nUnknown obstacle ' + str(i+1) + ' has a weight ' + str(round(self.exp[j][1], 4)))
                         ax.text(x_center, y_center - 10, 'Unknown obstacle ' + str(i+1), c='white')
                         break
                 
@@ -1670,7 +1675,105 @@ class ExplainRobotNavigation:
                     self.image[i, j] = 0
                 elif self.image[i, j] == 100:
                     self.image[i, j] = 99
-        
+
+
+    def testSegmentation(self, expID):
+
+        print('Test segmentation function beginning')
+
+        if self.manual_instance_loading == False:
+            # Get local costmap
+            index = expID
+            # Original costmap will be saved to self.local_costmap_original
+            local_costmap_original = self.costmap_data.iloc[(index) * self.costmap_size:(index + 1) * self.costmap_size, :]
+
+            # Make image a np.array deepcopy of local_costmap_original
+            image = np.array(copy.deepcopy(local_costmap_original))
+
+        else:
+            image = self.image    
+
+        # Turn inflated area to free space and 100s to 99s
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if 99 > image[i, j] > 0:
+                    image[i, j] = 0
+                elif image[i, j] == 100:
+                    image[i, j] = 99
+
+        # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+        image = image * 1.0
+
+        # Make image a np.array deepcopy of local_costmap_original
+        img_ = copy.deepcopy(image)
+
+        #'''
+        # Save local costmap as gray image
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(img_, aspect='auto')
+        fig.savefig('costmap.png')
+        fig.clf()
+        #'''
+
+        # Turn gray image to rgb image
+        rgb = gray2rgb(img_)
+
+        '''
+        # Save local costmap as rgb image
+        fig = plt.figure(frameon=False)
+        w = 4.8
+        h = 4.8
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(rgb, aspect='auto')
+        fig.savefig('local_costmap_rgb_test_segmentation.png')
+        fig.clf()
+        '''
+
+        # Superpixel segmentation with skimage functions
+
+        # felzenszwalb
+        #segments = felzenszwalb(rgb, scale=100, sigma=5, min_size=1500, multichannel=True)
+        #segments = felzenszwalb(rgb, scale=1, sigma=0.8, min_size=20, multichannel=True)  # default
+
+        # quickshift
+        #segments = quickshift(rgb, ratio=1.0, kernel_size=8, max_dist=800, return_tree=False, sigma=0.0, convert2lab=True, random_seed=42)
+        #segments = quickshift(rgb, ratio=1.0, kernel_size=5, max_dist=10, return_tree=False, sigma=0, convert2lab=True, random_seed=42) # default
+
+        # slic
+        segments = slic(rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False, start_label=None, mask=None)
+        #segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
+
+        # Turn segments gray image to rgb image
+        #segments_rgb = gray2rgb(segments)
+
+        # Save segments to .csv file
+        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
+
+        #'''
+        # Save local costmap as rgb image
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments, aspect='auto')
+        fig.savefig('segments.png')
+        fig.clf()
+        #'''
+
+        print('Test segmentation function ending')    
+            
 
 
     def explain_instance_dataset(self, expID, iteration_ID):
@@ -3158,99 +3261,6 @@ class ExplainRobotNavigation:
 
         return np.array(cmd_vel.iloc[:, 2])
 
-    def testSegmentation(self, expID):
-
-        print('Test segmentation function beginning')
-
-        # Get local costmap
-        index = expID
-        # Original costmap will be saved to self.local_costmap_original
-        local_costmap_original = self.costmap_data.iloc[(index) * self.costmap_size:(index + 1) * self.costmap_size, :]
-
-        # Make image a np.array deepcopy of local_costmap_original
-        image = np.array(copy.deepcopy(local_costmap_original))
-
-        # Turn inflated area to free space and 100s to 99s
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if 99 > image[i, j] > 0:
-                    image[i, j] = 0
-                elif image[i, j] == 100:
-                    image[i, j] = 99
-
-        # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-        image = image * 1.0
-
-        # Make image a np.array deepcopy of local_costmap_original
-        img_ = copy.deepcopy(image)
-
-        #'''
-        # Save local costmap as gray image
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(img_, aspect='auto')
-        fig.savefig('costmap.png')
-        fig.clf()
-        #'''
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
-        '''
-        # Save local costmap as rgb image
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(rgb, aspect='auto')
-        fig.savefig('local_costmap_rgb_test_segmentation.png')
-        fig.clf()
-        '''
-
-        # Superpixel segmentation with skimage functions
-
-        # felzenszwalb
-        #segments = felzenszwalb(rgb, scale=100, sigma=5, min_size=1500, multichannel=True)
-        #segments = felzenszwalb(rgb, scale=1, sigma=0.8, min_size=20, multichannel=True)  # default
-
-        # quickshift
-        #segments = quickshift(rgb, ratio=1.0, kernel_size=8, max_dist=800, return_tree=False, sigma=0.0, convert2lab=True, random_seed=42)
-        #segments = quickshift(rgb, ratio=1.0, kernel_size=5, max_dist=10, return_tree=False, sigma=0, convert2lab=True, random_seed=42) # default
-
-        # slic
-        segments = slic(rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=5, slic_zero=False, start_label=None, mask=None)
-        #segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
-
-        # Turn segments gray image to rgb image
-        #segments_rgb = gray2rgb(segments)
-
-        # Save segments to .csv file
-        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
-
-        #'''
-        # Save local costmap as rgb image
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments, aspect='auto')
-        fig.savefig('segments.png')
-        fig.clf()
-        #'''
-
-        print('Test segmentation function ending')    
-        
 
 
 
