@@ -189,7 +189,7 @@ class ExplainRobotNavigation:
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            self.semantic_seg = True
+            self.semantic_seg = False
             if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
             elif self.semantic_seg == False:
@@ -352,12 +352,15 @@ class ExplainRobotNavigation:
 
         costmap_segmented = pd.read_csv('costmap_segmented.csv')
 
-        map_sem = np.zeros((304, 201), np.uint8)
+        map_sem_1 = np.zeros((304, 201), np.uint8)
+        map_sem_2 = np.zeros((304, 201), np.uint8)
 
         #indices_x = np.zeros((160, 160), np.uint8)
         #indices_y = np.zeros((160, 160), np.uint8)
 
         map_pairs = []
+
+        br_duplikata = 0
         
         for i in range(0, 160):
             for j in range(0, 160):
@@ -367,22 +370,34 @@ class ExplainRobotNavigation:
                 p = np.array([x, y, 0])
                 # print('p: ', p)
                 pnew = p.dot(r_array) + t
-                # print('pnew: ', pnew)
+                #print('\n(i, j) = ', (i, j))
+                #print('pnew: ', pnew)
                 x = pnew[0]
                 y = pnew[1]
 
-                j_map = int((x - self.mapOriginX) / self.mapResolution)
-                i_map = int((y - self.mapOriginY) / self.mapResolution)
+                j_map = int((x - self.mapOriginX) / self.mapResolution + 0.5)
+                i_map = int((y - self.mapOriginY) / self.mapResolution + 0.5)
+
+                #print('(i_map, j_map) = ', ((y - self.mapOriginY) / self.mapResolution + 0.5, (x - self.mapOriginX) / self.mapResolution + 0.5))
 
                 if (i_map, j_map) not in map_pairs:
                     map_pairs.append((i_map, j_map))
-                    map_sem[i_map, j_map] = costmap_segmented.iloc[i, j]
+                    map_sem_1[i_map, j_map] = costmap_segmented.iloc[i, j]
+                    #print('(i_map, j_map) = ', (i_map, j_map))
                     #indices_x[i, j] = j_map
-                    #indices_y[i, j] = i_map
+                    #indices_y[i, j] = i_map    
+                else:
+                    map_sem_2[i_map, j_map] = costmap_segmented.iloc[i, j]
+                    #br_duplikata += 1   
+                    #print('(i_map, j_map) = ', (i_map, j_map))
+                    #print('duplikat')    
 
-        pd.DataFrame(map_sem).to_csv('semantic_map_temporary.csv', index=False, header=False)
+        pd.DataFrame(map_sem_1).to_csv('semantic_map_1_temporary.csv', index=False, header=False)
+        pd.DataFrame(map_sem_2).to_csv('semantic_map_2_temporary.csv', index=False, header=False)
         #pd.DataFrame(indices_x).to_csv('INDICES_X.csv', index=False, header=False)
         #pd.DataFrame(indices_y).to_csv('INDICES_Y.csv', index=False, header=False)
+
+        #print('\nbr_duplikata: ', br_duplikata)
 
     # classifier function for lime image
     def classifier_fn_image(self, sampled_instance):
@@ -1115,28 +1130,21 @@ class ExplainRobotNavigation:
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.imshow(self.image, aspect='auto')
+        #print('self.image.shape: ', self.image.shape)
+        gray_shade = 180
+        white_shade = 255
+        image = gray2rgb(self.image)
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade    
+        #pd.DataFrame(image[:,:,0]).to_csv('R.csv')
+        #pd.DataFrame(image[:,:,1]).to_csv('G.csv')
+        #pd.DataFrame(image[:,:,2]).to_csv('B.csv')            
+        ax.imshow(image.astype(np.uint8), aspect='auto')
         fig.savefig(path_core + '/costmap.png')
-        fig.clf()
-
-
-        # plot explanation
-        fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(255, 255, 0))
-        ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
-        fig.savefig(path_core + '/explanation.png', transparent=False)
         fig.clf()
 
         # plot costmap with plans
@@ -1148,10 +1156,31 @@ class ExplainRobotNavigation:
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='red', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='black', marker='o')
-        ax.imshow(self.image, aspect='auto')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        #ax.imshow(self.image, aspect='auto')
+        ax.imshow(image.astype(np.uint8), aspect='auto')
         fig.savefig(path_core + '/input.png')
+        fig.clf()
+
+        # plot explanation
+        fig = plt.figure(frameon=True)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
+        #marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(180, 180, 180)) #color=(255, 255, 0)
+        #ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        fig.savefig(path_core + '/explanation.png', transparent=False)
         fig.clf()
                         
         if self.semantic_seg == False:
@@ -1194,9 +1223,13 @@ class ExplainRobotNavigation:
             fig.clf()                
 
         elif self.semantic_seg == True:
+            semantic_map_1 = np.array(pd.read_csv('~/amar_ws/semantic_map_1.csv'))
+            semantic_map_2 = np.array(pd.read_csv('~/amar_ws/semantic_map_2.csv'))
             semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
             semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
-            costmap_segmented = np.array(pd.read_csv('~/amar_ws/costmap_segmented.csv'))
+            self.costmap_segmented_included = True
+            if self.costmap_segmented_included == True:
+                costmap_segmented = np.array(pd.read_csv('~/amar_ws/costmap_segmented.csv'))
 
             # plot segments with weights
             self.segments += 1
@@ -1249,18 +1282,17 @@ class ExplainRobotNavigation:
                     x = pnew[0]
                     y = pnew[1]
 
-                    j_map = int((x - self.mapOriginX) / self.mapResolution)
-                    i_map = int((y - self.mapOriginY) / self.mapResolution)
+                    j_map = int((x - self.mapOriginX) / self.mapResolution + 0.5) #- 1
+                    i_map = int((y - self.mapOriginY) / self.mapResolution + 0.5) #- 1
 
                     if (i_map, j_map) not in map_pairs:
                         map_pairs.append((i_map, j_map))
-                        semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
+                        #semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
+                        semantic_local_costmap[i, j] = semantic_map_1[i_map, j_map]
                     else:
-                        if j != 0:
-                            semantic_local_costmap[i, j] = semantic_local_costmap[i, j-1]
-                        elif i != 0:
-                            semantic_local_costmap[i, j] = semantic_local_costmap[i-1, j]
-                           
+                        #semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
+                        semantic_local_costmap[i, j] = semantic_map_2[i_map, j_map]
+
             #pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap.csv')               
 
         
@@ -1269,8 +1301,12 @@ class ExplainRobotNavigation:
             for val in np.unique(self.segments):
                 # static known obstacle
                 if np.all(self.image[self.segments == val] == 99) == True:
-                    #semantic_num = np.bincount(semantic_local_costmap[self.segments == val]).argmax()
-                    semantic_num = np.bincount(costmap_segmented[self.segments == val]).argmax()
+                    
+                    if self.costmap_segmented_included == False:
+                        semantic_num = np.bincount(semantic_local_costmap[self.segments == val]).argmax()
+                    else:
+                        semantic_num = np.bincount(costmap_segmented[self.segments == val]).argmax()
+                    
                     if semantic_num >= 90:
                         pass
                         #print('\nSTATIC KNOWN OBSTACLE!')
@@ -1344,11 +1380,14 @@ class ExplainRobotNavigation:
                 
 
             ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
-            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='orange', marker='o')
+            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='purple', marker='o')
             ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
-            regions = regionprops(np.array(costmap_segmented).astype(int))
-            #regions = regionprops(np.array(semantic_local_costmap).astype(int))
+            if self.costmap_segmented_included == True:
+                regions = regionprops(np.array(costmap_segmented).astype(int))
+            else:
+                regions = regionprops(np.array(semantic_local_costmap).astype(int))
+            
             #'''
             labels = []
             for props in regions:
@@ -1367,16 +1406,46 @@ class ExplainRobotNavigation:
                         break
                 i = i + 1
 
-            marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
-            #marked_boundaries = mark_boundaries(self.temp_img, np.array(semantic_local_costmap), color=(255, 255, 0))
+            if self.costmap_segmented_included == True:
+                marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
+            else:
+                marked_boundaries = mark_boundaries(self.temp_img, np.array(semantic_local_costmap), color=(255, 255, 0))
+    
             ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
             fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
+            fig.clf()
+
+            fig = plt.figure(frameon=False)
+            w = 1.6*3
+            h = 1.6*3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')
+            fig.savefig(path_core + '/temp_img.png')
+            fig.clf()
+
+            fig = plt.figure(frameon=False)
+            w = 1.6*3
+            h = 1.6*3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(np.array(semantic_local_costmap).astype(np.uint8), aspect='auto')
+            fig.savefig(path_core + '/semantic_local_costmap.png')
             fig.clf()
 
             #print('unknown_obstacles_vals: ', unknown_obstacles_vals)
 
             for i in range(0, semantic_tags.shape[0]):
-                segments_label = np.unique(self.segments[costmap_segmented == semantic_tags.iloc[i, 0]])
+
+                if self.costmap_segmented_included == True:
+                    segments_label = np.unique(self.segments[costmap_segmented == semantic_tags.iloc[i, 0]])
+                else:
+                    segments_label = np.unique(self.segments[semantic_local_costmap == semantic_tags.iloc[i, 0]])
+                
                 '''
                 print('\n')
                 print('i = ', i)
@@ -1384,6 +1453,7 @@ class ExplainRobotNavigation:
                 print('semantic_tags.iloc[i, 1]: ', semantic_tags.iloc[i, 1])
                 print('semantic_tags.iloc[i, 0]: ', semantic_tags.iloc[i, 0])
                 '''
+                
                 weights_unique = []
                 for label in segments_label:
                     if label in unknown_obstacles_vals:
@@ -1407,8 +1477,9 @@ class ExplainRobotNavigation:
                     weights_string = ""
                     for j in range(0, len(weights_unique) - 1):
                         weights_string += weights_unique[j] + ", "
-                    weights_string += weights_unique[-1] + " "    
-                    print(semantic_tags.iloc[i, 1] + " has weights " + weights_string)
+                    if len(weights_unique) > 0:    
+                        weights_string += weights_unique[-1] + " "    
+                        print(semantic_tags.iloc[i, 1] + " has weights " + weights_string)
 
             
     # flip matrix horizontally or vertically

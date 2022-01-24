@@ -1,6 +1,7 @@
 """
 Functions for explaining classifiers that use Image data.
 """
+from cProfile import label
 import copy
 from functools import partial
 
@@ -144,7 +145,9 @@ class ImageExplanation(object):
                 mask[segments == f] = 120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
                 #temp[segments == f] = image[segments == f].copy()
                 val_low = 0.0
-                val_high = 200.0
+                val_high = 255.0
+
+                gray_shade = 180
 
                 color_free_space = False
 
@@ -157,9 +160,9 @@ class ImageExplanation(object):
                             temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / max_w) #180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
                             temp[segments == f, 2] = 0 #180.0
                         else:
-                            temp[segments == f, 0] = 180.0  # c is channel, RGB - 012
-                            temp[segments == f, 1] = 180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
-                            temp[segments == f, 2] = 180.0
+                            temp[segments == f, 0] = gray_shade  # c is channel, RGB - 012
+                            temp[segments == f, 1] = gray_shade #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
+                            temp[segments == f, 2] = gray_shade
                     # if negative weight
                     else:
                         if color_free_space == True:
@@ -167,9 +170,9 @@ class ImageExplanation(object):
                             temp[segments == f, 1] = 0 #180.0  # c is channel, RGB - 012
                             temp[segments == f, 2] = 0 #180.0
                         else:
-                            temp[segments == f, 0] = 180.0  # c is channel, RGB - 012
-                            temp[segments == f, 1] = 180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
-                            temp[segments == f, 2] = 180.0
+                            temp[segments == f, 0] = gray_shade  # c is channel, RGB - 012
+                            temp[segments == f, 1] = gray_shade #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
+                            temp[segments == f, 2] = gray_shade
                 # if obstacle
                 else:
                     # if positive weight
@@ -969,14 +972,14 @@ class LimeImageExplainer(object):
 
         #'''
         fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.imshow(segments_2.astype('float64'), aspect='auto')
-        fig.savefig('segments2.png', transparent=False)
+        fig.savefig('segments_slic.png', transparent=False)
         fig.clf()
         #'''
 
@@ -991,18 +994,23 @@ class LimeImageExplainer(object):
         footprint_radius = 13
         add = 15
 
+        '''
         print('plan_x_list[-1]: ', plan_x_list[-1])
         print('plan_y_list[-1]: ', plan_y_list[-1])
         print('x_odom: ', x_odom)
         print('y_odom: ', y_odom)
+        '''
 
         d_x = plan_x_list[-1] - x_odom
         if d_x == 0:
             d_x = 1
         k = (-plan_y_list[-1] + y_odom) / (d_x)
+
+        '''
         print('k = ', k)
         print('plan_x_list: ', plan_x_list)
         print('plan_y_list: ', plan_y_list)
+        '''
 
         delta_y = plan_y_list[-1] - y_odom
         delta_x = plan_x_list[-1] - x_odom  
@@ -1058,44 +1066,80 @@ class LimeImageExplainer(object):
                     segments[:, :] = ctr
                     ctr = ctr + 1    
         '''
-
-        '''
-        fig = plt.figure(frameon=False)
-        w = 1.6 #* 3
-        h = 1.6 #* 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.scatter(x_, y_, c='r')
-        fig.savefig('HELP.png', transparent=False)
-        fig.clf()
-        '''
                 
-        #print('np.unique(segments_2): ', np.unique(segments_2))
         for i in np.unique(segments_2):
             if np.all(img[segments_2 == i] == 99):
                 #print('obstacle')
                 segments[segments_2 == i] = ctr
                 ctr = ctr + 1
 
+        seg_labels = np.unique(segments)[1:]        
+
+        num_of_seg = len(seg_labels)
+        num_of_wanted_seg = 8
+
+        seg_sizes = []
+
+        if num_of_seg < num_of_wanted_seg:
+            for i in range(0, num_of_seg):
+                print(len(segments[segments == seg_labels[i]]))
+                seg_sizes.append(len(segments[segments == seg_labels[i]]))
+
+        print('segm_sizes: ', seg_sizes)
+        print('segm_labels: ', seg_labels)
+        seg_labels = [x for _, x in sorted(zip(seg_sizes, seg_labels))]
+        seg_labels.reverse()
+        print('segm_sizes: ', seg_sizes)
+        print('segm_labels: ', seg_labels)
+
+        seg_missing = num_of_wanted_seg - num_of_seg
+        print('seg_missing: ', seg_missing)
+        if seg_missing < num_of_seg:
+            label_current = len(seg_labels) + 1
+            for i in range(0, seg_missing):
+                temp = segments[segments == seg_labels[i]]
+                print('temp = ', temp)
+                for j in range(0, int(len(temp) / 2)):
+                    temp[j] = label_current
+                label_current += 1
+                segments[segments == seg_labels[i]] = temp
+        else:
+            label_current = len(seg_labels) + 1 #1
+            num_of_new_seg_per_old_seg = int(seg_missing / num_of_seg) + 1
+            print('num_of_new_seg_per_old_seg: ', num_of_new_seg_per_old_seg)
+            for i in range(0, num_of_seg):
+                temp = segments[segments == seg_labels[i]]
+                print('temp_before = ', temp)
+                counter_local = 1
+                print('counter_local * int(len(temp) / num_of_new_seg_per_old_seg): ', counter_local * int(len(temp) / num_of_new_seg_per_old_seg))
+                print('len(temp): ', len(temp))
+                for j in range(0, len(temp)):
+                    temp[j] = label_current
+                    if j == counter_local * int(len(temp) / num_of_new_seg_per_old_seg):
+                        print('IN')
+                        label_current += 1
+                        counter_local += 1
+                print('temp_after = ', temp)        
+                segments[segments == seg_labels[i]] = temp           
+
         end = time.time()
 
-        print("\sm3 runtime: ", end - start)
+        print("\sm7 runtime: ", end - start)
 
         #'''
         fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segmentsFINAL.png', transparent=False)
+        fig.savefig('segments_final.png', transparent=False)
         fig.clf()
-        segments_unique = np.unique(segments)
         #'''
+
+        print('np.unique(segments): ', np.unique(segments))
 
         return segments
 
@@ -1427,16 +1471,16 @@ class LimeImageExplainer(object):
 
         show_free_space = False
 
-        print("data before: ", data)
+        #print("data before: ", data)
         if show_free_space == True:
             data[0, :] = 1
             data[-1, :] = 0 # only if I use my perturbation
         else:
-            print(data.shape[0])
+            print('data.shape[0]: ', data.shape[0])
             data = data[int(data.shape[0]/2):, :]    
             #for i in range(0, data.shape[0]):
             #    data[i, 0] = 1
-        print("data after: ", data)
+        #print("data after: ", data)
         #import pandas as pd
         #pd.DataFrame(data).to_csv('data.csv', index=False, header=False)
 
