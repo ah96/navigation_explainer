@@ -1094,7 +1094,7 @@ class LimeImageExplainer(object):
 
         seg_missing = num_of_wanted_seg - num_of_seg
         print('seg_missing: ', seg_missing)
-        if seg_missing < num_of_seg:
+        if seg_missing <= num_of_seg:
             label_current = len(seg_labels) + 1
             for i in range(0, seg_missing):
                 temp = segments[segments == seg_labels[i]]

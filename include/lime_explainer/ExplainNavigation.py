@@ -522,7 +522,7 @@ class ExplainRobotNavigation:
         # DETERMINE THE DEVIATION TYPE
         # a new way of deviation logic
         local_plan_gap_threshold = 48 #60 #48 #32
-        small_deviation_threshold = 6.5 #5 #7
+        small_deviation_threshold = 5.0 #5 #7
         big_deviation_threshold = 14
 
         local_plan_original_gap = False
