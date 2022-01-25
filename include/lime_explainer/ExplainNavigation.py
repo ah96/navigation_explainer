@@ -522,7 +522,7 @@ class ExplainRobotNavigation:
         # DETERMINE THE DEVIATION TYPE
         # a new way of deviation logic
         local_plan_gap_threshold = 48 #60 #48 #32
-        small_deviation_threshold = 5.0 #5 #7
+        small_deviation_threshold = 7.0 #5 #7
         big_deviation_threshold = 14
 
         local_plan_original_gap = False
@@ -583,8 +583,10 @@ class ExplainRobotNavigation:
                         break
                 if small_deviation == True:
                     deviation_type = 'small_deviation'
+                    print('max_dev: ', max(devs))
                 else:
-                    deviation_type = 'no_deviation'        
+                    deviation_type = 'no_deviation'
+                    print('max_dev: ', max(devs))        
                                                
         print('\nself.expID: ', self.expID)
         print('\ndeviation_type: ', deviation_type)
@@ -655,7 +657,7 @@ class ExplainRobotNavigation:
                     if local_plan_found == True and local_plan_point_in_obstacle == False:
                         print('local plan length: ', len(local_plan_xs))
                         print('local_plan_gap: ', local_plan_gap)
-                        print('max(local_plan_gaps): ', max(local_plan_gaps))
+                        print('max(local_plan_gaps): ', max(local_plan_gaps))  
                     print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                     print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
 
@@ -838,7 +840,7 @@ class ExplainRobotNavigation:
                         print('max(local_plan_gaps): ', max(local_plan_gaps))
                         if local_plan_gap == False:
                             print('deviation: ', real_deviation)
-                            #print('minimal diff: ', min(diffs))
+                            print('minimal diff: ', min(diffs))
                     print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                     print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
             
@@ -926,7 +928,7 @@ class ExplainRobotNavigation:
                         print('max(local_plan_gaps): ', max(local_plan_gaps))
                         if local_plan_gap == False:
                             print('deviation: ', real_deviation)
-                            #print('minimal diff: ', min(diffs))
+                            print('minimal diff: ', min(diffs))
                     print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                     print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
             
