@@ -972,12 +972,12 @@ class LimeImageExplainer(object):
         import copy
         import time
 
-        print('\nsm7 started')
+        #print('\nsm7 started')
         
         # show original image
         img = copy.deepcopy(image)
 
-        start = time.time()
+        #start = time.time()
 
         # Find segments_2
         segments_slic = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
@@ -985,7 +985,7 @@ class LimeImageExplainer(object):
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        #'''
+        '''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -996,7 +996,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_slic.astype('float64'), aspect='auto')
         fig.savefig('segments_slic.png', transparent=False)
         fig.clf()
-        #'''
+        '''
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -1098,7 +1098,7 @@ class LimeImageExplainer(object):
 
                     # if upright
                     if abs(k) >= 1:
-                        if height > width + 5:
+                        if height > width:
                             for j in range(0, int(len(temp) / 2)):
                                 temp[j] = label_current
                             segments[segments == seg_labels[i]] = temp
@@ -1121,7 +1121,7 @@ class LimeImageExplainer(object):
 
                     # if to the side
                     elif abs(k) < 1:
-                        if width > height + 5:
+                        if width > height:
                             for j in range(0, int(len(temp) / 2)):
                                 temp[j] = label_current
                         else:
@@ -1175,7 +1175,7 @@ class LimeImageExplainer(object):
 
                         # if upright
                         if abs(k) >= 1:
-                            if height > width + 5:
+                            if height > width:
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg + 1):
                                     temp[j*step:(j+1)*step] = label_current
@@ -1205,7 +1205,7 @@ class LimeImageExplainer(object):
                                                 break
                         # if to the side
                         else:
-                            if width > height + 5:
+                            if width > height:
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg + 1):
                                     temp[j*step:(j+1)*step] = label_current
@@ -1289,7 +1289,7 @@ class LimeImageExplainer(object):
 
                         # if upright
                         if abs(k) >= 1:
-                            if height > width + 5:
+                            if height > width:
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
                                     temp[j*step:(j+1)*step] = label_current
@@ -1320,7 +1320,7 @@ class LimeImageExplainer(object):
 
                         # if to the side
                         else:
-                            if width > height + 5:
+                            if width > height:
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
                                     temp[j*step:(j+1)*step] = label_current
@@ -1350,11 +1350,11 @@ class LimeImageExplainer(object):
                                                 break
 
 
-        end = time.time()
+        #end = time.time()
 
-        print("\nsm7 runtime: ", end - start)
+        #print("\nsm7 runtime: ", end - start)
 
-        #'''
+        '''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -1365,7 +1365,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments.astype('float64'), aspect='auto')
         fig.savefig('segments_final.png', transparent=False)
         fig.clf()
-        #'''
+        '''
 
         # fix labels of segments
         seg_labels = np.unique(segments)
@@ -1374,9 +1374,9 @@ class LimeImageExplainer(object):
             if label != i:
                 segments[segments == label] = i
 
-        print('\nnp.unique(segments): ', np.unique(segments))
+        #print('\nnp.unique(segments): ', np.unique(segments))
 
-        print('\nsm7 ended')
+        #print('\nsm7 ended')
 
         return segments
 
@@ -1686,8 +1686,10 @@ class LimeImageExplainer(object):
             data[0, :] = 1
             data[-1, :] = 0 # only if I use my perturbation
         else:
-            print('data.shape[0]: ', data.shape[0])
-            data = data[int(data.shape[0]/2):, :]    
+            #print('data.shape[0]: ', data.shape[0])
+            data = data[int(data.shape[0]/2):, :]
+            data[0, 1:] = 1
+            data[-1, 1:] = 0    
             #for i in range(0, data.shape[0]):
             #    data[i, 0] = 1
         #print("data after: ", data)
@@ -1724,7 +1726,7 @@ class LimeImageExplainer(object):
 
 
 
-    def explain_instance_evaluation(self, image, classifier_fn, labels=(1,),
+    def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_segments=1,
                          num_segments_current=1,
@@ -1734,6 +1736,9 @@ class LimeImageExplainer(object):
                          model_regressor=None,
                          random_seed=None,
                          progress_bar=True):
+
+        import copy
+        image_orig = copy.deepcopy(image)                 
 
         if len(image.shape) == 2:
             image = gray2rgb(image)
@@ -1748,7 +1753,8 @@ class LimeImageExplainer(object):
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
             start = time.time()
-            segments = self.mySlic(image)
+            #segments = self.mySlic(image)
+            segments = self.sm7(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
             end = time.time()
             segmentation_time = end - start
             #segmentation_time = round(end - start, 3)
@@ -1803,21 +1809,35 @@ class LimeImageExplainer(object):
                     batch_size=10,
                     progress_bar=True):
 
-        #print('num_segments: ', num_segments)
-        #print('num_segments_current: ', num_segments_current)
-
+        num_samples = 2 ** (num_segments+1)
+        #print('num_samples: ', num_samples)
         import itertools
-        lst = list(map(list, itertools.product([0, 1], repeat=num_segments)))
-        data = np.array(lst).reshape((2**num_segments, num_segments))
-        data[0, :] = 1
-        data[-1, :] = 0
+        lst = list(map(list, itertools.product([0, 1], repeat=(num_segments+1))))
+        data = np.array(lst).reshape((num_samples, num_segments+1))
+        #print('data.shape[0] - original - original: ', data.shape[0])
+        
+        labels = []
+
+        show_free_space = False
+
+        if show_free_space == True:
+            data[0, :] = 1
+            data[-1, :] = 0 # only if I use my perturbation
+        else:
+            data = data[int(data.shape[0]/2):, :]
+            data[0, 1:] = 1
+            data[-1, 1:] = 0    
 
         labels = []
 
+        #print('data.shape[0] - original: ', data.shape[0])
         if num_segments != num_segments_current:
             data_copy = copy.deepcopy(data)
             data = data_copy[np.random.choice(len(data_copy), 2**num_segments_current, replace=False)]
             data[0, :] = 1
+        #print('num_segments: ', num_segments)
+        #print('num_segments_current: ', num_segments_current)
+        #print('data.shape[0]: ', data.shape[0])    
 
         imgs = []
         rows = tqdm(data) if progress_bar else data
