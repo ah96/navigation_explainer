@@ -1132,26 +1132,26 @@ class LimeImageExplainer(object):
 
                     # if to the side
                     elif abs(k) < 1:
-                        print('OVAJ SLUCAJ')
+                        #print('OVAJ SLUCAJ')
                         if width > height:
-                            print('width > height')
-                            print('label_current: ', label_current)
+                            #print('width > height')
+                            #print('label_current: ', label_current)
                             label_current
                             for j in range(0, int(len(temp) / 2)):
                                 temp[j] = label_current
                             segments[segments == seg_labels[i]] = temp   
                         else:
-                            print('width < height')
-                            print('label_current: ', label_current)
+                            #print('width < height')
+                            #print('label_current: ', label_current)
                             label_original = temp[0]
-                            print('label_original = ', label_original)
+                            #print('label_original = ', label_original)
                             num_of_pixels = len(temp)
                             counter = 0
                             for q in range(0, segments.shape[1]):
                                 for j in range(0, segments.shape[0]):
                                     if segments[j, q] == label_original:
-                                        print('IN')
-                                        print('counter = ', counter)
+                                        #print('IN')
+                                        #print('counter = ', counter)
                                         if 0 <= counter <= num_of_pixels / 2:
                                             segments[j, q] = label_current
                                         counter += 1
