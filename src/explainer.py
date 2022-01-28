@@ -424,7 +424,7 @@ def CreateDataset():
         myfile.write('picture_ID,position_x,position_y\n')
     #''' 
 
-    dataset_size = 1 #local_costmap_info.shape[0] - num_of_first_rows_to_delete
+    dataset_size = local_costmap_info.shape[0] - num_of_first_rows_to_delete
     import random    
     for i in range(0, dataset_size):
         # optional instance selection - deterministic
