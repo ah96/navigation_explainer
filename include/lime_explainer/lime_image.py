@@ -1198,7 +1198,8 @@ class LimeImageExplainer(object):
                                             else:
                                                 segments[j, q] = label_current
                                                 if (counter + 1) % step == 0:
-                                                    label_current += 1
+                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg:
+                                                        label_current += 1
                                             counter += 1
                                             if counter == num_of_pixels:
                                                 label_current += 1
@@ -1313,8 +1314,8 @@ class LimeImageExplainer(object):
                                                 segments[j, q] = label_original
                                             else:
                                                 segments[j, q] = label_current
-                                                if (counter + 1) % step == 0:
-                                                    label_current += 1
+                                                if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
+                                                        label_current += 1
                                             counter += 1
                                             if counter == num_of_pixels:
                                                 label_current += 1
