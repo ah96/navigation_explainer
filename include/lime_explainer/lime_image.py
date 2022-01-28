@@ -1019,6 +1019,8 @@ class LimeImageExplainer(object):
             d_x = 1
         k = (-plan_y_list[-1] + y_odom) / (d_x)
 
+        print('abs(k) = ', abs(k)) 
+
         '''
         delta_y = plan_y_list[-1] - y_odom
         delta_x = plan_x_list[-1] - x_odom  
@@ -1070,7 +1072,7 @@ class LimeImageExplainer(object):
             #print('labels of segemnts sorted: ', seg_labels)
 
             seg_missing = num_of_wanted_seg - num_of_seg
-            #print('\nnumber of segments missing: ', seg_missing)
+            print('\nnumber of segments missing: ', seg_missing)
 
             # if a number of missing segments is smaller or equal than the number of existing segments
             if seg_missing <= num_of_seg:
@@ -1102,7 +1104,8 @@ class LimeImageExplainer(object):
                     height = h_max - h_min + 1
                     #print('\nheight', height)
                     width = w_max - w_min + 1
-                    #print('width', width)            
+                    #print('width', width)
+           
 
                     # if upright
                     if abs(k) >= 1:
@@ -1129,16 +1132,41 @@ class LimeImageExplainer(object):
 
                     # if to the side
                     elif abs(k) < 1:
+                        print('OVAJ SLUCAJ')
                         if width > height:
+                            print('width > height')
+                            print('label_current: ', label_current)
+                            label_current
                             for j in range(0, int(len(temp) / 2)):
                                 temp[j] = label_current
+                            segments[segments == seg_labels[i]] = temp   
                         else:
+                            print('width < height')
+                            print('label_current: ', label_current)
                             label_original = temp[0]
+                            print('label_original = ', label_original)
+                            num_of_pixels = len(temp)
+                            counter = 0
+                            for q in range(0, segments.shape[1]):
+                                for j in range(0, segments.shape[0]):
+                                    if segments[j, q] == label_original:
+                                        print('IN')
+                                        print('counter = ', counter)
+                                        if 0 <= counter <= num_of_pixels / 2:
+                                            segments[j, q] = label_current
+                                        counter += 1
+
+                            '''
                             for j in range(0, height):
                                 for q in range(0, int(width/2)):
+                                    if j * width + q > len(temp) - 1:
+                                        continue
                                     temp[j * width + q] = label_original
                                 for q in range(int(width/2), width):
-                                    temp[j * width + q] = label_current               
+                                    if j * width + q > len(temp) - 1:
+                                        continue
+                                    temp[j * width + q] = label_current
+                            '''
                     
                     label_current += 1
 
@@ -1396,8 +1424,8 @@ class LimeImageExplainer(object):
             if label != i:
                 segments[segments == label] = i
 
-        #print('\nnp.unique(segments): ', np.unique(segments))
-        #print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
+        print('\nnp.unique(segments): ', np.unique(segments))
+        print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
 
         if len(np.unique(segments)) > 9:
             # make one free space segment

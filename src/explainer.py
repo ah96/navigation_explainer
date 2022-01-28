@@ -276,7 +276,7 @@ def LimeSingle():
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 11 #DS1: #51 #78 #84 #144, #DS2: #260
+        expID = 41 #DS1: #51 #78 #84 #144, #DS2: #260
         print('\nexpID: ', expID)
 
     exp_nav.explain_instance(expID)
@@ -428,7 +428,7 @@ def CreateDataset():
     print('local_costmap_info.shape[0]: ', local_costmap_info.shape[0])
     print('num_of_first_rows_to_delete: ', num_of_first_rows_to_delete)
     #import random    
-    for i in range(11, dataset_size):
+    for i in range(41, dataset_size):
         # optional instance selection - deterministic
         expID = i
         print('expID: ', expID)
