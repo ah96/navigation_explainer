@@ -276,7 +276,7 @@ def LimeSingle():
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 24 #DS1: #51 #78 #84 #144, #DS2: #260
+        expID = 201 #DS1: #51 #78 #84 #144, #DS2: #260
         print('\nexpID: ', expID)
 
     exp_nav.explain_instance(expID)
@@ -411,22 +411,22 @@ def CreateDataset():
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     #'''
-    with open('costmap_data.csv', "w") as myfile:
+    with open('costmap_data.csv', "a") as myfile:
             myfile.write('picture_ID,width,height,origin_x,origin_y,resolution\n')
 
-    with open('local_plan_coordinates.csv', "w") as myfile:
+    with open('local_plan_coordinates.csv', "a") as myfile:
             myfile.write('picture_ID,position_x,position_y\n')
 
-    with open('global_plan_coordinates.csv', "w") as myfile:
+    with open('global_plan_coordinates.csv', "a") as myfile:
             myfile.write('picture_ID,position_x,position_y\n')
 
-    with open('robot_coordinates.csv', "w") as myfile:
+    with open('robot_coordinates.csv', "a") as myfile:
         myfile.write('picture_ID,position_x,position_y\n')
     #''' 
 
     dataset_size = local_costmap_info.shape[0] - num_of_first_rows_to_delete
     import random    
-    for i in range(0, dataset_size):
+    for i in range(239, dataset_size):
         # optional instance selection - deterministic
         expID = i
 
