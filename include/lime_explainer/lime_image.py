@@ -4,6 +4,7 @@ Functions for explaining classifiers that use Image data.
 from cProfile import label
 import copy
 from functools import partial
+from itertools import count
 
 import numpy as np
 import sklearn
@@ -972,7 +973,7 @@ class LimeImageExplainer(object):
         import copy
         import time
 
-        #print('\nsm7 started')
+        print('\nsm7 started')
         
         # show original image
         img = copy.deepcopy(image)
@@ -985,7 +986,7 @@ class LimeImageExplainer(object):
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -996,7 +997,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_slic.astype('float64'), aspect='auto')
         fig.savefig('segments_slic.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -1031,13 +1032,20 @@ class LimeImageExplainer(object):
         num_of_obstacles = 0
         # add obstacle segments        
         for i in np.unique(segments_slic):
-            if np.all(img[segments_slic == i] == 99):
+            temp = img[segments_slic == i]
+            count_of_99_s = np.count_nonzero(temp == 99)
+            #print('count: ', count)
+            #print('temp: ', temp)
+            #print('len(temp): ', temp.shape[0])
+            if np.all(img[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
                 #print('obstacle')
                 segments[segments_slic == i] = ctr
                 ctr = ctr + 1
                 num_of_obstacles += 1
 
-        if num_of_obstacles > 0:
+        print('num_of_obstacles: ', num_of_obstacles)        
+
+        if 8 > num_of_obstacles > 0:
             # divide segment obstacles    
             seg_labels = np.unique(segments)[1:]        
 
@@ -1368,7 +1376,7 @@ class LimeImageExplainer(object):
 
         #print("\nsm7 runtime: ", end - start)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -1379,7 +1387,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments.astype('float64'), aspect='auto')
         fig.savefig('segments_final.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         # fix labels of segments
         seg_labels = np.unique(segments)
@@ -1389,8 +1397,35 @@ class LimeImageExplainer(object):
                 segments[segments == label] = i
 
         #print('\nnp.unique(segments): ', np.unique(segments))
+        #print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
 
-        #print('\nsm7 ended')
+        if len(np.unique(segments)) > 9:
+            # make one free space segment
+            ctr = 0
+            segments[:, :] = ctr
+            ctr = ctr + 1
+
+            num_of_obstacles = 0
+            # add obstacle segments        
+            for i in np.unique(segments_slic):
+                if np.all(img[segments_slic == i] == 99):
+                    #print('obstacle')
+                    segments[segments_slic == i] = ctr
+                    ctr = ctr + 1
+                    num_of_obstacles += 1
+
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_final_corrected.png', transparent=False)
+            fig.clf()
+
+        print('\nsm7 ended')
 
         return segments
 
@@ -1617,7 +1652,7 @@ class LimeImageExplainer(object):
                                         classifier_fn, num_samples,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
-
+        print('after data_labels fn.')
         #distance_metric = 'jaccard'
         distances = sklearn.metrics.pairwise_distances(
             data,

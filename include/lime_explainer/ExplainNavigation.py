@@ -402,7 +402,7 @@ class ExplainRobotNavigation:
     # classifier function for lime image
     def classifier_fn_image(self, sampled_instance):
 
-        #print('\nclassifier_fn_image started')
+        print('\nclassifier_fn_image started')
 
         # sampled_instance info
         #print('sampled_instance: ', sampled_instance)
@@ -2024,6 +2024,7 @@ class ExplainRobotNavigation:
             img = copy.deepcopy(self.image)
 
             segm_fn = 'custom_segmentation'
+            print('segm_fn = ', segm_fn)
 
             #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
             devDistance_x = 0
