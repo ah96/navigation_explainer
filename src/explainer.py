@@ -283,6 +283,15 @@ def LimeSingle():
     #exp_nav.testSegmentation(expID)
 
 def CreateDataset():
+    import pandas as pd
+    X_train = pd.DataFrame()
+    X_test = pd.DataFrame()
+    y_train = pd.DataFrame() 
+    y_test = pd.DataFrame()
+
+    output_class_name = ''
+    num_samples = 100
+
     # Data loading
     from lime_explainer import DataLoader
     
@@ -300,17 +309,97 @@ def CreateDataset():
     print('\n')
     '''
 
+    # preprocess data
     num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
-
-    costmap_size = local_costmap_info.iloc[0, 2]
-    #print('costmap_size: ', costmap_size)
+        
+    if explanation_mode == 'tabular' or explanation_mode == 'tabular_costmap':
+        from lime_explainer import DatasetCreator
     
-    # Dataset creation
-    X_train = []
-    X_test = []
+        # Select input for explanation algorithm
+        X = odom.iloc[:, 6:8]  # input for explanation are odometry velocities
+        # print(X)
 
-    # output_class_name - not important for LIME image
-    output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
+        one_hot_encoding = True
+
+        if tabular_mode == 'regression':
+            import numpy as np
+
+            # regression
+            # Selecting the output for the explanation algorithm
+            index_output_class = 1 # [0] - command linear velocity, [1] - command angular velocity
+            y = cmd_vel.iloc[:,index_output_class:index_output_class+1]
+            #print(y)        
+            output_class_name = y.columns.values[0]
+
+        elif (tabular_mode == 'classification') & (one_hot_encoding == False):
+            import numpy as np
+            
+            # classification        
+            # left-right-straight logic
+            conditions = [
+                (cmd_vel['cmd_vel_ang_z'] >= 0),
+                (cmd_vel['cmd_vel_ang_z'] < 0)
+                ]
+
+            values = ['left', 'right']
+
+            cmd_vel['direction'] = np.select(conditions, values)
+            
+            # Selecting the output for the explanation algorithm
+            index_output_class = 2 # [2] - direction
+            y = cmd_vel.iloc[:,index_output_class:index_output_class+1] # the output for explanation is direction
+            #print(y)
+            output_class_name = y.columns.values[0]
+
+        elif (tabular_mode == 'classification') & (one_hot_encoding == True):
+            import numpy as np
+            
+            # random forest classification - one-hot encoding        
+            # left-right-straight logic
+            conditions = [
+                (cmd_vel['cmd_vel_ang_z'] >= 0),
+                (cmd_vel['cmd_vel_ang_z'] < 0)
+                ]
+
+            # one-hot left-right coding
+            valuesLeft = [1.0, 0.0]
+
+            cmd_vel['left'] = np.select(conditions, valuesLeft)
+
+            valuesRight = [0.0, 1.0]
+
+            cmd_vel['right'] = np.select(conditions, valuesRight)
+            
+            # Selecting the output for the explanation algorithm
+            index_output_class = 2 # [2] - 'left', [3] - 'right'
+            y = cmd_vel.iloc[:,index_output_class:index_output_class+2] # the explanation output is direction, i.e. left, right and straight one-hot encoded
+            #print(y)
+            output_class_name = y.columns.values[0] # 'left' - [0] or 'right' - [1]
+
+        
+        import random
+        #randomNum  = random.randint(0, 100)
+        randomNum = 42
+        
+        slice_ratio = 0.01 # very small slice_ratio ensures that almost all data is put in X_train
+        
+        X_train, X_test, y_train, y_test = DatasetCreator.split_test_train(X, y, slice_ratio, randomNum) # Row names (indexes) remain preserved even after mixing - very good
+
+
+        # Ensuring that this data is Dataframes, but not necessary, because they already are. Let it stand here for printing while doing possible debugging process.
+        X_train = pd.DataFrame(X_train)
+        print('\nX_train: ')
+        print(X_train)
+        y_train = pd.DataFrame(y_train)
+        print('\ny_train: ')
+        print(y_train)
+        
+        X_test = pd.DataFrame(X_test)
+        print('\nX_test: ')
+        print(X_test)
+        y_test = pd.DataFrame(y_test)
+        print('\ny_test: ')
+        print(y_test)
 
     # Explanation
     from lime_explainer import ExplainNavigation
@@ -318,8 +407,8 @@ def CreateDataset():
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        X_train, X_test, tabular_mode, explanation_mode, num_samples,
-                                                        output_class_name, num_of_first_rows_to_delete, footprints, costmap_size)
+                                                        tabular_mode, explanation_mode, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        X_train, X_test, y_train, y_test, num_samples)
 
     #'''
     with open('costmap_data.csv', "w") as myfile:
@@ -335,9 +424,9 @@ def CreateDataset():
         myfile.write('picture_ID,position_x,position_y\n')
     #''' 
 
-    dataset_size = local_costmap_info.shape[0]
+    dataset_size = local_costmap_info.shape[0] - num_of_first_rows_to_delete
     import random    
-    for i in range(1, dataset_size):
+    for i in range(0, dataset_size):
         # optional instance selection - deterministic
         expID = i
 
@@ -2437,13 +2526,13 @@ buttonLimeSingle = Button(root, text='Run LIME single', height=3, width=25, comm
 #buttonLimeSingle.grid(row=0,column=0)
 buttonLimeSingle.pack()
 
-buttonCreateDataset = Button(root, text='Create dataset for LIME/GAN', height=3, width=25, command=CreateDataset, fg='black', bg='white')
-#buttonCreateDataset.grid(row=1,column=0)
-buttonCreateDataset.pack()
-
 buttonEvaluateLIME = Button(root, text='Evaluate LIME', height=3, width=25, command=EvaluateLIME, fg='black', bg='white')
 #buttonEvaluateLIME.grid(row=2,column=0)
 buttonEvaluateLIME.pack()
+
+buttonCreateDataset = Button(root, text='Create dataset for LIME/GAN', height=3, width=25, command=CreateDataset, fg='black', bg='white')
+#buttonCreateDataset.grid(row=1,column=0)
+buttonCreateDataset.pack()
 
 buttonRunGAN = Button(root, text='Run GAN', height=3, width=25, command=RunGAN, fg='black', bg='white')
 #buttonRunGAN.grid(row=3,column=0)
