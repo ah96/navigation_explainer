@@ -2466,7 +2466,7 @@ class ExplainRobotNavigation:
                 myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
                 
                 for i in range(0, segments_num + 1):
-                    num_of_iterations_for_one_num_of_segments = 50 #30 #50
+                    num_of_iterations_for_one_num_of_segments = 30 #30 #50
                     
                     for j in range(0, num_of_iterations_for_one_num_of_segments): 
                         # measure explain_instance time
