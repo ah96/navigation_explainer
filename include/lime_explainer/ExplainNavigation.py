@@ -100,7 +100,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = False
+            self.manual_instance_loading = True
             self.manually_make_semantic_map = False
             self.test_segmentation = False 
 
@@ -189,7 +189,7 @@ class ExplainRobotNavigation:
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            self.semantic_seg = False
+            self.semantic_seg = True
             if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
             elif self.semantic_seg == False:
@@ -1365,8 +1365,8 @@ class ExplainRobotNavigation:
             fig.clf()                
 
         elif self.semantic_seg == True:
-            semantic_map_1 = np.array(pd.read_csv('~/amar_ws/semantic_map_1.csv'))
-            semantic_map_2 = np.array(pd.read_csv('~/amar_ws/semantic_map_2.csv'))
+            #semantic_map_1 = np.array(pd.read_csv('~/amar_ws/semantic_map_1.csv'))
+            #semantic_map_2 = np.array(pd.read_csv('~/amar_ws/semantic_map_2.csv'))
             semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
             semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
             self.costmap_segmented_included = True
@@ -1429,11 +1429,11 @@ class ExplainRobotNavigation:
 
                     if (i_map, j_map) not in map_pairs:
                         map_pairs.append((i_map, j_map))
-                        #semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
-                        semantic_local_costmap[i, j] = semantic_map_1[i_map, j_map]
+                        semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
+                        #semantic_local_costmap[i, j] = semantic_map_1[i_map, j_map]
                     else:
-                        #semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
-                        semantic_local_costmap[i, j] = semantic_map_2[i_map, j_map]
+                        semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
+                        #semantic_local_costmap[i, j] = semantic_map_2[i_map, j_map]
 
             #pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap.csv')               
 
@@ -1517,7 +1517,24 @@ class ExplainRobotNavigation:
                 for j in range(0, len(self.exp)):
                     if self.exp[j][0] == unknown_obstacles_vals[i]:
                         print('\nUnknown obstacle ' + str(i+1) + ' has a weight ' + str(round(self.exp[j][1], 4)))
-                        ax.text(x_center, y_center - 10, 'Unknown obstacle ' + str(i+1), c='white')
+                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+                        
+                        '''
+                        # case 3
+                        #ax.text(x_center + 2, y_center - 4, 'Unknown obstacle ' + str(i+1), c='white')
+                        '''
+                        
+                        '''
+                        # case 2
+                        if i == 1:
+                            ax.text(x_center, y_center-3, 'Unknown obstacle ' + str(i), c='white')
+                        '''
+
+                        '''
+                        # case 3
+                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+                        '''
+                        
                         break
                 
 
@@ -1545,6 +1562,66 @@ class ExplainRobotNavigation:
                 for j in range(0, len(semantic_tags)):
                     if semantic_tags.iloc[j, 0] == v:
                         ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
+
+                        '''
+                        # case 3
+                        if semantic_tags.iloc[j, 1] == 'lab south':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                            ax.text(cy - 10, cx + 5, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                            ax.text(cy, cx + 12, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab north':    
+                            ax.text(cy - 20, cx - 10, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab east':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall I':    
+                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall II':    
+                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall III':    
+                            ax.text(cy - 3, cx + 5, semantic_tags.iloc[j, 1], c='white')
+                        '''
+
+                        '''
+                        # case 2
+                        if semantic_tags.iloc[j, 1] == 'lab south':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                            ax.text(cy-15, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab north':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab east':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall I':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall II':    
+                            ax.text(cy-8, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall III':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        '''
+
+                        '''
+                        if semantic_tags.iloc[j, 1] == 'lab south':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab north':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab east':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall I':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall II':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall III':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')    
+                        '''
+
                         break
                 i = i + 1
 
