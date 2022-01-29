@@ -402,7 +402,7 @@ class ExplainRobotNavigation:
     # classifier function for lime image
     def classifier_fn_image(self, sampled_instance):
 
-        #print('\nclassifier_fn_image started')
+        print('\nclassifier_fn_image started')
 
         # sampled_instance info
         #print('sampled_instance: ', sampled_instance)
@@ -2101,6 +2101,7 @@ class ExplainRobotNavigation:
             img = copy.deepcopy(self.image)
 
             segm_fn = 'custom_segmentation'
+            print('segm_fn = ', segm_fn)
 
             #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
             devDistance_x = 0
@@ -2390,7 +2391,7 @@ class ExplainRobotNavigation:
                 myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
                 
                 for i in range(0, segments_num + 1):
-                    num_of_iterations_for_one_num_of_segments = 50 #30 #50
+                    num_of_iterations_for_one_num_of_segments = 30 #30 #50
                     
                     for j in range(0, num_of_iterations_for_one_num_of_segments): 
                         # measure explain_instance time

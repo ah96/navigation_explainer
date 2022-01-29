@@ -4,6 +4,7 @@ Functions for explaining classifiers that use Image data.
 from cProfile import label
 import copy
 from functools import partial
+from itertools import count
 
 import numpy as np
 import sklearn
@@ -972,7 +973,7 @@ class LimeImageExplainer(object):
         import copy
         import time
 
-        #print('\nsm7 started')
+        print('\nsm7 started')
         
         # show original image
         img = copy.deepcopy(image)
@@ -985,7 +986,7 @@ class LimeImageExplainer(object):
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -996,7 +997,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_slic.astype('float64'), aspect='auto')
         fig.savefig('segments_slic.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -1018,6 +1019,8 @@ class LimeImageExplainer(object):
             d_x = 1
         k = (-plan_y_list[-1] + y_odom) / (d_x)
 
+        print('abs(k) = ', abs(k)) 
+
         '''
         delta_y = plan_y_list[-1] - y_odom
         delta_x = plan_x_list[-1] - x_odom  
@@ -1031,13 +1034,20 @@ class LimeImageExplainer(object):
         num_of_obstacles = 0
         # add obstacle segments        
         for i in np.unique(segments_slic):
-            if np.all(img[segments_slic == i] == 99):
+            temp = img[segments_slic == i]
+            count_of_99_s = np.count_nonzero(temp == 99)
+            #print('count: ', count)
+            #print('temp: ', temp)
+            #print('len(temp): ', temp.shape[0])
+            if np.all(img[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
                 #print('obstacle')
                 segments[segments_slic == i] = ctr
                 ctr = ctr + 1
                 num_of_obstacles += 1
 
-        if num_of_obstacles > 0:
+        print('num_of_obstacles: ', num_of_obstacles)        
+
+        if 8 > num_of_obstacles > 0:
             # divide segment obstacles    
             seg_labels = np.unique(segments)[1:]        
 
@@ -1062,7 +1072,7 @@ class LimeImageExplainer(object):
             #print('labels of segemnts sorted: ', seg_labels)
 
             seg_missing = num_of_wanted_seg - num_of_seg
-            #print('\nnumber of segments missing: ', seg_missing)
+            print('\nnumber of segments missing: ', seg_missing)
 
             # if a number of missing segments is smaller or equal than the number of existing segments
             if seg_missing <= num_of_seg:
@@ -1094,7 +1104,8 @@ class LimeImageExplainer(object):
                     height = h_max - h_min + 1
                     #print('\nheight', height)
                     width = w_max - w_min + 1
-                    #print('width', width)            
+                    #print('width', width)
+           
 
                     # if upright
                     if abs(k) >= 1:
@@ -1121,16 +1132,41 @@ class LimeImageExplainer(object):
 
                     # if to the side
                     elif abs(k) < 1:
+                        #print('OVAJ SLUCAJ')
                         if width > height:
+                            #print('width > height')
+                            #print('label_current: ', label_current)
+                            label_current
                             for j in range(0, int(len(temp) / 2)):
                                 temp[j] = label_current
+                            segments[segments == seg_labels[i]] = temp   
                         else:
+                            #print('width < height')
+                            #print('label_current: ', label_current)
                             label_original = temp[0]
+                            #print('label_original = ', label_original)
+                            num_of_pixels = len(temp)
+                            counter = 0
+                            for q in range(0, segments.shape[1]):
+                                for j in range(0, segments.shape[0]):
+                                    if segments[j, q] == label_original:
+                                        #print('IN')
+                                        #print('counter = ', counter)
+                                        if 0 <= counter <= num_of_pixels / 2:
+                                            segments[j, q] = label_current
+                                        counter += 1
+
+                            '''
                             for j in range(0, height):
                                 for q in range(0, int(width/2)):
+                                    if j * width + q > len(temp) - 1:
+                                        continue
                                     temp[j * width + q] = label_original
                                 for q in range(int(width/2), width):
-                                    temp[j * width + q] = label_current               
+                                    if j * width + q > len(temp) - 1:
+                                        continue
+                                    temp[j * width + q] = label_current
+                            '''
                     
                     label_current += 1
 
@@ -1368,7 +1404,7 @@ class LimeImageExplainer(object):
 
         #print("\nsm7 runtime: ", end - start)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -1379,7 +1415,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments.astype('float64'), aspect='auto')
         fig.savefig('segments_final.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         # fix labels of segments
         seg_labels = np.unique(segments)
@@ -1388,9 +1424,36 @@ class LimeImageExplainer(object):
             if label != i:
                 segments[segments == label] = i
 
-        #print('\nnp.unique(segments): ', np.unique(segments))
+        print('\nnp.unique(segments): ', np.unique(segments))
+        print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
 
-        #print('\nsm7 ended')
+        if len(np.unique(segments)) > 9:
+            # make one free space segment
+            ctr = 0
+            segments[:, :] = ctr
+            ctr = ctr + 1
+
+            num_of_obstacles = 0
+            # add obstacle segments        
+            for i in np.unique(segments_slic):
+                if np.all(img[segments_slic == i] == 99):
+                    #print('obstacle')
+                    segments[segments_slic == i] = ctr
+                    ctr = ctr + 1
+                    num_of_obstacles += 1
+
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_final_corrected.png', transparent=False)
+            fig.clf()
+
+        print('\nsm7 ended')
 
         return segments
 
@@ -1617,7 +1680,7 @@ class LimeImageExplainer(object):
                                         classifier_fn, num_samples,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
-
+        print('after data_labels fn.')
         #distance_metric = 'jaccard'
         distances = sklearn.metrics.pairwise_distances(
             data,
