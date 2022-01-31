@@ -39,7 +39,7 @@ from skimage.segmentation.slic_superpixels import _get_grid_centroids, _get_mask
 from skimage.measure import regionprops
 
 # important global variables
-perturb_hide_color_value = 50
+perturb_hide_color_value = 0 #0 #50
 
 class ExplainRobotNavigation:
     # constructor
@@ -100,7 +100,7 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = True
+            self.manual_instance_loading = False
             self.manually_make_semantic_map = False
             self.test_segmentation = False 
 
@@ -189,7 +189,7 @@ class ExplainRobotNavigation:
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            self.semantic_seg = True
+            self.semantic_seg = False
             if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
             elif self.semantic_seg == False:
@@ -410,6 +410,8 @@ class ExplainRobotNavigation:
 
         #pd.DataFrame(self.image).to_csv('image.csv')
         
+        import time
+        start = time.time()
         #'''
         # I will use channel 0 from sampled_instance as actual perturbed data
         # Perturbed pixel intensity is perturb_hide_color_value
@@ -426,6 +428,8 @@ class ExplainRobotNavigation:
                             sampled_instance[i][j, k, 0] = 0.0
                             #print('obstacle')
         #'''
+        end = time.time()
+        print('end - start perturb:= ', end - start)
 
         #'''
         # Save perturbed costmap_data to file for C++ node
@@ -506,8 +510,6 @@ class ExplainRobotNavigation:
         #print('\nself.transformed_plan.shape[0]: ', self.transformed_plan.shape[0])
         transformed_plan_xs = []
         transformed_plan_ys = []
-        #closest_to_robot_index = -100
-        min_diff = 100
         for i in range(0, self.transformed_plan.shape[0]):
             x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
@@ -516,12 +518,10 @@ class ExplainRobotNavigation:
                 transformed_plan_xs.append(x_temp)
                 transformed_plan_ys.append(y_temp)
 
-                diff = math.sqrt( (transformed_plan_xs[-1]-local_plan_xs_orig[0])**2 + (transformed_plan_ys[-1]-local_plan_ys_orig[0])**2 )
-                if diff < min_diff:
-                    min_diff = diff
-                    #closest_to_robot_index = len(transformed_plan_xs) - 1
         transformed_plan_xs = np.array(transformed_plan_xs)
         transformed_plan_ys = np.array(transformed_plan_ys)
+
+        start = time.time()
 
         # DETERMINE THE DEVIATION TYPE
         # thresholds
@@ -608,6 +608,9 @@ class ExplainRobotNavigation:
             print('len(local_plan_orig): ', len(local_plan_xs_orig))
             print('\n')
         '''
+
+        end = time.time()
+        print('end - start deviation type = ', end - start)
         
         # deviation of local plan from global plan
         self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
@@ -615,11 +618,14 @@ class ExplainRobotNavigation:
 
         #### MAIN PART ####
 
+        start = time.time()
+
         if mode == 'regression':
             # fill in deviation dataframe
             dev_original = 0
             # find if there is local plan
             for i in range(0, sampled_instance.shape[0]):
+                print('i = ', i)
                 local_plan_xs = []
                 local_plan_ys = []
                 local_plan_found = False
@@ -660,11 +666,12 @@ class ExplainRobotNavigation:
 
                 self.local_plan_deviation.iloc[i, 0] = max(devs)
 
-        elif mode == 'classification':                
+        elif mode == 'classification':
+            print_iterations = False                
             if deviation_type == 'stop':
                 # fill in deviation dataframe
                 for i in range(0, sampled_instance.shape[0]):
-                    print('\ni = ', i)
+                    #print('\ni = ', i)
                     # test if there is local plan
                     local_plan_xs = []
                     local_plan_ys = []
@@ -739,26 +746,9 @@ class ExplainRobotNavigation:
                                             x_indices.append(x)
                                             y_indices.append(y)
 
-                                
-                                print('idx = ', idx)
-                                print('(local_plan_xs[idx], local_plan_ys[idx]): ', (local_plan_xs[idx], local_plan_ys[idx]))
-                                print('(local_plan_xs[idx+1], local_plan_ys[idx+1]): ', (local_plan_xs[idx+1], local_plan_ys[idx+1]))
-                                print('d_x: ', d_x)
-                                if d_x != 0:
-                                    print('k = ', k)
-                                    print('n = ', n)
-                                print('x_indices: ', x_indices)
-                                print('y_indices: ', y_indices)
-                                
-
-                                if i == 33:
-                                    pd.DataFrame(sampled_instance[i][:, :, 0]).to_csv('33.csv')
-
                                 for j in range(0, len(x_indices)):
                                     for m in range(x_indices[j] - 0, x_indices[j] + 1):
                                         for q in range(y_indices[j] - 0, y_indices[j] + 1):
-                                            if i == 33:
-                                                print('(m, q, sampled_instance[i][q, m, 0]): ', (m, q, sampled_instance[i][q, m, 0]))
                                             if sampled_instance[i][q, m, 0] == 99:
                                                 local_plan_gap = True
                                                 break                 
@@ -781,95 +771,96 @@ class ExplainRobotNavigation:
                         print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                         print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
                 
-            elif deviation_type == 'big_deviation': 
-                print('i = ', i)
-                # test if there is local plan
-                local_plan_xs = []
-                local_plan_ys = []
-                local_plan_found = False
-                for j in range(0, self.local_plans.shape[0]):
-                    if self.local_plans.iloc[j, -1] == i:
-                        x_temp = int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                        y_temp = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            elif deviation_type == 'big_deviation':
+                for i in range(0, sampled_instance.shape[0]): 
+                    #print('i = ', i)
+                    # test if there is local plan
+                    local_plan_xs = []
+                    local_plan_ys = []
+                    local_plan_found = False
+                    for j in range(0, self.local_plans.shape[0]):
+                        if self.local_plans.iloc[j, -1] == i:
+                            x_temp = int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                            y_temp = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-                        if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                            local_plan_xs.append(x_temp)
-                            local_plan_ys.append(y_temp)
-                            local_plan_found = True
-                    
-                local_plan_point_in_obstacle = False    
-                if local_plan_found == True:
-                    # test if any part of the local plan is in the obstacle region
-                    for j in range(len(local_plan_xs) - 1, len(local_plan_xs)):
-                        if sampled_instance[i][local_plan_ys[j], local_plan_xs[j], 0] == 99:
-                            local_plan_point_in_obstacle = True
-                            break
+                            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                                local_plan_xs.append(x_temp)
+                                local_plan_ys.append(y_temp)
+                                local_plan_found = True
+                        
+                    local_plan_point_in_obstacle = False    
+                    if local_plan_found == True:
+                        # test if any part of the local plan is in the obstacle region
+                        for j in range(len(local_plan_xs) - 1, len(local_plan_xs)):
+                            if sampled_instance[i][local_plan_ys[j], local_plan_xs[j], 0] == 99:
+                                local_plan_point_in_obstacle = True
+                                break
 
-                    # if there is local plan in obstacle, it is stop - no deviation
-                    if local_plan_point_in_obstacle == True:
-                        self.local_plan_deviation.iloc[i, 0] = 0.0
-                    else:                  
-                        # test if there is local plan gap
-                        diff = 0
-                        local_plan_gap = False
-                        
-                        local_plan_gaps = []
-                        
-                        for j in range(0, len(local_plan_xs) - 1):
-                            diff = math.sqrt( (local_plan_xs[j]-local_plan_xs[j+1])**2 + (local_plan_ys[j]-local_plan_ys[j+1])**2 )
-                            local_plan_gaps.append(diff)
-                        
-                        if max(local_plan_gaps) > local_plan_gap_threshold:
-                            local_plan_gap = True
-                        
-                        if local_plan_gap == True:
+                        # if there is local plan in obstacle, it is stop - no deviation
+                        if local_plan_point_in_obstacle == True:
                             self.local_plan_deviation.iloc[i, 0] = 0.0
-                        else:
-                            diff_x = 0
-                            diff_y = 0
-                            real_deviation = False
-                            devs = []
-                            for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
-                                local_diffs = []
-                                deviation_local = True  
-                                for k in range(0, len(transformed_plan_xs)):
-                                    diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
-                                    diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
-                                    diff = math.sqrt(diff_x + diff_y)
-                                    local_diffs.append(diff)
-                                    if diff <= big_deviation_threshold:
-                                        deviation_local = False
-                                        break # comment out to get the real biggest minimal difference between local and tranformed plan
-                                devs.append(min(local_diffs))
-                                if deviation_local == True:
-                                    real_deviation = True
-                                    break # comment out to get the real biggest minimal difference between local and tranformed plan
+                        else:                  
+                            # test if there is local plan gap
+                            diff = 0
+                            local_plan_gap = False
                             
-                            if real_deviation == True:
-                                self.local_plan_deviation.iloc[i, 0] = 1.0
-                            else:    
-                                self.local_plan_deviation.iloc[i, 0] = 0.0                
-                else:
-                    self.local_plan_deviation.iloc[i, 0] = 0.0
-                
-                if print_iterations == True:
-                    print('\ni: ', i)
-                    print('local plan found: ', local_plan_found)
-                    print('local_plan_point_in_obstacle: ', local_plan_point_in_obstacle)
-                    if local_plan_found == True and local_plan_point_in_obstacle == False:
-                        print('local plan length: ', len(local_plan_xs))
-                        print('local_plan_gap: ', local_plan_gap)
-                        print('max(local_plan_gaps): ', max(local_plan_gaps))
-                        if local_plan_gap == False:
-                            print('deviation: ', real_deviation)
-                            print('max dev: ', max(devs))
-                    print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
-                    print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
+                            local_plan_gaps = []
+                            
+                            for j in range(0, len(local_plan_xs) - 1):
+                                diff = math.sqrt( (local_plan_xs[j]-local_plan_xs[j+1])**2 + (local_plan_ys[j]-local_plan_ys[j+1])**2 )
+                                local_plan_gaps.append(diff)
+                            
+                            if max(local_plan_gaps) > local_plan_gap_threshold:
+                                local_plan_gap = True
+                            
+                            if local_plan_gap == True:
+                                self.local_plan_deviation.iloc[i, 0] = 0.0
+                            else:
+                                diff_x = 0
+                                diff_y = 0
+                                real_deviation = False
+                                devs = []
+                                for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
+                                    local_diffs = []
+                                    deviation_local = True  
+                                    for k in range(0, len(transformed_plan_xs)):
+                                        diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
+                                        diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                                        diff = math.sqrt(diff_x + diff_y)
+                                        local_diffs.append(diff)
+                                        if diff <= big_deviation_threshold:
+                                            deviation_local = False
+                                            break # comment out to get the real biggest minimal difference between local and tranformed plan
+                                    devs.append(min(local_diffs))
+                                    if deviation_local == True:
+                                        real_deviation = True
+                                        break # comment out to get the real biggest minimal difference between local and tranformed plan
+                                
+                                if real_deviation == True:
+                                    self.local_plan_deviation.iloc[i, 0] = 1.0
+                                else:    
+                                    self.local_plan_deviation.iloc[i, 0] = 0.0                
+                    else:
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                    
+                    if print_iterations == True:
+                        print('\ni: ', i)
+                        print('local plan found: ', local_plan_found)
+                        print('local_plan_point_in_obstacle: ', local_plan_point_in_obstacle)
+                        if local_plan_found == True and local_plan_point_in_obstacle == False:
+                            print('local plan length: ', len(local_plan_xs))
+                            print('local_plan_gap: ', local_plan_gap)
+                            print('max(local_plan_gaps): ', max(local_plan_gaps))
+                            if local_plan_gap == False:
+                                print('deviation: ', real_deviation)
+                                print('max dev: ', max(devs))
+                        print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
+                        print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
                 
             elif deviation_type == 'small_deviation':
                 # fill in deviation dataframe
                 for i in range(0, sampled_instance.shape[0]):
-                    print('i = ', i)
+                    #print('i = ', i)
                     # test if there is local plan
                     local_plan_xs = []
                     local_plan_ys = []
@@ -976,7 +967,7 @@ class ExplainRobotNavigation:
             elif deviation_type == 'no_deviation':
                 # fill in deviation dataframe
                 for i in range(0, sampled_instance.shape[0]):
-                    print('i = ', i)
+                    #print('i = ', i)
                     # test if there is local plan
                     local_plan_xs = []
                     local_plan_ys = []
@@ -1066,9 +1057,12 @@ class ExplainRobotNavigation:
                                 print('max(devs): ', max(devs))
                         print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                         print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
-    
+
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         #self.cmd_vel_perturb['deviate'].to_csv('izlaz.csv')
+
+        end = time.time()
+        print('end - start main part = ', end - start)
         
         # if more outputs wanted
         more_outputs = False
@@ -1966,7 +1960,6 @@ class ExplainRobotNavigation:
                 elif self.image[i, j] == 100:
                     self.image[i, j] = 99
 
-
     def testSegmentation(self, expID):
 
         print('Test segmentation function beginning')
@@ -2387,7 +2380,7 @@ class ExplainRobotNavigation:
             import time
 
             #with open('explanations' + str(self.expID) + '.csv', "w") as myfile:
-            with open('explanations' + str(ID) + '.csv', "w") as myfile:
+            with open('explanations' + str(ID) + '.csv', "a") as myfile:
                 myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
                 
                 for i in range(0, segments_num + 1):
@@ -2500,7 +2493,7 @@ class ExplainRobotNavigation:
         #print('sampled_instance: ', sampled_instance)
         #print('sampled_instance.shape: ', sampled_instance.shape)
         
-        #'''
+        '''
         # I will use channel 0 from sampled_instance as actual perturbed data
         # Perturbed pixel intensity is perturb_hide_color_value
         # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
@@ -2514,7 +2507,7 @@ class ExplainRobotNavigation:
                         elif self.image[j, k] == 99:
                             sampled_instance[i][j, k, 0] = 0
                             #print('obstacle')
-        #'''
+        '''
 
         #'''
         # Save perturbed costmap_data to file for C++ node
@@ -2563,19 +2556,14 @@ class ExplainRobotNavigation:
         #print('self.transformed_plan: ', self.transformed_plan)
         #print('self.transformed_plan.shape: ', self.transformed_plan.shape)
 
-        # only needed for classifier_fn_image_plot() function
-        self.sampled_instance = sampled_instance
-
-        # plot perturbation of local costmap
-        #self.classifier_fn_image_plot()
-
         import math
 
         # fill the list of the original local plan coordinates
         #print('self.local_plan_tmp: ', self.local_plan_tmp)
         #print('\nself.local_plan_tmp.shape[0]: ', self.local_plan_tmp.shape[0])
-        local_plan_xs_orig = []
-        local_plan_ys_orig = []
+        local_plan_xs_orig = self.local_plan_x_list #[]
+        local_plan_ys_orig = self.local_plan_y_list #[]
+        '''
         for i in range(0, self.local_plan_tmp.shape[0]):
             x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
@@ -2583,6 +2571,7 @@ class ExplainRobotNavigation:
             if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                 local_plan_xs_orig.append(x_temp)
                 local_plan_ys_orig.append(y_temp)
+        '''
         #print('\nlen(local_plan_xs): ', len(local_plan_xs_orig))
         #print('len(local_plan_ys): ', len(local_plan_ys_orig))
 
@@ -2590,8 +2579,6 @@ class ExplainRobotNavigation:
         #print('\nself.transformed_plan.shape[0]: ', self.transformed_plan.shape[0])
         transformed_plan_xs = []
         transformed_plan_ys = []
-        #closest_to_robot_index = -100
-        min_diff = 100
         for i in range(0, self.transformed_plan.shape[0]):
             x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
@@ -2600,10 +2587,6 @@ class ExplainRobotNavigation:
                 transformed_plan_xs.append(x_temp)
                 transformed_plan_ys.append(y_temp)
 
-                diff = math.sqrt( (transformed_plan_xs[-1]-local_plan_xs_orig[0])**2 + (transformed_plan_ys[-1]-local_plan_ys_orig[0])**2 )
-                if diff < min_diff:
-                    min_diff = diff
-                    #closest_to_robot_index = len(transformed_plan_xs) - 1
         transformed_plan_xs = np.array(transformed_plan_xs)
         transformed_plan_ys = np.array(transformed_plan_ys)
 
@@ -2681,8 +2664,8 @@ class ExplainRobotNavigation:
                     deviation_type = 'no_deviation'
                     #print('max_dev: ', max(devs))
 
-        print('deviation_type: ', deviation_type)            
-
+        print('deviation_type: ', deviation_type)
+        
         # deviation of local plan from global plan
         self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
         #print('self.local_plan_deviation: ', self.local_plan_deviation)
@@ -2731,77 +2714,9 @@ class ExplainRobotNavigation:
                 dev_original = max(devs)    
 
             self.local_plan_deviation.iloc[i, 0] = max(devs)
-
-        
+       
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         
-        # if more outputs wanted
-        more_outputs = False
-        if more_outputs == True:
-            # classification
-            stop_list = []
-            linear_positive_list = []
-            rotate_left_list = []
-            rotate_right_list = []
-            ahead_straight_list = []
-            ahead_left_list = []
-            ahead_right_list = []
-            for i in range(0, self.cmd_vel_perturb.shape[0]):
-                if abs(self.cmd_vel_perturb.iloc[i, 0]) < 0.01:
-                    stop_list.append(1.0)
-                else:
-                    stop_list.append(0.0)
-
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01:
-                    linear_positive_list.append(1.0)
-                else:
-                    linear_positive_list.append(0.0)
-
-                if self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                    rotate_left_list.append(1.0)
-                else:
-                    rotate_left_list.append(0.0)
-
-                if self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                    rotate_right_list.append(1.0)
-                else:
-                    rotate_right_list.append(0.0)
-
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) < 0.01:
-                    ahead_straight_list.append(1.0)
-                else:
-                    ahead_straight_list.append(0.0)
-
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                    ahead_left_list.append(1.0)
-                else:
-                    ahead_left_list.append(0.0)
-
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                    ahead_right_list.append(1.0)
-                else:
-                    ahead_right_list.append(0.0)
-
-            self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
-            self.cmd_vel_perturb['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['linear_positive'])
-            self.cmd_vel_perturb['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left'])
-            self.cmd_vel_perturb['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right'])
-            self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
-            self.cmd_vel_perturb['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_left'])
-            self.cmd_vel_perturb['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_right'])
-
-            '''
-            print('self.cmd_vel_perturb: ', self.cmd_vel_perturb)
-            print('self.local_plan_deviation: ', self.local_plan_deviation)
-            print('stop_list: ', stop_list)
-            print('linear_positive_list: ', linear_positive_list)
-            print('rotate_left_list: ', rotate_left_list)
-            print('rotate_right_list: ', rotate_right_list)
-            print('ahead_straight_list: ', ahead_straight_list)
-            print('ahead_left_list: ', ahead_left_list)
-            print('ahead_right_list: ', ahead_right_list)
-            '''
-
         print('classifier_fn_image ended')
 
         return np.array(self.cmd_vel_perturb.iloc[:, 3:]), planner_time

@@ -266,7 +266,7 @@ def LimeSingle():
                                                         tabular_mode, explanation_mode, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
     
-    choose_random_instance = False
+    choose_random_instance = True
 
     if choose_random_instance == True:
         # random instance selection
@@ -568,12 +568,12 @@ def EvaluateLIME():
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     import time
-    evaluation_sample_size = 50
+    evaluation_sample_size = 100
     
     with open("explanations.txt", "a") as myfile:
         myfile.write('explain_instance_time\n')
     
-    for i in range(8, evaluation_sample_size):
+    for i in range(0, evaluation_sample_size):
         choose_random_instance = True
 
         if choose_random_instance == True:
