@@ -100,7 +100,10 @@ class ExplainRobotNavigation:
         if self.explanation_mode == 'image':
             self.index = self.expID
 
-            self.manual_instance_loading = False
+            self.case = 3
+            self.eps = True
+            self.semantic_seg = True
+            self.manual_instance_loading = True
             self.manually_make_semantic_map = False
             self.test_segmentation = False 
 
@@ -139,7 +142,7 @@ class ExplainRobotNavigation:
                 #self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
                 #self.plan_tmp = self.plan_tmp.iloc[:, 1:]
                 #self.plan_tmp.to_csv('plan_new.csv', index=False, header=True)
-                self.plan_tmp = pd.read_csv('plan_new.csv')
+                self.plan_tmp = pd.read_csv('global_plan_new.csv')
 
                 # Save global plan instance to a file
                 #self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
@@ -189,7 +192,6 @@ class ExplainRobotNavigation:
             # Use new variable in the algorithm - possible time saving
             img = copy.deepcopy(self.image)
 
-            self.semantic_seg = False
             if self.semantic_seg == True:
                 segm_fn = 'semantic_segmentation'
             elif self.semantic_seg == False:
@@ -394,10 +396,6 @@ class ExplainRobotNavigation:
 
         pd.DataFrame(map_sem_1).to_csv('semantic_map_1_temporary.csv', index=False, header=False)
         pd.DataFrame(map_sem_2).to_csv('semantic_map_2_temporary.csv', index=False, header=False)
-        #pd.DataFrame(indices_x).to_csv('INDICES_X.csv', index=False, header=False)
-        #pd.DataFrame(indices_y).to_csv('INDICES_Y.csv', index=False, header=False)
-
-        #print('\nbr_duplikata: ', br_duplikata)
 
     # classifier function for lime image
     def classifier_fn_image(self, sampled_instance):
@@ -412,7 +410,7 @@ class ExplainRobotNavigation:
         
         import time
         start = time.time()
-        #'''
+        '''
         # I will use channel 0 from sampled_instance as actual perturbed data
         # Perturbed pixel intensity is perturb_hide_color_value
         # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
@@ -427,7 +425,7 @@ class ExplainRobotNavigation:
                         elif self.image[j, k] == 99.0:
                             sampled_instance[i][j, k, 0] = 0.0
                             #print('obstacle')
-        #'''
+        '''
         end = time.time()
         print('end - start perturb:= ', end - start)
 
@@ -463,19 +461,19 @@ class ExplainRobotNavigation:
         self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('self.cmd_vel: ', self.cmd_vel_perturb)
         #print('self.cmd_vel.shape: ', self.cmd_vel_perturb.shape)
-        #self.cmd_vel_perturb.to_csv('cmd_vel.csv')
+        self.cmd_vel_perturb.to_csv('cmd_vel.csv')
 
         # load local plans
         self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
         #print('self.local_plans: ', self.local_plans)
         #print('self.local_plans.shape: ', self.local_plans.shape)
-        #self.local_plans.to_csv('local_plans.csv')
+        self.local_plans.to_csv('local_plans.csv')
 
         # load transformed plan
         self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
         #print('self.transformed_plan: ', self.transformed_plan)
         #print('self.transformed_plan.shape: ', self.transformed_plan.shape)
-
+        self.transformed_plan.to_csv('transformed_plan.csv')
 
         plot_perturbations = False
         if plot_perturbations == True:
@@ -494,8 +492,9 @@ class ExplainRobotNavigation:
         # fill the list of the original local plan coordinates
         #print('self.local_plan_tmp: ', self.local_plan_tmp)
         #print('\nself.local_plan_tmp.shape[0]: ', self.local_plan_tmp.shape[0])
-        local_plan_xs_orig = []
-        local_plan_ys_orig = []
+        local_plan_xs_orig = self.local_plan_x_list #[]
+        local_plan_ys_orig = self.local_plan_y_list #[]
+        '''
         for i in range(0, self.local_plan_tmp.shape[0]):
             x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
@@ -503,23 +502,21 @@ class ExplainRobotNavigation:
             if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                 local_plan_xs_orig.append(x_temp)
                 local_plan_ys_orig.append(y_temp)
+        '''
         #print('\nlen(local_plan_xs): ', len(local_plan_xs_orig))
         #print('len(local_plan_ys): ', len(local_plan_ys_orig))
 
         # fill the list of transformed plan coordinates
         #print('\nself.transformed_plan.shape[0]: ', self.transformed_plan.shape[0])
-        transformed_plan_xs = []
-        transformed_plan_ys = []
+        self.transformed_plan_xs = []
+        self.transformed_plan_ys = []
         for i in range(0, self.transformed_plan.shape[0]):
             x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
             if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                transformed_plan_xs.append(x_temp)
-                transformed_plan_ys.append(y_temp)
-
-        transformed_plan_xs = np.array(transformed_plan_xs)
-        transformed_plan_ys = np.array(transformed_plan_ys)
+                self.transformed_plan_xs.append(x_temp)
+                self.transformed_plan_ys.append(y_temp)
 
         start = time.time()
 
@@ -554,9 +551,9 @@ class ExplainRobotNavigation:
             for j in range( 0, len(local_plan_xs_orig)):
                 diffs = []
                 deviation_local = True  
-                for k in range(0, len(transformed_plan_xs)):
-                    diff_x = (local_plan_xs_orig[j] - transformed_plan_xs[k]) ** 2
-                    diff_y = (local_plan_ys_orig[j] - transformed_plan_ys[k]) ** 2
+                for k in range(0, len(self.transformed_plan_xs)):
+                    diff_x = (local_plan_xs_orig[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (local_plan_ys_orig[j] - self.transformed_plan_ys[k]) ** 2
                     diff = math.sqrt(diff_x + diff_y)
                     diffs.append(diff)
                     if diff <= big_deviation_threshold:
@@ -580,9 +577,9 @@ class ExplainRobotNavigation:
                 small_deviation = False
                 for j in range( 0, len(local_plan_xs_orig)):
                     deviation_local = True  
-                    for k in range(0, len(transformed_plan_xs)):
-                        diff_x = (local_plan_xs_orig[j] - transformed_plan_xs[k]) ** 2
-                        diff_y = (local_plan_ys_orig[j] - transformed_plan_ys[k]) ** 2
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (local_plan_xs_orig[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (local_plan_ys_orig[j] - self.transformed_plan_ys[k]) ** 2
                         diff = math.sqrt(diff_x + diff_y)
                         if diff <= small_deviation_threshold:
                             deviation_local = False
@@ -625,7 +622,7 @@ class ExplainRobotNavigation:
             dev_original = 0
             # find if there is local plan
             for i in range(0, sampled_instance.shape[0]):
-                print('i = ', i)
+                #print('i = ', i)
                 local_plan_xs = []
                 local_plan_ys = []
                 local_plan_found = False
@@ -643,7 +640,7 @@ class ExplainRobotNavigation:
                     if deviation_type == 'stop':
                         self.local_plan_deviation.iloc[i, 0] = dev_original
                     elif deviation_type == 'no_deviation':
-                        self.local_plan_deviation.iloc[i, 0] = 100
+                        self.local_plan_deviation.iloc[i, 0] = 745.5 #1000
                     elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
                         self.local_plan_deviation.iloc[i, 0] = 0.0
                     continue             
@@ -654,17 +651,17 @@ class ExplainRobotNavigation:
                 for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
                     local_diffs = []
                     deviation_local = True  
-                    for k in range(0, len(transformed_plan_xs)):
-                        diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
-                        diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
                         diff = math.sqrt(diff_x + diff_y)
                         local_diffs.append(diff)                        
                     devs.append(min(local_diffs))
 
                 if i == 0:
-                    dev_original = max(devs)    
+                    dev_original = sum(devs)    
 
-                self.local_plan_deviation.iloc[i, 0] = max(devs)
+                self.local_plan_deviation.iloc[i, 0] = sum(devs)
 
         elif mode == 'classification':
             print_iterations = False                
@@ -823,9 +820,9 @@ class ExplainRobotNavigation:
                                 for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
                                     local_diffs = []
                                     deviation_local = True  
-                                    for k in range(0, len(transformed_plan_xs)):
-                                        diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
-                                        diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                                    for k in range(0, len(self.transformed_plan_xs)):
+                                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
                                         diff = math.sqrt(diff_x + diff_y)
                                         local_diffs.append(diff)
                                         if diff <= big_deviation_threshold:
@@ -912,9 +909,9 @@ class ExplainRobotNavigation:
                                 for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
                                     diffs = []
                                     deviation_local = False  
-                                    for k in range(0, len(transformed_plan_xs)):
-                                        diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
-                                        diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                                    for k in range(0, len(self.transformed_plan_xs)):
+                                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
                                         diff = math.sqrt(diff_x + diff_y)
                                         #print('diff: ', diff)
                                         diffs.append(diff)
@@ -1019,9 +1016,9 @@ class ExplainRobotNavigation:
                                 for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
                                     diffs = []
                                     deviation_local = True  
-                                    for k in range(0, len(transformed_plan_xs)):
-                                        diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
-                                        diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                                    for k in range(0, len(self.transformed_plan_xs)):
+                                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
                                         diff = math.sqrt(diff_x + diff_y)
                                         diffs.append(diff)
                                         if diff < no_deviation_threshold:
@@ -1059,7 +1056,7 @@ class ExplainRobotNavigation:
                         print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
 
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
-        #self.cmd_vel_perturb['deviate'].to_csv('izlaz.csv')
+        self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
 
         end = time.time()
         print('end - start main part = ', end - start)
@@ -1174,12 +1171,12 @@ class ExplainRobotNavigation:
                     if 0 <= index_x < 160 and 0 <= index_y < 160:
                         local_plan_x_list.append(index_x)
                         local_plan_y_list.append(index_y)
-                    '''
+                    #'''
                     [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans.iloc[j, 2], self.local_plans.iloc[j, 3])
                     yaw_x = math.cos(yaw)
                     yaw_y = math.sin(yaw)
-                    plt.quiver(index_x, index_y, yaw_x, yaw_y, color='white')
-                    '''
+                    plt.quiver(index_x, index_y, yaw_y, yaw_x, color='white')
+                    #'''
             # print('i: ', i)
             # print('local_plan_x_list.size(): ', len(local_plan_x_list))
             # print('local_plan_y_list.size(): ', len(local_plan_y_list))
@@ -1239,7 +1236,7 @@ class ExplainRobotNavigation:
 
             # plot robot's location and orientation
             plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-            plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
+            plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
 
             # plot command velocities as text
             plt.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_perturb.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_perturb.iloc[i, 2], 2)))
@@ -1291,12 +1288,16 @@ class ExplainRobotNavigation:
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
         #ax.imshow(self.image, aspect='auto')
         ax.imshow(image.astype(np.uint8), aspect='auto')
         fig.savefig(path_core + '/input.png')
+        if self.eps == True:
+            fig.savefig(path_core + '/input.eps')
         fig.clf()
 
         # plot explanation
@@ -1308,7 +1309,9 @@ class ExplainRobotNavigation:
         ax.set_axis_off()
         fig.add_axes(ax)
         
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        #print('len(self.transformed_plan_x_list): ', len(self.transformed_plan_xs))
+        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
         ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
         ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
@@ -1317,6 +1320,8 @@ class ExplainRobotNavigation:
         #ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
         ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
         fig.savefig(path_core + '/explanation.png', transparent=False)
+        if self.eps == True:
+            fig.savefig(path_core + '/explanation.eps', transparent=False)
         fig.clf()
                         
         if self.semantic_seg == False:
@@ -1511,28 +1516,28 @@ class ExplainRobotNavigation:
                 for j in range(0, len(self.exp)):
                     if self.exp[j][0] == unknown_obstacles_vals[i]:
                         print('\nUnknown obstacle ' + str(i+1) + ' has a weight ' + str(round(self.exp[j][1], 4)))
-                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
                         
-                        '''
-                        # case 3
-                        #ax.text(x_center + 2, y_center - 4, 'Unknown obstacle ' + str(i+1), c='white')
-                        '''
+                        if self.case == 1:
+                            # case 1
+                            ax.text(x_center + 2, y_center - 4, 'Unknown obstacle ' + str(i+1), c='white')
                         
-                        '''
-                        # case 2
-                        if i == 1:
-                            ax.text(x_center, y_center-3, 'Unknown obstacle ' + str(i), c='white')
-                        '''
+                        elif self.case == 2:
+                            # case 2
+                            if i == 1:
+                                ax.text(x_center, y_center-3, 'Unknown obstacle ' + str(i), c='white')
 
-                        '''
-                        # case 3
-                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
-                        '''
-                        
+                        elif self.case == 3:
+                            # case 3
+                            ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+
+                        else:
+                            ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+
                         break
                 
 
-            ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
+            #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
+            ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
             ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='purple', marker='o')
             ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
@@ -1555,66 +1560,65 @@ class ExplainRobotNavigation:
                 # printing/plotting explanation weights
                 for j in range(0, len(semantic_tags)):
                     if semantic_tags.iloc[j, 0] == v:
-                        ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
+                        if self.case == 3:
+                            # case 3
+                            if semantic_tags.iloc[j, 1] == 'lab south':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                                ax.text(cy - 10, cx + 5, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                                ax.text(cy, cx + 12, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'lab north':    
+                                ax.text(cy - 20, cx - 10, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'lab east':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall I':    
+                                ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall II':    
+                                ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall III':    
+                                ax.text(cy - 3, cx + 5, semantic_tags.iloc[j, 1], c='white')
 
-                        '''
-                        # case 3
-                        if semantic_tags.iloc[j, 1] == 'lab south':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                            ax.text(cy - 10, cx + 5, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                            ax.text(cy, cx + 12, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab north':    
-                            ax.text(cy - 20, cx - 10, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab east':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall I':    
-                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall II':    
-                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall III':    
-                            ax.text(cy - 3, cx + 5, semantic_tags.iloc[j, 1], c='white')
-                        '''
+                        elif self.case == 2:
+                            # case 2
+                            if semantic_tags.iloc[j, 1] == 'lab south':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                                ax.text(cy-15, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'lab north':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'lab east':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall I':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall II':    
+                                ax.text(cy-8, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall III':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
 
-                        '''
-                        # case 2
-                        if semantic_tags.iloc[j, 1] == 'lab south':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                            ax.text(cy-15, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab north':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab east':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall I':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall II':    
-                            ax.text(cy-8, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall III':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        '''
+                        elif self.case == 1:
+                            # case 1
+                            if semantic_tags.iloc[j, 1] == 'lab south':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'lab north':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'lab east':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall I':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall II':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                            elif semantic_tags.iloc[j, 1] == 'wall III':    
+                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')    
 
-                        '''
-                        if semantic_tags.iloc[j, 1] == 'lab south':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab north':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab east':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall I':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall II':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall III':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')    
-                        '''
+                        else:
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
 
                         break
                 i = i + 1
@@ -1626,6 +1630,8 @@ class ExplainRobotNavigation:
     
             ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
             fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
+            if self.eps == True:
+                fig.savefig(path_core + '/semantic_explanation.eps', transparent=False)
             fig.clf()
 
             fig = plt.figure(frameon=False)
@@ -1945,6 +1951,7 @@ class ExplainRobotNavigation:
         for i in range(0, self.plan_tmp_tmp.shape[0], 3):
             x_temp = int((self.plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             if 0 <= x_temp < self.costmap_size:
+                #print('I = ', i)
                 self.plan_x_list.append(x_temp)
                 self.plan_y_list.append(
                     int((self.plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
