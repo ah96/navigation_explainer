@@ -276,7 +276,7 @@ def LimeSingle():
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 41 #DS1: #51 #78 #84 #144, #DS2: #260
+        expID = 8 #DS1: #51 #78 #84 #144, #DS2: #260
         print('\nexpID: ', expID)
 
     exp_nav.explain_instance(expID)
@@ -568,12 +568,13 @@ def EvaluateLIME():
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     import time
-    evaluation_sample_size = 50
+    evaluation_sample_size = 100
     
     with open("explanations.txt", "a") as myfile:
         myfile.write('explain_instance_time\n')
     
-    for i in range(8, evaluation_sample_size):
+    for i in range(5, evaluation_sample_size):
+        print('i = ', i)
         choose_random_instance = True
 
         if choose_random_instance == True:
