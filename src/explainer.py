@@ -428,7 +428,7 @@ def CreateDataset():
     print('local_costmap_info.shape[0]: ', local_costmap_info.shape[0])
     print('num_of_first_rows_to_delete: ', num_of_first_rows_to_delete)
     #import random    
-    for i in range(41, dataset_size):
+    for i in range(0, dataset_size):
         # optional instance selection - deterministic
         expID = i
         print('expID: ', expID)
