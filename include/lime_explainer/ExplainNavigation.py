@@ -2392,6 +2392,9 @@ class ExplainRobotNavigation:
                 
                 for i in range(0, segments_num + 1):
                     num_of_iterations_for_one_num_of_segments = 30 #30 #50
+
+                    if i == segments_num:
+                        num_of_iterations_for_one_num_of_segments = 1
                     
                     for j in range(0, num_of_iterations_for_one_num_of_segments): 
                         # measure explain_instance time
@@ -2682,6 +2685,7 @@ class ExplainRobotNavigation:
         dev_original = 0
         # find if there is local plan
         for i in range(0, sampled_instance.shape[0]):
+            #print('i = ', i)
             local_plan_xs = []
             local_plan_ys = []
             local_plan_found = False
@@ -2699,7 +2703,7 @@ class ExplainRobotNavigation:
                 if deviation_type == 'stop':
                     self.local_plan_deviation.iloc[i, 0] = dev_original
                 elif deviation_type == 'no_deviation':
-                    self.local_plan_deviation.iloc[i, 0] = 100
+                    self.local_plan_deviation.iloc[i, 0] = 745.5 #100
                 elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
                     self.local_plan_deviation.iloc[i, 0] = 0.0
                 continue             
@@ -2710,17 +2714,17 @@ class ExplainRobotNavigation:
             for j in range( 0, len(local_plan_xs)): #min(len(local_plan_xs), len(local_plan_xs_orig)) ):
                 local_diffs = []
                 deviation_local = True  
-                for k in range(0, len(transformed_plan_xs)):
-                    diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
-                    diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                for k in range(0, len(self.transformed_plan_xs)):
+                    diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
                     diff = math.sqrt(diff_x + diff_y)
                     local_diffs.append(diff)                        
                 devs.append(min(local_diffs))
 
             if i == 0:
-                dev_original = max(devs)    
+                dev_original = sum(devs)    
 
-            self.local_plan_deviation.iloc[i, 0] = max(devs)
+            self.local_plan_deviation.iloc[i, 0] = sum(devs)
        
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         
