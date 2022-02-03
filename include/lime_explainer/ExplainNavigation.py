@@ -2587,18 +2587,15 @@ class ExplainRobotNavigation:
 
         # fill the list of transformed plan coordinates
         #print('\nself.transformed_plan.shape[0]: ', self.transformed_plan.shape[0])
-        transformed_plan_xs = []
-        transformed_plan_ys = []
+        self.transformed_plan_xs = []
+        self.transformed_plan_ys = []
         for i in range(0, self.transformed_plan.shape[0]):
             x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
             if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                transformed_plan_xs.append(x_temp)
-                transformed_plan_ys.append(y_temp)
-
-        transformed_plan_xs = np.array(transformed_plan_xs)
-        transformed_plan_ys = np.array(transformed_plan_ys)
+                self.transformed_plan_xs.append(x_temp)
+                self.transformed_plan_ys.append(y_temp)
 
         # DETERMINE THE DEVIATION TYPE
         # thresholds
@@ -2631,9 +2628,9 @@ class ExplainRobotNavigation:
             for j in range( 0, len(local_plan_xs_orig)):
                 diffs = []
                 deviation_local = True  
-                for k in range(0, len(transformed_plan_xs)):
-                    diff_x = (local_plan_xs_orig[j] - transformed_plan_xs[k]) ** 2
-                    diff_y = (local_plan_ys_orig[j] - transformed_plan_ys[k]) ** 2
+                for k in range(0, len(self.transformed_plan_xs)):
+                    diff_x = (local_plan_xs_orig[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (local_plan_ys_orig[j] - self.transformed_plan_ys[k]) ** 2
                     diff = math.sqrt(diff_x + diff_y)
                     diffs.append(diff)
                     if diff <= big_deviation_threshold:
@@ -2657,9 +2654,9 @@ class ExplainRobotNavigation:
                 small_deviation = False
                 for j in range( 0, len(local_plan_xs_orig)):
                     deviation_local = True  
-                    for k in range(0, len(transformed_plan_xs)):
-                        diff_x = (local_plan_xs_orig[j] - transformed_plan_xs[k]) ** 2
-                        diff_y = (local_plan_ys_orig[j] - transformed_plan_ys[k]) ** 2
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (local_plan_xs_orig[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (local_plan_ys_orig[j] - self.transformed_plan_ys[k]) ** 2
                         diff = math.sqrt(diff_x + diff_y)
                         if diff <= small_deviation_threshold:
                             deviation_local = False
