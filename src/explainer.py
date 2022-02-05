@@ -572,13 +572,13 @@ def EvaluateLIME():
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     import time
-    evaluation_sample_size = 1
+    evaluation_sample_size = 50
     
     with open("explanations.txt", "a") as myfile:
         myfile.write('explain_instance_time\n')
     
     for i in range(0, evaluation_sample_size):
-        print('i = ', i)
+        print('\ni = ', i)
         choose_random_instance = True
 
         if choose_random_instance == True:

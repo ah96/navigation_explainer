@@ -2373,6 +2373,7 @@ class ExplainRobotNavigation:
                 myfile.write('num_samples,before_explain_instance_time,segmentation_time,classifier_fn_time,planner_time,target_calculation_time,costmap_save_time,distances_time,regressor_time,explain_instance_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5,weight_6,weight_7,weight_8\n')
                 
                 for i in nums_of_samples:
+                    #print('\i = ', i)
                     num_of_iterations_for_one_num_of_segments = 10 #30 #50
 
                     if i == 256:
@@ -2381,7 +2382,7 @@ class ExplainRobotNavigation:
                     for j in range(0, num_of_iterations_for_one_num_of_segments): 
                         # measure explain_instance time
                         start = time.time()
-                        self.explanation, self.segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time, costmap_save_time, distances_time, regressor_time = self.explainer.explain_instance_evaluation(
+                        self.explanation, self.segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time,costmap_save_time, distances_time, regressor_time = self.explainer.explain_instance_evaluation(
                             self.image, self.classifier_fn_image_evaluation, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
                             self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
                             self.plan_x_list, self.plan_y_list,
@@ -2422,9 +2423,7 @@ class ExplainRobotNavigation:
                         regressor_time = round(regressor_time,3)
 
                         # write measured times to .csv file
-                        myfile.write(str(i) + ',' + str(before_explain_instance_time) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(
-                                planner_time)+ str(target_calculation_time) + ',' + str(costmap_save_time) + ',' + str(distances_time) + ',' + str(regressor_time) + ',' + str(explain_instance_time) + ',' + str(
-                                explanation_pics_time) + ',' + str(plotting_time) + ',')
+                        myfile.write(str(i) + ',' + str(before_explain_instance_time) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(planner_time) + ',' + str(target_calculation_time) + ',' + str(costmap_save_time) + ',' + str(distances_time) + ',' + str(regressor_time) + ',' + str(explain_instance_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
                         for k in range(0, len(self.exp)):
                             for l in range(0, len(self.exp)):
                                 if k == self.exp[l][0]:
