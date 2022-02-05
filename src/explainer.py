@@ -573,7 +573,7 @@ def EvaluateLIME():
     with open("explanations.txt", "a") as myfile:
         myfile.write('explain_instance_time\n')
     
-    for i in range(0, evaluation_sample_size):
+    for i in range(47, 59):
         print('i = ', i)
         choose_random_instance = True
 
@@ -585,7 +585,7 @@ def EvaluateLIME():
             print('\nexpID: ', expID)
         else:     
             # optional instance selection - deterministic
-            expID = 75 #DS1: #51 #78 #84 #144, #DS2: #260
+            expID = 273 #DS1: #51 #78 #84 #144, #DS2: #260
             print('\nexpID: ', expID)
 
         with open('IDs.csv', "a") as myfile:

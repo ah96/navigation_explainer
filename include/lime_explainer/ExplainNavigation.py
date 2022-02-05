@@ -2388,7 +2388,7 @@ class ExplainRobotNavigation:
 
             #with open('explanations' + str(self.expID) + '.csv', "w") as myfile:
             with open('explanations' + str(ID) + '.csv', "a") as myfile:
-                myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5\n')
+                myfile.write('num_samples,segmentation_time,classifier_fn_time,planner_time,explanation_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5,weight_6,weight_7,weight_8\n')
                 
                 for i in range(0, segments_num + 1):
                     num_of_iterations_for_one_num_of_segments = 30 #30 #50
