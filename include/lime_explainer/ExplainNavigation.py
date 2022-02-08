@@ -11,6 +11,9 @@ import os
 # lime image - my implementation
 from lime_explainer import lime_image
 
+# anchor_image - my implementation
+from lime_explainer import anchor_image
+
 # for managing data
 import numpy as np
 import matplotlib.pyplot as plt
@@ -39,7 +42,7 @@ perturb_hide_color_value = 0 #0 #50
 class ExplainRobotNavigation:
     # constructor
     def __init__(self, cmd_vel, odom, plan, global_plan, local_plan, current_goal, local_costmap_data,
-                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, tabular_mode, explanation_mode,
+                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, tabular_mode, explanation_mode, explanation_alg,
                  num_of_first_rows_to_delete, footprints, output_class_name, X_train, X_test, y_train, y_test, num_samples):
         print('\nConstructor starting')
 
@@ -59,6 +62,7 @@ class ExplainRobotNavigation:
         self.map_info = map_info
         self.tabular_mode = tabular_mode
         self.explanation_mode = explanation_mode
+        self.explanation_algorithm = explanation_alg
         self.offset = num_of_first_rows_to_delete
         self.footprints = footprints
         self.costmap_size = local_costmap_info.iloc[0, 2]
@@ -69,19 +73,32 @@ class ExplainRobotNavigation:
         self.num_samples = num_samples
         self.output_class_name = output_class_name
 
-        # manually modified LIME image
-        if self.explanation_mode == 'image':
-            self.explainer = lime_image.LimeImageExplainer(verbose=True)
+        if self.explanation_algorithm == 'LIME':
+            # manually modified LIME image
+            if self.explanation_mode == 'image':
+                self.explainer = lime_image.LimeImageExplainer(verbose=True)
 
-        elif self.explanation_mode == 'tabular':
-            self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.X_train),
-                                                                    feature_names=self.X_train.columns, mode=self.tabular_mode,
-                                                                    class_names=[self.output_class_name],
-                                                                    verbose=True, feature_selection='none',
-                                                                    discretize_continuous=False,
-                                                                    sample_around_instance=False, random_state=None)
-        elif self.explanation_mode == 'tabular_costmap':
-            pass
+            elif self.explanation_mode == 'tabular':
+                self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.X_train),
+                                                                        feature_names=self.X_train.columns, mode=self.tabular_mode,
+                                                                        class_names=[self.output_class_name],
+                                                                        verbose=True, feature_selection='none',
+                                                                        discretize_continuous=False,
+                                                                        sample_around_instance=False, random_state=None)
+            elif self.explanation_mode == 'tabular_costmap':
+                pass
+
+        elif self.explanation_algorithm == 'Anchors':
+            # manually modified Anchors Image
+            if self.explanation_mode == 'image':
+                self.explainer = anchor_image.AnchorImage( distribution_path=None, transform_img_fn=None, 
+                                                           n=1000, dummys=None, white=None, segmentation_fn=slic)
+
+            elif self.explanation_mode == 'tabular':
+                pass
+              
+            elif self.explanation_mode == 'tabular_costmap':
+                pass
         
         print('\nConstructor ending')
 
@@ -90,183 +107,479 @@ class ExplainRobotNavigation:
         print('\nexplain_instance starting')
 
         self.expID = expID
-            
-        # if explanation_mode is 'image'
-        if self.explanation_mode == 'image':
-            self.index = self.expID
+        self.index = self.expID
 
-            self.case = 3
-            self.eps = True
-            self.semantic_seg = False
-            self.manual_instance_loading = False
-            self.manually_make_semantic_map = False
-            self.test_segmentation = False 
+        self.case = 3
+        self.eps = False
+        self.semantic_seg = False
+        self.manual_instance_loading = False
+        self.manually_make_semantic_map = False
+        self.test_segmentation = False
 
-            if self.manual_instance_loading == False:
-                # Get local costmap
-                # Original costmap will be saved to self.local_costmap_original
-                self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
+        if self.explanation_algorithm == 'LIME':    
+            # if explanation_mode is 'image'
+            if self.explanation_mode == 'image':
+                import time
+                before_explain_instance_start = time.time()
 
-                # Make image a np.array deepcopy of local_costmap_original
-                self.image = np.array(copy.deepcopy(self.local_costmap_original))
+                if self.manual_instance_loading == False:
+                    # Get local costmap
+                    # Original costmap will be saved to self.local_costmap_original
+                    self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
 
-                # Turn inflated area to free space and 100s to 99s
-                self.inflatedToFree()
+                    # Make image a np.array deepcopy of local_costmap_original
+                    self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
-                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-                self.image = self.image * 1.0
+                    inflated_to_static_start = time.time()
+                    # Turn inflated area to free space and 100s to 99s
+                    self.inflatedToStatic()
+                    inflated_to_static_end = time.time()
+                    inflated_to_static_time = inflated_to_static_end - inflated_to_static_start
+                    print('\ninflated_to_static_time: ', inflated_to_static_end - inflated_to_static_start)
 
-            elif self.manual_instance_loading == True:
-                #pd.DataFrame(self.image).to_csv('costmap_new.csv', index=False)
-                self.image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
+                    # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+                    self.image = self.image * 1.0
 
-                # Save footprint instance to a file
-                #self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
-                #self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
-                #self.footprint_tmp.to_csv('footprint_new.csv', index=False, header=True)
-                self.footprint_tmp = pd.read_csv('footprint_new.csv')
-                #print(self.footprint_tmp)
-                
-                # Save local plan instance to a file
-                #self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
-                #self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
-                #self.local_plan_tmp.to_csv('local_plan_new.csv', index=False, header=True)
-                self.local_plan_tmp = pd.read_csv('local_plan_new.csv')
+                elif self.manual_instance_loading == True:
+                    # Load costmap
+                    self.image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
 
-                # Save plan (from global planner) instance to a file
-                #self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
-                #self.plan_tmp = self.plan_tmp.iloc[:, 1:]
-                #self.plan_tmp.to_csv('plan_new.csv', index=False, header=True)
-                self.plan_tmp = pd.read_csv('global_plan_new.csv')
-
-                # Save global plan instance to a file
-                #self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
-                #self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
-                #self.global_plan_tmp.to_csv('global_plan_new.csv', index=False, header=True)
-                self.global_plan_tmp = pd.read_csv('global_plan_new.csv')
-
-                # Save costmap_info instance to file
-                #self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
-                #self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
-                #self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
-                #self.costmap_info_tmp.to_csv('costmap_info_new.csv', index=False, header=True)
-                self.costmap_info_tmp = pd.read_csv('costmap_info_new.csv')
-
-                # Save amcl_pose instance to file
-                #self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
-                #self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
-                #self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
-                #self.amcl_pose_tmp.to_csv('amcl_pose_new.csv', index=False, header=True)
-                self.amcl_pose_tmp = pd.read_csv('amcl_pose_new.csv')
-
-                # Save tf_odom_map instance to file
-                #self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
-                #self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-                #self.tf_odom_map_tmp.to_csv('tf_odom_map_new.csv', index=False, header=True)
-                self.tf_odom_map_tmp = pd.read_csv('tf_odom_map_new.csv')
-
-                # Save tf_map_odom instance to file
-                #self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
-                #self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-                #self.tf_map_odom_tmp.to_csv('tf_map_odom_new.csv', index=False, header=True)
-                self.tf_map_odom_tmp = pd.read_csv('tf_map_odom_new.csv')
-
-                # Save odometry instance to file
-                #self.odom_tmp = self.odom.iloc[self.index, :]
-                #self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
-                #self.odom_tmp = self.odom_tmp.iloc[:, 2:]
-                #self.odom_tmp.to_csv('odom_new.csv', index=False, header=True)
-                self.odom_tmp = pd.read_csv('odom_new.csv')
-            
-            # Saving data to .csv files for C++ node - local navigation planner
-            self.limeImageSaveDataForLocalPlanner()
-            
-            # Saving important data to class variables
-            self.saveImportantData2ClassVars()
-
-            # Use new variable in the algorithm - possible time saving
-            #img = copy.deepcopy(self.image)
-
-            if self.semantic_seg == True:
-                segm_fn = 'semantic_segmentation'
-            elif self.semantic_seg == False:
-                segm_fn = 'custom_segmentation'
-
-            devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
-            #print('self.findDevDistance(): ', devDistance)
-            #print('sum: ', sum)
-
-            if self.manually_make_semantic_map == True:
-                # manually make semantic map
-                self.costmap2Map()
-            else:
-                if self.test_segmentation == True:
-                    self.testSegmentation(self.expID)
-                else:    
-                    import time
-                    start = time.time()
-                    self.explanation, self.segments = self.explainer.explain_instance(self.image, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                                                                self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
-                                                                                self.plan_x_list, self.plan_y_list,
-                                                                                hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
-                    end = time.time()
-                    print('REAL EXP TIME = ', end - start)
-                    self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
-                                                                                hide_rest=False, min_weight=0.0)            
+                    # Load footprint
+                    self.footprint_tmp = pd.read_csv('footprint_new.csv')
+                    #print(self.footprint_tmp)
                     
-                    self.plotExplanation()
+                    # Load local plan
+                    self.local_plan_tmp = pd.read_csv('local_plan_new.csv')
 
-        elif self.explanation_mode == 'tabular':
-            # search for instance queue index (original instance queue name in almost (haman) input data frames)
-            self.index = self.X_train.index.values[self.expID]
-            print('self.index: ', self.index)
+                    # Load plan (from global planner)
+                    self.plan_tmp = pd.read_csv('global_plan_new.csv')
 
-            self.explanation = self.explainer.explain_instance(data_row=np.array(self.X_train.iloc[self.expID]),
-                                                               predict_fn=self.classifier_fn_tabular,
-                                                               num_samples=self.num_samples,
-                                                               num_features=self.X_train.shape[1])
+                    # Load global plan
+                    self.global_plan_tmp = pd.read_csv('global_plan_new.csv')
 
-            print(self.explanation.as_list())
-            fig = self.explanation.as_pyplot_figure()
-            plt.savefig('explanation.png')
+                    # Load costmap_info
+                    self.costmap_info_tmp = pd.read_csv('costmap_info_new.csv')
 
-        elif self.explanation_mode == 'tabular_costmap':
-            self.index = self.expID
-            img = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
-            lista = []
-            for i in range(0, img.shape[0]):
-                for j in range(0, img.shape[1]):
-                    lista.append(img.iloc[i, j])
-            self.tabular_costmap = pd.DataFrame(lista)
-            self.tabular_costmap = pd.DataFrame(self.tabular_costmap).transpose()
-            self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.tabular_costmap),
-                                                                    feature_names=self.tabular_costmap.columns,
-                                                                    mode=self.tabular_mode, class_names=[self.output_class_name],
-                                                                    verbose=True, feature_selection='none',
-                                                                    discretize_continuous=False)
+                    # Load amcl_pose
+                    self.amcl_pose_tmp = pd.read_csv('amcl_pose_new.csv')
 
-            self.explanation = self.explainer.explain_instance(data_row=self.tabular_costmap,
-                                                               predict_fn=self.classifier_fn_tabular_costmap,
-                                                               num_samples=self.num_samples,
-                                                               num_features=self.tabular_costmap.shape[1])
-            # print(self.explanation.as_list())
-            fig = self.explanation.as_pyplot_figure()
-            plt.savefig('explanation.png')
+                    # Load tf_odom_map
+                    self.tf_odom_map_tmp = pd.read_csv('tf_odom_map_new.csv')
+
+                    # Load tf_map_odom
+                    self.tf_map_odom_tmp = pd.read_csv('tf_map_odom_new.csv')
+
+                    # Load odometry
+                    self.odom_tmp = pd.read_csv('odom_new.csv')
+                
+                save_data_for_local_planner_start = time.time()
+                # Saving data to .csv files for C++ node - local navigation planner
+                self.SaveImageDataForLocalPlanner()
+                save_data_for_local_planner_end = time.time()
+                save_data_for_local_planner_time = save_data_for_local_planner_end - save_data_for_local_planner_start
+                
+                # Saving important data to class variables
+                self.saveImportantData2ClassVars()
+
+                # Choose semantic or standard segmentation
+                if self.semantic_seg == True:
+                    segm_fn = 'semantic_segmentation'
+                elif self.semantic_seg == False:
+                    segm_fn = 'custom_segmentation'
+
+                before_explain_instance_end = time.time()
+                before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
+
+                print('\nsave_data_for_local_planner_time / before_explain_instance_time (%) = ', 100 * save_data_for_local_planner_time / before_explain_instance_time)
+
+                # get data needed for sm7 segmentation method
+                devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
+
+                if self.manually_make_semantic_map == True:
+                    # manually make semantic map
+                    self.costmap2Map()
+                else:
+                    # test segmentation
+                    if self.test_segmentation == True:
+                        self.testSegmentation(self.expID)
+                    else:
+                        # explain with LIME    
+                        import time
+                        real_explanation_start = time.time()
+                        self.explanation, self.segments = self.explainer.explain_instance(self.image, self.classifier_fn_image_lime, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                                                                    self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
+                                                                                    self.plan_x_list, self.plan_y_list,
+                                                                                    hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
+                        real_explanation_end = time.time()
+                        real_explanation_time = real_explanation_end - real_explanation_start
+                        print('\nReal (pure) explanation time = ', real_explanation_time)
+                        
+                        # get explanation image
+                        self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
+                                                                                    hide_rest=False, min_weight=0.0)            
+                        
+                        plotting_time_start = time.time()
+                        self.plotExplanation()
+                        plotting_time_end = time.time()
+                        plotting_time_start = plotting_time_end - plotting_time_start
+                        print('\nPlotting time = ', plotting_time_start)
+                        
+
+            elif self.explanation_mode == 'tabular':
+                # search for instance queue index (original instance queue name in almost (haman) input data frames)
+                self.index = self.X_train.index.values[self.expID]
+                print('self.index: ', self.index)
+
+                self.explanation = self.explainer.explain_instance(data_row=np.array(self.X_train.iloc[self.expID]),
+                                                                predict_fn=self.classifier_fn_tabular,
+                                                                num_samples=self.num_samples,
+                                                                num_features=self.X_train.shape[1])
+
+                print(self.explanation.as_list())
+                fig = self.explanation.as_pyplot_figure()
+                plt.savefig('explanation.png')
+
+            elif self.explanation_mode == 'tabular_costmap':
+                self.index = self.expID
+                img = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
+                lista = []
+                for i in range(0, img.shape[0]):
+                    for j in range(0, img.shape[1]):
+                        lista.append(img.iloc[i, j])
+                self.tabular_costmap = pd.DataFrame(lista)
+                self.tabular_costmap = pd.DataFrame(self.tabular_costmap).transpose()
+                self.explainer = lime.lime_tabular.LimeTabularExplainer(training_data=np.array(self.tabular_costmap),
+                                                                        feature_names=self.tabular_costmap.columns,
+                                                                        mode=self.tabular_mode, class_names=[self.output_class_name],
+                                                                        verbose=True, feature_selection='none',
+                                                                        discretize_continuous=False)
+
+                self.explanation = self.explainer.explain_instance(data_row=self.tabular_costmap,
+                                                                predict_fn=self.classifier_fn_tabular_costmap,
+                                                                num_samples=self.num_samples,
+                                                                num_features=self.tabular_costmap.shape[1])
+                # print(self.explanation.as_list())
+                fig = self.explanation.as_pyplot_figure()
+                plt.savefig('explanation.png')
         
+        elif self.explanation_algorithm == 'Anchors':
+            print('anchors')
+            # manually modified Anchors Image
+            if self.explanation_mode == 'image':
+
+                import time
+                before_explain_instance_start = time.time()
+
+                if self.manual_instance_loading == False:
+                    # Get local costmap
+                    # Original costmap will be saved to self.local_costmap_original
+                    self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
+
+                    # Make image a np.array deepcopy of local_costmap_original
+                    self.image = np.array(copy.deepcopy(self.local_costmap_original))
+
+                    # Turn inflated area to free space and 100s to 99s
+                    self.inflatedToFree()
+
+                    # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+                    self.image = self.image * 1.0
+
+                elif self.manual_instance_loading == True:
+                    #pd.DataFrame(self.image).to_csv('costmap_new.csv', index=False)
+                    self.image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
+
+                    # Save footprint instance to a file
+                    #self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
+                    #self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
+                    #self.footprint_tmp.to_csv('footprint_new.csv', index=False, header=True)
+                    self.footprint_tmp = pd.read_csv('footprint_new.csv')
+                    #print(self.footprint_tmp)
+                    
+                    # Save local plan instance to a file
+                    #self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
+                    #self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
+                    #self.local_plan_tmp.to_csv('local_plan_new.csv', index=False, header=True)
+                    self.local_plan_tmp = pd.read_csv('local_plan_new.csv')
+
+                    # Save plan (from global planner) instance to a file
+                    #self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
+                    #self.plan_tmp = self.plan_tmp.iloc[:, 1:]
+                    #self.plan_tmp.to_csv('plan_new.csv', index=False, header=True)
+                    self.plan_tmp = pd.read_csv('global_plan_new.csv')
+
+                    # Save global plan instance to a file
+                    #self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
+                    #self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
+                    #self.global_plan_tmp.to_csv('global_plan_new.csv', index=False, header=True)
+                    self.global_plan_tmp = pd.read_csv('global_plan_new.csv')
+
+                    # Save costmap_info instance to file
+                    #self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
+                    #self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
+                    #self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
+                    #self.costmap_info_tmp.to_csv('costmap_info_new.csv', index=False, header=True)
+                    self.costmap_info_tmp = pd.read_csv('costmap_info_new.csv')
+
+                    # Save amcl_pose instance to file
+                    #self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
+                    #self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
+                    #self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
+                    #self.amcl_pose_tmp.to_csv('amcl_pose_new.csv', index=False, header=True)
+                    self.amcl_pose_tmp = pd.read_csv('amcl_pose_new.csv')
+
+                    # Save tf_odom_map instance to file
+                    #self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
+                    #self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
+                    #self.tf_odom_map_tmp.to_csv('tf_odom_map_new.csv', index=False, header=True)
+                    self.tf_odom_map_tmp = pd.read_csv('tf_odom_map_new.csv')
+
+                    # Save tf_map_odom instance to file
+                    #self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
+                    #self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
+                    #self.tf_map_odom_tmp.to_csv('tf_map_odom_new.csv', index=False, header=True)
+                    self.tf_map_odom_tmp = pd.read_csv('tf_map_odom_new.csv')
+
+                    # Save odometry instance to file
+                    #self.odom_tmp = self.odom.iloc[self.index, :]
+                    #self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
+                    #self.odom_tmp = self.odom_tmp.iloc[:, 2:]
+                    #self.odom_tmp.to_csv('odom_new.csv', index=False, header=True)
+                    self.odom_tmp = pd.read_csv('odom_new.csv')
+                
+                start = time.time()
+                # Saving data to .csv files for C++ node - local navigation planner
+                self.limeImageSaveDataForLocalPlanner()
+                end = time.time()
+                save_time = end - start
+                
+                # Saving important data to class variables
+                self.saveImportantData2ClassVars()
+
+                # Use new variable in the algorithm - possible time saving
+                #img = copy.deepcopy(self.image)
+
+                if self.semantic_seg == True:
+                    segm_fn = 'semantic_segmentation'
+                elif self.semantic_seg == False:
+                    segm_fn = 'custom_segmentation'
+
+                before_explain_instance_end = time.time()
+                before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
+
+                print('PERCENTAGE = ', 100 * save_time / before_explain_instance_time)
+                img = gray2rgb(self.image)
+                self.segments, self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image, threshold=0.95, delta=0.1, tau=0.15, batch_size=100)
+
+                print('self.segments = ', self.segments)
+                print('self.explanation = ', self.explanation)
+
+                # show exp
+                self.show_exp(self.segments, self.explanation, img, self.explainer)
+
+                # plot segs
+                fig = plt.figure(frameon=False)
+                w = 1.6*3
+                h = 1.6*3
+                fig.set_size_inches(w, h)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+                path_core = os.getcwd()
+                ax.imshow(self.segments.astype(np.uint8), aspect='auto')
+                fig.savefig(path_core + '/segments_anchors.png')
+                fig.clf()
+
+            elif self.explanation_mode == 'tabular':
+                pass
+              
+            elif self.explanation_mode == 'tabular_costmap':
+                pass
+            
         print('\nexplain_instance ending')
 
-    # helper function for lime image
-    def findDevDistance(self):
+    # save data for local planner in explanation with image
+    def SaveImageDataForLocalPlanner(self):
+        if self.manual_instance_loading == False:
+            # Take original command speed
+            self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
+            self.cmd_vel_original_tmp = pd.DataFrame(self.cmd_vel_original_tmp).transpose()
+            self.cmd_vel_original_tmp = self.cmd_vel_original_tmp.iloc[:, 2:]
+
+            # Saving data to .csv files for C++ node - local navigation planner
+            # Save footprint instance to a file
+            self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
+            self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
+            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+
+            # Save local plan instance to a file
+            self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
+            self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
+            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+
+            # Save plan (from global planner) instance to a file
+            self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
+            self.plan_tmp = self.plan_tmp.iloc[:, 1:]
+            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+
+            # Save global plan instance to a file
+            self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
+            self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
+            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
+                                        header=False)
+
+            # Save costmap_info instance to file
+            self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
+            self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
+            self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
+            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
+                                        header=False)
+
+            # Save amcl_pose instance to file
+            self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
+            self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
+            self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
+            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+
+            # Save tf_odom_map instance to file
+            self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
+            self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
+            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
+                                        header=False)
+
+            # Save tf_map_odom instance to file
+            self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
+            self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
+            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
+                                        header=False)
+
+            # Save odometry instance to file
+            self.odom_tmp = self.odom.iloc[self.index, :]
+            self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
+            self.odom_tmp = self.odom_tmp.iloc[:, 2:]
+            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+
+        elif self.manual_instance_loading == True:
+            # Saving data to .csv files for C++ node - local navigation planner
+            # Save footprint instance to a file
+            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+
+            # Save local plan instance to a file
+            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+
+            # Save plan (from global planner) instance to a file
+            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+
+            # Save global plan instance to a file
+            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
+                                        header=False)
+
+            # Save costmap_info instance to file
+            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
+                                        header=False)
+
+            # Save amcl_pose instance to file
+            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+
+            # Save tf_odom_map instance to file
+            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
+                                        header=False)
+
+            # Save tf_map_odom instance to file
+            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
+                                        header=False)
+
+            # Save odometry instance to file
+            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+
+    # saving important data to class variables
+    def saveImportantData2ClassVars(self):
+        # save costmap info to class variables
+        self.localCostmapOriginX = self.costmap_info_tmp.iloc[0, 3]
+        #print('self.localCostmapOriginX: ', self.localCostmapOriginX)
+        self.localCostmapOriginY = self.costmap_info_tmp.iloc[0, 4]
+        #print('self.localCostmapOriginY: ', self.localCostmapOriginY)
+        self.localCostmapResolution = self.costmap_info_tmp.iloc[0, 0]
+        #print('self.localCostmapResolution: ', self.localCostmapResolution)
+        self.localCostmapHeight = self.costmap_info_tmp.iloc[0, 2]
+        #print('self.localCostmapHeight: ', self.localCostmapHeight)
+        self.localCostmapWidth = self.costmap_info_tmp.iloc[0, 1]
+        #print('self.localCostmapWidth: ', self.localCostmapWidth)
+
+        # save robot odometry location to class variables
+        self.odom_x = self.odom_tmp.iloc[0, 0]
+        # print('self.odom_x: ', self.odom_x)
+        self.odom_y = self.odom_tmp.iloc[0, 1]
+        # print('self.odom_y: ', self.odom_y)
+
+        # save indices of robot's odometry location in local costmap to class variables
+        self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+        # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
+        self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+        # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
+
+        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
+        self.x_odom_index = [self.localCostmapIndex_x_odom]
+        # print('self.x_odom_index: ', self.x_odom_index)
+        self.y_odom_index = [self.localCostmapIndex_y_odom]
+        # print('self.y_odom_index: ', self.y_odom_index)
+
         # indices of local plan's poses in local costmap
         self.local_plan_x_list = []
         self.local_plan_y_list = []
         for i in range(1, self.local_plan_tmp.shape[0]):
             x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 self.local_plan_x_list.append(x_temp)
                 self.local_plan_y_list.append(y_temp)
 
+        '''
+        # save robot odometry orientation to class variables
+        self.odom_z = self.odom_tmp.iloc[0, 2]
+        self.odom_w = self.odom_tmp.iloc[0, 3]
+        # calculate Euler angles based on orientation quaternion
+        [self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
+        
+        # find yaw angles projections on x and y axes and save them to class variables
+        self.yaw_odom_x = math.cos(self.yaw_odom)
+        self.yaw_odom_y = math.sin(self.yaw_odom)
+        '''
+
+        '''
+        # save indices of footprint's poses in local costmap to class variables
+        self.footprint_x_list = []
+        self.footprint_y_list = []
+        for j in range(0, self.footprint_tmp.shape[0]):
+            self.footprint_x_list.append(int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
+            self.footprint_y_list.append(int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
+        '''
+
+        '''
+        # map info
+        self.mapOriginX = self.map_info.iloc[0, 4]
+        # print('self.mapOriginX: ', self.mapOriginX)
+        self.mapOriginY = self.map_info.iloc[0, 5]
+        # print('self.mapOriginY: ', self.mapOriginY)
+        self.mapResolution = self.map_info.iloc[0, 1]
+        # print('self.mapResolution: ', self.mapResolution)
+        self.mapHeight = self.map_info.iloc[0, 3]
+        # print('self.mapHeight: ', self.mapHeight)
+        self.mapWidth = self.map_info.iloc[0, 2]
+        # print('self.mapWidth: ', self.mapWidth)
+
+        # robot amcl location
+        self.amcl_x = self.amcl_pose_tmp.iloc[0, 0]
+        # print('self.amcl_x: ', self.amcl_x)
+        self.amcl_y = self.amcl_pose_tmp.iloc[0, 1]
+        # print('self.amcl_y: ', self.amcl_y)
+
+        # robot amcl orientation
+        self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
+        self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
+        # calculate Euler angles based on orientation quaternion
+        [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
+        '''
+        
         # transform global plan from /map to /odom frame
         # rotation matrix
         from scipy.spatial.transform import Rotation as R
@@ -282,123 +595,40 @@ class ExplainRobotNavigation:
         t = np.array(
             [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
         # print('t: ', t)
-        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+
+        #self.plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+        self.plan_tmp_tmp = pd.DataFrame(0.0, index=np.arange(self.global_plan_tmp.shape[0]), columns=self.global_plan_tmp.columns)
         for i in range(0, self.global_plan_tmp.shape[0]):
             p = np.array(
                 [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
             # print('p: ', p)
             pnew = p.dot(r_array) + t
             # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+            self.plan_tmp_tmp.iloc[i, 0] = pnew[0]
+            self.plan_tmp_tmp.iloc[i, 1] = pnew[1]
+            self.plan_tmp_tmp.iloc[i, 2] = pnew[2]
     
         # Get coordinates of the global plan in the local costmap
         self.plan_x_list = []
         self.plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+        for i in range(0, self.plan_tmp_tmp.shape[0], 3):
+            x_temp = int((self.plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 self.plan_x_list.append(x_temp)
                 self.plan_y_list.append(y_temp)
-
-        devs_x = []
-        signs_x = []
-        devs_y = []
-        signs_y = []
-        devs = []
-        for j in range( 0, len(self.local_plan_x_list)):
-            diffs_x = []
-            sums_x = []
-            diffs_y = []
-            sums_y = []
-            diffs = []
-            for k in range(0, len(self.plan_x_list)):
-                diff_x = self.local_plan_x_list[j] - self.plan_x_list[k]
-                sums_x.append(diff_x)
-                diffs_x.append(abs(diff_x))
-
-                diff_y = self.local_plan_y_list[j] - self.plan_y_list[k]
-                sums_y.append(diff_y)
-                diffs_y.append(abs(diff_y))
-
-                diff = math.sqrt(diff_x**2 + diff_y**2)
-                diffs.append(diff)                
-            devs_x.append(min(diffs_x))
-            signs_x.append(sums_x[diffs_x.index(devs_x[-1])])
-
-            devs_y.append(min(diffs_y))
-            signs_y.append(sums_y[diffs_y.index(devs_y[-1])])
-
-            devs.append(min(diffs))
-
-        return max(devs_x), np.sign(signs_x[devs_x.index(max(devs_x))]), max(devs_y), np.sign(signs_y[devs_y.index(max(devs_y))]), max(devs)    
-
-    # helper function for creating manual semantic maps
-    def costmap2Map(self):
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat([self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4], self.tf_odom_map_tmp.iloc[0, 5], self.tf_odom_map_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        
-        # translation vector
-        t = np.array([self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
-        # print('t: ', t)
-
-        costmap_segmented = pd.read_csv('costmap_segmented.csv')
-
-        map_sem_1 = np.zeros((304, 201), np.uint8)
-        map_sem_2 = np.zeros((304, 201), np.uint8)
-
-        #indices_x = np.zeros((160, 160), np.uint8)
-        #indices_y = np.zeros((160, 160), np.uint8)
-
-        map_pairs = []
-
-        br_duplikata = 0
-        
-        for i in range(0, 160):
-            for j in range(0, 160):
-                x = j * self.localCostmapResolution + self.localCostmapOriginX
-                y = i * self.localCostmapResolution + self.localCostmapOriginY
-
-                p = np.array([x, y, 0])
-                # print('p: ', p)
-                pnew = p.dot(r_array) + t
-                #print('\n(i, j) = ', (i, j))
-                #print('pnew: ', pnew)
-                x = pnew[0]
-                y = pnew[1]
-
-                j_map = int((x - self.mapOriginX) / self.mapResolution + 0.5)
-                i_map = int((y - self.mapOriginY) / self.mapResolution + 0.5)
-
-                #print('(i_map, j_map) = ', ((y - self.mapOriginY) / self.mapResolution + 0.5, (x - self.mapOriginX) / self.mapResolution + 0.5))
-
-                if (i_map, j_map) not in map_pairs:
-                    map_pairs.append((i_map, j_map))
-                    map_sem_1[i_map, j_map] = costmap_segmented.iloc[i, j]
-                    #print('(i_map, j_map) = ', (i_map, j_map))
-                    #indices_x[i, j] = j_map
-                    #indices_y[i, j] = i_map    
-                else:
-                    map_sem_2[i_map, j_map] = costmap_segmented.iloc[i, j]
-                    #br_duplikata += 1   
-                    #print('(i_map, j_map) = ', (i_map, j_map))
-                    #print('duplikat')    
-
-        pd.DataFrame(map_sem_1).to_csv('semantic_map_1_temporary.csv', index=False, header=False)
-        pd.DataFrame(map_sem_2).to_csv('semantic_map_2_temporary.csv', index=False, header=False)
+        #print('self.plan_tmp_tmp.shape: ', self.plan_tmp_tmp.shape)
+        #print('self.plan_y_list.shape: ', len(self.plan_y_list))
+                    
+    # turn inflated costmap to static costmap
+    def inflatedToStatic(self):
+        self.image[self.image == 100] = 99
+        self.image[self.image != 99] = 0
 
     # classifier function for lime image
-    def classifier_fn_image(self, sampled_instance):
+    def classifier_fn_image_lime(self, sampled_instance):
 
-        print('\nclassifier_fn_image started')
+        print('\nclassifier_fn_image_lime started')
 
         '''
         #start = time.time()  
@@ -422,6 +652,14 @@ class ExplainRobotNavigation:
 
         # Save perturbed costmap_data to file for C++ node
         costmap_start = time.time()
+
+        '''
+        temp = np.delete(sampled_instance,2,3)
+        print(temp.shape)
+        temp = np.delete(temp,1,3)
+        print(temp.shape)
+        temp = temp.reshape(temp.shape[0]*160,160)
+        '''
 
         temp = sampled_instance.reshape(sampled_instance.shape[0]*160,160)
         np.savetxt('./src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
@@ -451,6 +689,7 @@ class ExplainRobotNavigation:
 
         #print('\nC++ node ended')
 
+        start = time.time()
         # load command velocities - output from local planner
         self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('self.cmd_vel: ', self.cmd_vel_perturb)
@@ -468,6 +707,8 @@ class ExplainRobotNavigation:
         #print('self.transformed_plan: ', self.transformed_plan)
         #print('self.transformed_plan.shape: ', self.transformed_plan.shape)
         #self.transformed_plan.to_csv('transformed_plan.csv')
+        end = time.time()
+        print('OUTPUT TIME: ', end - start)
 
         plot_perturbations = False
         if plot_perturbations == True:
@@ -475,7 +716,7 @@ class ExplainRobotNavigation:
             self.sampled_instance = sampled_instance
 
             # plot perturbation of local costmap
-            self.classifier_fn_image_plot()
+            self.classifier_fn_image_lime_plot()
 
         print_iterations = False
         
@@ -1108,8 +1349,8 @@ class ExplainRobotNavigation:
         return np.array(self.cmd_vel_perturb.iloc[:, 3:])
 
     # function for plotting lime image perturbations
-    def classifier_fn_image_plot(self):
-        #'''
+    def classifier_fn_image_lime_plot(self):
+                #'''
         # indices of transformed plan's poses in local costmap
         self.transformed_plan_x_list = []
         self.transformed_plan_y_list = []
@@ -1217,8 +1458,182 @@ class ExplainRobotNavigation:
             # save figure
             plt.savefig('perturbation_' + str(i) + '.png')
             plt.clf()
-       
 
+
+    # helper function for lime image
+    def findDevDistance(self):
+        # indices of local plan's poses in local costmap
+        self.local_plan_x_list = []
+        self.local_plan_y_list = []
+        for i in range(1, self.local_plan_tmp.shape[0]):
+            x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                self.local_plan_x_list.append(x_temp)
+                self.local_plan_y_list.append(y_temp)
+
+        # transform global plan from /map to /odom frame
+        # rotation matrix
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat(
+            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
+             self.tf_map_odom_tmp.iloc[0, 6]])
+        # print('r: ', r.as_matrix())
+        r_array = np.asarray(r.as_matrix())
+        # print('r_array: ', r_array)
+        # print('r_array.shape: ', r_array.shape)
+        
+        # translation vector
+        t = np.array(
+            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
+        # print('t: ', t)
+        plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
+        for i in range(0, self.global_plan_tmp.shape[0]):
+            p = np.array(
+                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
+            # print('p: ', p)
+            pnew = p.dot(r_array) + t
+            # print('pnew: ', pnew)
+            plan_tmp_tmp.iloc[i, 0] = pnew[0]
+            plan_tmp_tmp.iloc[i, 1] = pnew[1]
+            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+    
+        # Get coordinates of the global plan in the local costmap
+        self.plan_x_list = []
+        self.plan_y_list = []
+        for i in range(0, plan_tmp_tmp.shape[0], 3):
+            x_temp = int((plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                self.plan_x_list.append(x_temp)
+                self.plan_y_list.append(y_temp)
+
+        devs_x = []
+        signs_x = []
+        devs_y = []
+        signs_y = []
+        devs = []
+        for j in range( 0, len(self.local_plan_x_list)):
+            diffs_x = []
+            sums_x = []
+            diffs_y = []
+            sums_y = []
+            diffs = []
+            for k in range(0, len(self.plan_x_list)):
+                diff_x = self.local_plan_x_list[j] - self.plan_x_list[k]
+                sums_x.append(diff_x)
+                diffs_x.append(abs(diff_x))
+
+                diff_y = self.local_plan_y_list[j] - self.plan_y_list[k]
+                sums_y.append(diff_y)
+                diffs_y.append(abs(diff_y))
+
+                diff = math.sqrt(diff_x**2 + diff_y**2)
+                diffs.append(diff)                
+            devs_x.append(min(diffs_x))
+            signs_x.append(sums_x[diffs_x.index(devs_x[-1])])
+
+            devs_y.append(min(diffs_y))
+            signs_y.append(sums_y[diffs_y.index(devs_y[-1])])
+
+            devs.append(min(diffs))
+
+        return max(devs_x), np.sign(signs_x[devs_x.index(max(devs_x))]), max(devs_y), np.sign(signs_y[devs_y.index(max(devs_y))]), max(devs)    
+
+    # helper function for creating manual semantic maps
+    def costmap2Map(self):
+        # transform global plan from /map to /odom frame
+        # rotation matrix
+        from scipy.spatial.transform import Rotation as R
+        r = R.from_quat([self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4], self.tf_odom_map_tmp.iloc[0, 5], self.tf_odom_map_tmp.iloc[0, 6]])
+        # print('r: ', r.as_matrix())
+        r_array = np.asarray(r.as_matrix())
+        # print('r_array: ', r_array)
+        # print('r_array.shape: ', r_array.shape)
+        
+        # translation vector
+        t = np.array([self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
+        # print('t: ', t)
+
+        costmap_segmented = pd.read_csv('costmap_segmented.csv')
+
+        map_sem_1 = np.zeros((304, 201), np.uint8)
+        map_sem_2 = np.zeros((304, 201), np.uint8)
+
+        #indices_x = np.zeros((160, 160), np.uint8)
+        #indices_y = np.zeros((160, 160), np.uint8)
+
+        map_pairs = []
+
+        br_duplikata = 0
+        
+        for i in range(0, 160):
+            for j in range(0, 160):
+                x = j * self.localCostmapResolution + self.localCostmapOriginX
+                y = i * self.localCostmapResolution + self.localCostmapOriginY
+
+                p = np.array([x, y, 0])
+                # print('p: ', p)
+                pnew = p.dot(r_array) + t
+                #print('\n(i, j) = ', (i, j))
+                #print('pnew: ', pnew)
+                x = pnew[0]
+                y = pnew[1]
+
+                j_map = int((x - self.mapOriginX) / self.mapResolution + 0.5)
+                i_map = int((y - self.mapOriginY) / self.mapResolution + 0.5)
+
+                #print('(i_map, j_map) = ', ((y - self.mapOriginY) / self.mapResolution + 0.5, (x - self.mapOriginX) / self.mapResolution + 0.5))
+
+                if (i_map, j_map) not in map_pairs:
+                    map_pairs.append((i_map, j_map))
+                    map_sem_1[i_map, j_map] = costmap_segmented.iloc[i, j]
+                    #print('(i_map, j_map) = ', (i_map, j_map))
+                    #indices_x[i, j] = j_map
+                    #indices_y[i, j] = i_map    
+                else:
+                    map_sem_2[i_map, j_map] = costmap_segmented.iloc[i, j]
+                    #br_duplikata += 1   
+                    #print('(i_map, j_map) = ', (i_map, j_map))
+                    #print('duplikat')    
+
+        pd.DataFrame(map_sem_1).to_csv('semantic_map_1_temporary.csv', index=False, header=False)
+        pd.DataFrame(map_sem_2).to_csv('semantic_map_2_temporary.csv', index=False, header=False)
+       
+    def ShowImageNoAxis(self, image, boundaries=None, save=1):
+        fig = plt.figure()
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        if boundaries is not None:
+            ax.imshow(mark_boundaries(image / 2 + 0.5, boundaries))
+        else:
+            ax.imshow(image / 2 + .5)
+        if save is not None:
+            plt.savefig(save)
+        plt.show()   
+
+    def show_exp(self, segments, exp, image, explainer):
+        mask = np.ones(segments.shape).astype(bool)
+        temp = copy.deepcopy(image)
+        temp_img = copy.deepcopy(temp)
+    #     temp.img = temp.fudged_image.copy()
+        temp[:] = 0
+        # for x in exp_greedy[:3]:
+        #     x = (x, x)
+        for x in exp:
+            temp[segments == x[0]] = temp_img[segments==x[0]]
+        # temp.img[mask] = np.random.random(mask.nonzero()[0].shape[0] * 3).reshape(mask.nonzero()[0].shape[0], 3)
+        #print('Anchor for prediction ', names[predict_fn(np.expand_dims(image, 0))[0].argmax()], 'confidence', exp[-1][2])
+        self.ShowImageNoAxis(temp)
+        print('Counter Examples:')
+        for e in exp[-1][3]:
+            data = e[:-1]
+            temp = explainer.dummys[e[-1]].copy()
+            for x in data.nonzero()[0]:
+                temp[segments == x] = image[segments == x]
+            self.ShowImageNoAxis(temp)
+            #print('Prediction = ', names[predict_fn(np.expand_dims(temp, 0))[0].argmax()])
 
     # plot explanation picture and segments
     def plotExplanation(self):
@@ -1713,237 +2128,6 @@ class ExplainRobotNavigation:
         qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
         
         return [qx, qy, qz, qw]
-
-    # save data for local planner in lime image
-    def limeImageSaveDataForLocalPlanner(self):
-        if self.manual_instance_loading == False:
-            # Take original command speed
-            self.cmd_vel_original_tmp = self.cmd_vel_original.iloc[self.index, :]
-            self.cmd_vel_original_tmp = pd.DataFrame(self.cmd_vel_original_tmp).transpose()
-            self.cmd_vel_original_tmp = self.cmd_vel_original_tmp.iloc[:, 2:]
-
-            # Saving data to .csv files for C++ node - local navigation planner
-            # Save footprint instance to a file
-            self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
-            self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
-            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
-
-            # Save local plan instance to a file
-            self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
-            self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
-            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
-
-            # Save plan (from global planner) instance to a file
-            self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
-            self.plan_tmp = self.plan_tmp.iloc[:, 1:]
-            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
-
-            # Save global plan instance to a file
-            self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
-            self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
-            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
-                                        header=False)
-
-            # Save costmap_info instance to file
-            self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
-            self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
-            self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
-            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
-                                        header=False)
-
-            # Save amcl_pose instance to file
-            self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
-            self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
-            self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
-            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
-
-            # Save tf_odom_map instance to file
-            self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
-            self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
-                                        header=False)
-
-            # Save tf_map_odom instance to file
-            self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
-            self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
-                                        header=False)
-
-            # Save odometry instance to file
-            self.odom_tmp = self.odom.iloc[self.index, :]
-            self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
-            self.odom_tmp = self.odom_tmp.iloc[:, 2:]
-            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
-
-        elif self.manual_instance_loading == True:
-            # Saving data to .csv files for C++ node - local navigation planner
-            # Save footprint instance to a file
-            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
-
-            # Save local plan instance to a file
-            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
-
-            # Save plan (from global planner) instance to a file
-            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
-
-            # Save global plan instance to a file
-            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
-                                        header=False)
-
-            # Save costmap_info instance to file
-            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
-                                        header=False)
-
-            # Save amcl_pose instance to file
-            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
-
-            # Save tf_odom_map instance to file
-            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
-                                        header=False)
-
-            # Save tf_map_odom instance to file
-            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
-                                        header=False)
-
-            # Save odometry instance to file
-            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
-
-    # Saving important data to class variables
-    def saveImportantData2ClassVars(self):
-        # save costmap info to class variables
-        self.localCostmapOriginX = self.costmap_info_tmp.iloc[0, 3]
-        #print('self.localCostmapOriginX: ', self.localCostmapOriginX)
-        self.localCostmapOriginY = self.costmap_info_tmp.iloc[0, 4]
-        #print('self.localCostmapOriginY: ', self.localCostmapOriginY)
-        self.localCostmapResolution = self.costmap_info_tmp.iloc[0, 0]
-        #print('self.localCostmapResolution: ', self.localCostmapResolution)
-        self.localCostmapHeight = self.costmap_info_tmp.iloc[0, 2]
-        #print('self.localCostmapHeight: ', self.localCostmapHeight)
-        self.localCostmapWidth = self.costmap_info_tmp.iloc[0, 1]
-        #print('self.localCostmapWidth: ', self.localCostmapWidth)
-
-        # save robot odometry location to class variables
-        self.odom_x = self.odom_tmp.iloc[0, 0]
-        # print('self.odom_x: ', self.odom_x)
-        self.odom_y = self.odom_tmp.iloc[0, 1]
-        # print('self.odom_y: ', self.odom_y)
-
-        # save indices of robot's odometry location in local costmap to class variables
-        self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
-        self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
-        # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
-
-        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-        self.x_odom_index = [self.localCostmapIndex_x_odom]
-        # print('self.x_odom_index: ', self.x_odom_index)
-        self.y_odom_index = [self.localCostmapIndex_y_odom]
-        # print('self.y_odom_index: ', self.y_odom_index)
-
-        '''
-        # save robot odometry orientation to class variables
-        self.odom_z = self.odom_tmp.iloc[0, 2]
-        self.odom_w = self.odom_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        [self.yaw_odom, pitch_odom, roll_odom] = self.quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
-        
-        # find yaw angles projections on x and y axes and save them to class variables
-        self.yaw_odom_x = math.cos(self.yaw_odom)
-        self.yaw_odom_y = math.sin(self.yaw_odom)
-        '''
-
-        '''
-        # save indices of footprint's poses in local costmap to class variables
-        self.footprint_x_list = []
-        self.footprint_y_list = []
-        for j in range(0, self.footprint_tmp.shape[0]):
-            self.footprint_x_list.append(int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.footprint_y_list.append(int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        '''
-
-        '''
-        # map info
-        self.mapOriginX = self.map_info.iloc[0, 4]
-        # print('self.mapOriginX: ', self.mapOriginX)
-        self.mapOriginY = self.map_info.iloc[0, 5]
-        # print('self.mapOriginY: ', self.mapOriginY)
-        self.mapResolution = self.map_info.iloc[0, 1]
-        # print('self.mapResolution: ', self.mapResolution)
-        self.mapHeight = self.map_info.iloc[0, 3]
-        # print('self.mapHeight: ', self.mapHeight)
-        self.mapWidth = self.map_info.iloc[0, 2]
-        # print('self.mapWidth: ', self.mapWidth)
-
-        # robot amcl location
-        self.amcl_x = self.amcl_pose_tmp.iloc[0, 0]
-        # print('self.amcl_x: ', self.amcl_x)
-        self.amcl_y = self.amcl_pose_tmp.iloc[0, 1]
-        # print('self.amcl_y: ', self.amcl_y)
-
-        # robot amcl orientation
-        self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
-        self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
-        '''
-
-        # indices of local plan's poses in local costmap
-        self.local_plan_x_list = []
-        self.local_plan_y_list = []
-        for i in range(1, self.local_plan_tmp.shape[0]):
-            x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                self.local_plan_x_list.append(x_temp)
-                self.local_plan_y_list.append(y_temp)
-
-        
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat(
-            [self.tf_map_odom_tmp.iloc[0, 3], self.tf_map_odom_tmp.iloc[0, 4], self.tf_map_odom_tmp.iloc[0, 5],
-             self.tf_map_odom_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        
-        # translation vector
-        t = np.array(
-            [self.tf_map_odom_tmp.iloc[0, 0], self.tf_map_odom_tmp.iloc[0, 1], self.tf_map_odom_tmp.iloc[0, 2]])
-        # print('t: ', t)
-
-        #self.plan_tmp_tmp = copy.deepcopy(self.global_plan_tmp)
-        self.plan_tmp_tmp = pd.DataFrame(0.0, index=np.arange(self.global_plan_tmp.shape[0]), columns=self.global_plan_tmp.columns)
-        for i in range(0, self.global_plan_tmp.shape[0]):
-            p = np.array(
-                [self.global_plan_tmp.iloc[i, 0], self.global_plan_tmp.iloc[i, 1], self.global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            self.plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            self.plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            self.plan_tmp_tmp.iloc[i, 2] = pnew[2]
-    
-        # Get coordinates of the global plan in the local costmap
-        self.plan_x_list = []
-        self.plan_y_list = []
-        for i in range(0, self.plan_tmp_tmp.shape[0], 3):
-            x_temp = int((self.plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                #print('I = ', i)
-                self.plan_x_list.append(x_temp)
-                self.plan_y_list.append(y_temp)
-        #print('self.plan_tmp_tmp.shape: ', self.plan_tmp_tmp.shape)
-        #print('self.plan_y_list.shape: ', len(self.plan_y_list))
-                    
-
-    # turn inflated costmap to static costmap
-    def inflatedToFree(self):
-        self.image[self.image == 100] = 99
-        self.image[self.image != 99] = 0
 
     def testSegmentation(self, expID):
 
