@@ -128,17 +128,17 @@ class ImageExplanation(object):
                 #print('max_w: ', max_w)
 
             for f, w in exp[:num_features]:
-                #print('\n(f, w): ', (f, w))
+                print('\n(f, w): ', (f, w))
 
                 if np.abs(w) < min_weight:
                     continue
-                if w < 0:
+                if w < -0.01:
                     c = -1
-                elif w == 0:
-                    c = 0
-                elif w > 0:
+                elif w > 0.01:
                     c = 1
-                #print('c = ', c)
+                else:
+                    c = 0
+                print('c = ', c)
 
                 mask[segments == f] = f + 1 #120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
 
@@ -149,7 +149,7 @@ class ImageExplanation(object):
                 x1 = np.bincount(image[segments == f][:,0] > 0.0)
                 x2 = len(image[segments == f][:,0])
                 free_space_percentage = x1[0] / x2
-                #print('free_space_percentage: ', free_space_percentage)
+                print('free_space_percentage: ', free_space_percentage)
 
                 # free space
                 if free_space_percentage > 0.9:
@@ -447,7 +447,7 @@ class LimeImageExplainer(object):
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        #'''
+        '''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -458,7 +458,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_slic.astype('float64'), aspect='auto')
         fig.savefig('segments_slic.png', transparent=False)
         fig.clf()
-        #'''
+        '''
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -466,7 +466,7 @@ class LimeImageExplainer(object):
         if d_x == 0:
             d_x = 1
         k = (-plan_y_list[-1] + y_odom) / (d_x)
-        print('\nabs(k) = ', abs(k)) 
+        #print('\nabs(k) = ', abs(k)) 
 
         # make one free space segment
         ctr = 0
@@ -485,14 +485,14 @@ class LimeImageExplainer(object):
                 ctr = ctr + 1
                 num_of_existing_obstacle_segments += 1
 
-        print('\nnum_of_existing_obstacle_segments: ', num_of_existing_obstacle_segments)        
+        #print('\nnum_of_existing_obstacle_segments: ', num_of_existing_obstacle_segments)        
 
         if num_of_wanted_obstacle_segments > num_of_existing_obstacle_segments > 0:
             # divide segment obstacles    
             current_segs_labels = np.unique(segments)[1:]        
 
-            print('\nnumber of wanted segments: ', num_of_wanted_obstacle_segments)
-            print('number of current segments: ', num_of_existing_obstacle_segments)
+            #print('\nnumber of wanted segments: ', num_of_wanted_obstacle_segments)
+            #print('number of current segments: ', num_of_existing_obstacle_segments)
 
             current_segs_sizes = []
 
@@ -501,14 +501,14 @@ class LimeImageExplainer(object):
                     #print(len(segments[segments == seg_labels[i]]))
                     current_segs_sizes.append(len(segments[segments == current_segs_labels[i]]))
 
-            print('\nsizes of original segments: ', current_segs_sizes)
-            print('labels of original segments: ', current_segs_labels)
+            #print('\nsizes of original segments: ', current_segs_sizes)
+            #print('labels of original segments: ', current_segs_labels)
             sorted_segs_labels = [x for _, x in sorted(zip(current_segs_sizes, current_segs_labels))]
             sorted_segs_labels.reverse()
-            print('labels of sorted segments: ', sorted_segs_labels)
+            #print('labels of sorted segments: ', sorted_segs_labels)
 
             num_segs_missing = num_of_wanted_obstacle_segments - num_of_existing_obstacle_segments
-            print('\nnumber of segments missing: ', num_segs_missing)
+            #print('\nnumber of segments missing: ', num_segs_missing)
 
             # if a number of missing segments is smaller or equal than the number of existing segments
             # only divide existing segments into 2
@@ -608,6 +608,7 @@ class LimeImageExplainer(object):
             # if a number of missing segments is greater than the number of existing segments
             else:
                 num_of_new_seg_per_old_seg = int(num_segs_missing / num_of_existing_obstacle_segments)
+                #print('num_of_new_seg_per_old_seg = ', num_of_new_seg_per_old_seg)
                 
                 # if a number of new segment per old segments is integer and same for all old segments
                 # divide segments in num_of_new_seg_per_old_seg new segments
@@ -715,7 +716,7 @@ class LimeImageExplainer(object):
                     rest = num_segs_missing % num_of_existing_obstacle_segments
                     #print('rest = ', rest)
 
-                    put_rest_to_biggest_segment = False
+                    put_rest_to_biggest_segment = True
 
                     num_of_new_seg_per_old_seg_list = [whole_part] * num_of_existing_obstacle_segments
 
@@ -727,6 +728,7 @@ class LimeImageExplainer(object):
                         num_of_new_seg_per_old_seg_list[0] += rest
                         #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)
 
+                    #print('num_of_new_seg_per_old_seg_list = ', num_of_new_seg_per_old_seg_list)
 
                     label_current = len(sorted_segs_labels) + 1
                     #print('\nlabel_current = ', label_current)
@@ -763,15 +765,20 @@ class LimeImageExplainer(object):
                         if abs(k) >= 1:
                             #print('UPRIGHT')
                             if height > width:
+                                #print('height > width')
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
                                     temp[j*step:(j+1)*step] = label_current
                                     label_current += 1
                                 segments[segments == sorted_segs_labels[i]] = temp
                             else:
+                                #print('height <= width')
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                #print('step = ', step)
                                 label_original = temp[0]
+                                #print('label_original = ', label_original)
                                 num_of_pixels = len(temp)
+                                #print('num_of_pixels = ', num_of_pixels)
                                 counter = 0
                                 finished = False
                                 for q in range(0, segments.shape[1]):
@@ -783,8 +790,8 @@ class LimeImageExplainer(object):
                                                 segments[j, q] = label_original
                                             else:
                                                 segments[j, q] = label_current
-                                                if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
-                                                        label_current += 1
+                                                if (counter + 1) % step == 0:
+                                                    label_current += 1
                                             counter += 1
                                             if counter == num_of_pixels:
                                                 label_current += 1
@@ -795,18 +802,13 @@ class LimeImageExplainer(object):
                         else:
                             #print('SIDE')
                             if width > height:
-                                #print('WIDTH')
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
                                     temp[j*step:(j+1)*step] = label_current
-                                    #print('label_current: ', label_current)
                                     label_current += 1
                                 segments[segments == sorted_segs_labels[i]] = temp
                             else:
-                                #print('HEIGHT')
-                                #print('len(temp): ', len(temp))
                                 step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
-                                #print('step: ', step)
                                 label_original = temp[0]
                                 num_of_pixels = len(temp)
                                 counter = 0
@@ -821,18 +823,14 @@ class LimeImageExplainer(object):
                                             else:
                                                 segments[j, q] = label_current
                                                 if (counter + 1) % step == 0:
-                                                    #print('counter + 1 = ', counter + 1)
-                                                    #print('label_current = ', label_current)
-                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
-                                                        label_current += 1
+                                                    label_current += 1
                                             counter += 1
                                             if counter == num_of_pixels:
-                                                #print('counter_end = ', counter)
                                                 label_current += 1
                                                 finished = True
                                                 break
 
-        #'''
+        '''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -843,7 +841,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments.astype('float64'), aspect='auto')
         fig.savefig('segments_final.png', transparent=False)
         fig.clf()
-        #'''
+        '''
 
         # fix labels of segments
         seg_labels = np.unique(segments)
@@ -860,6 +858,10 @@ class LimeImageExplainer(object):
         print('\nsm_only_obstacles runtime: ', sm_only_obstacles_time)
 
         print('\nsm_only_obstacles ended')
+
+        if len(seg_labels) != num_of_wanted_obstacle_segments + 1:
+            print('ERROR!!!')
+            return segments_slic
 
         return segments
 
