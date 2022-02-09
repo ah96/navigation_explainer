@@ -128,7 +128,7 @@ class ImageExplanation(object):
                 #print('max_w: ', max_w)
 
             for f, w in exp[:num_features]:
-                print('\n(f, w): ', (f, w))
+                #print('\n(f, w): ', (f, w))
 
                 if np.abs(w) < min_weight:
                     continue
@@ -138,7 +138,7 @@ class ImageExplanation(object):
                     c = 1
                 else:
                     c = 0
-                print('c = ', c)
+                #print('c = ', c)
 
                 mask[segments == f] = f + 1 #120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
 
@@ -149,7 +149,7 @@ class ImageExplanation(object):
                 x1 = np.bincount(image[segments == f][:,0] > 0.0)
                 x2 = len(image[segments == f][:,0])
                 free_space_percentage = x1[0] / x2
-                print('free_space_percentage: ', free_space_percentage)
+                #print('free_space_percentage: ', free_space_percentage)
 
                 # free space
                 if free_space_percentage > 0.9:
