@@ -731,7 +731,7 @@ class ExplainRobotNavigation:
         transformed_time = end_transformed - start_transformed
         print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
 
-        plot_perturbations = True
+        plot_perturbations = False
         if plot_perturbations == True:
             # only needed for classifier_fn_image_plot() function
             self.sampled_instance = sampled_instance
@@ -2705,6 +2705,662 @@ class ExplainRobotNavigation:
 
 
 
+    def explain_instance_evaluation(self, expID, ID):
+        print('explain_instance_evaluation function starting\n')
+
+        self.expID = expID
+        self.index = self.expID
+
+        self.manual_instance_loading = False
+        self.manually_make_semantic_map = False
+        self.test_segmentation = False 
+
+        if self.explanation_algorithm == 'LIME':
+                
+            # if explanation_mode is 'image'
+            if self.explanation_mode == 'image':
+                import time
+                before_explain_instance_start = time.time()
+
+                # Get local costmap
+                # Original costmap will be saved to self.local_costmap_original
+                self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
+
+                # Make image a np.array deepcopy of local_costmap_original
+                self.image = np.array(copy.deepcopy(self.local_costmap_original))
+
+                # Turn inflated area to free space and 100s to 99s
+                self.inflatedToStatic()
+
+                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+                self.image = self.image * 1.0
+                
+                # Saving data to .csv files for C++ node - local navigation planner
+                self.SaveImageDataForLocalPlanner()
+
+                # Saving important data to class variables
+                self.saveImportantData2ClassVars()
+
+                segm_fn = 'custom_segmentation'
+
+                #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
+                devDistance_x = 0
+                sum_x = 0 
+                devDistance_y = 0 
+                sum_y = 0 
+                devDistance = 0
+
+                before_explain_instance_end = time.time()
+                before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
+
+                segments_num = 8
+    
+                import time
+
+                nums_of_samples = [2,4,8,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256]
+
+                #with open('explanations' + str(self.expID) + '.csv', "w") as myfile:
+                with open('explanations' + str(ID) + '.csv', "a") as myfile:
+                    myfile.write('num_samples,before_explain_instance_time,segmentation_time,classifier_fn_time,planner_time,target_calculation_time,costmap_save_time,distances_time,regressor_time,explain_instance_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5,weight_6,weight_7,weight_8\n')
+                    
+                    for i in nums_of_samples:
+                        #print('\i = ', i)
+                        num_of_iterations_for_one_num_of_segments = 10 #30 #50
+
+                        if i == 256:
+                            num_of_iterations_for_one_num_of_segments = 1
+                        
+                        for j in range(0, num_of_iterations_for_one_num_of_segments): 
+                            # measure explain_instance time
+                            start = time.time()
+                            self.explanation, self.segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time,costmap_save_time, distances_time, regressor_time = self.explainer.explain_instance_evaluation(
+                                self.image, self.classifier_fn_image_lime_evaluation, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
+                                self.plan_x_list, self.plan_y_list,
+                                hide_color=perturb_hide_color_value,
+                                num_segments=segments_num,
+                                num_samples_current=i,
+                                batch_size=2048, segmentation_fn=segm_fn,
+                                top_labels=10)
+                            end = time.time()
+                            explain_instance_time = round(end - start, 3)
+
+                            # measure get explanation_picture time
+                            start = time.time()
+                            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0,
+                                                                                                    positive_only=False,
+                                                                                                    negative_only=False,
+                                                                                                    num_features=100,
+                                                                                                    hide_rest=False,
+                                                                                                    min_weight=0.0)  # min_weight=0.1 - default
+                            end = time.time()
+                            explanation_pics_time = round(end - start, 3)
+
+                            # measure plotting time
+                            self.segments += 1
+                            start = time.time()
+                            self.plotMinimalEvaluation(i)
+                            end = time.time()
+                            plotting_time = round(end - start, 3)
+
+                            # round measured times to 3 decimal places
+                            before_explain_instance_time = round(before_explain_instance_time, 3)
+                            segmentation_time = round(segmentation_time, 3)
+                            classifier_fn_time = round(classifier_fn_time, 3)
+                            planner_time = round(planner_time, 3)
+                            target_calculation_time = round(target_calculation_time,3)
+                            costmap_save_time = round(costmap_save_time,3)
+                            distances_time = round(distances_time,3)
+                            regressor_time = round(regressor_time,3)
+
+                            # write measured times to .csv file
+                            myfile.write(str(i) + ',' + str(before_explain_instance_time) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(planner_time) + ',' + str(target_calculation_time) + ',' + str(costmap_save_time) + ',' + str(distances_time) + ',' + str(regressor_time) + ',' + str(explain_instance_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
+                            for k in range(0, len(self.exp)):
+                                for l in range(0, len(self.exp)):
+                                    if k == self.exp[l][0]:
+                                        if k != len(self.exp) - 1:
+                                            myfile.write(str(round(self.exp[l][1], 4)) + ',')
+                                        else:
+                                            myfile.write(str(round(self.exp[l][1], 4)))
+                                        break
+                            myfile.write('\n')
+                        myfile.write('\n')
+            
+        elif self.explanation_algorithm == 'Anchors':
+            pass
+
+    def classifier_fn_image_lime_evaluation(self, sampled_instance):
+
+        #print('classifier_fn_image started')
+
+        '''
+        # I will use channel 0 from sampled_instance as actual perturbed data
+        # Perturbed pixel intensity is perturb_hide_color_value
+        # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
+        for i in range(0, sampled_instance.shape[0]):
+            for j in range(0, sampled_instance[i].shape[0]):
+                for k in range(0, sampled_instance[i].shape[1]):
+                    if sampled_instance[i][j, k, 0] == perturb_hide_color_value:
+                        if self.image[j, k] == 0:
+                            sampled_instance[i][j, k, 0] = 99
+                            #print('free space')
+                        elif self.image[j, k] == 99:
+                            sampled_instance[i][j, k, 0] = 0
+                            #print('obstacle')
+        '''
+
+        # Save perturbed costmap_data to file for C++ node
+        costmap_start = time.time()
+
+        temp = sampled_instance.reshape(sampled_instance.shape[0]*160,160)
+        np.savetxt('./src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+
+        costmap_end = time.time()
+        costmap_save_time = costmap_end - costmap_start
+        print('Save perturbed costmap_data runtime: ', costmap_save_time)
+
+        #print('starting C++ node')
+
+        planner_start = time.time()
+
+        # start perturbed_node_image ROS C++ node
+        Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
+
+        # Wait until perturb_node_image is finished
+        rospy.wait_for_service("/perturb_node_image/finished")
+        #print('perturb_node_image finishedn from python')
+
+        # kill ROS node
+        Popen(shlex.split('rosnode kill /perturb_node_image'))
+
+        planner_end = time.time()
+        planner_time = planner_end - planner_start
+
+        #rospy.sleep(1)
+
+        #print('C++ node ended')
+
+        # load command velocities
+        #self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
+        #print('self.cmd_vel: ', self.cmd_vel_perturb)
+        #print('self.cmd_vel.shape: ', self.cmd_vel_perturb.shape)
+
+        # load local plans
+        self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
+        #print('self.local_plans: ', self.local_plans)
+        #print('self.local_plans.shape: ', self.local_plans.shape)
+
+        # load transformed plan
+        self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
+        #print('self.transformed_plan: ', self.transformed_plan)
+        #print('self.transformed_plan.shape: ', self.transformed_plan.shape)
+
+        # fill the list of transformed plan coordinates
+        self.transformed_plan_xs = []
+        self.transformed_plan_ys = []
+        for i in range(0, self.transformed_plan.shape[0]):
+            x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                self.transformed_plan_xs.append(x_temp)
+                self.transformed_plan_ys.append(y_temp)
+
+        # DETERMINE THE DEVIATION TYPE
+        # thresholds
+        local_plan_gap_threshold = 48 #60 #48 #32
+        small_deviation_threshold = 7.0 #5 #7
+        big_deviation_threshold = 14
+        #no_deviation_threshold = 3.0
+
+        # test for the original local plan gap
+        local_plan_original_gap = False
+        local_plan_gaps = []
+        diff = 0
+        for j in range(0, len(self.local_plan_x_list) - 1):
+            diff = math.sqrt( (self.local_plan_x_list[j]-self.local_plan_x_list[j+1])**2 + (self.local_plan_y_list[j]-self.local_plan_y_list[j+1])**2 )
+            local_plan_gaps.append(diff)
+        if max(local_plan_gaps) > local_plan_gap_threshold:
+            local_plan_original_gap = True
+
+        # local gap too big - stop
+        if local_plan_original_gap == True or len(self.local_plan_x_list) == 0:
+            deviation_type = 'stop'
+            local_plan_gap_threshold = 55
+        # no local gap - test further    
+        else:        
+            diff_x = 0
+            diff_y = 0
+            
+            big_deviation = False
+            devs = []
+            for j in range( 0, len(self.local_plan_x_list)):
+                diffs = []
+                deviation_local = True  
+                for k in range(0, len(self.transformed_plan_xs)):
+                    diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
+                    diff = math.sqrt(diff_x + diff_y)
+                    diffs.append(diff)
+                    if diff <= big_deviation_threshold:
+                        deviation_local = False
+                        break # commented (comment out) because of big_deviation_threshold = max(devs) * 0.8
+                devs.append(min(diffs))    
+                if deviation_local == True:
+                    big_deviation = True
+                    break # commented (comment out) because of big_deviation_threshold = max(devs) * 0.8
+            
+            if big_deviation == True:
+                deviation_type = 'big_deviation'
+                local_plan_gap_threshold = 48
+                #print('max_dev: ', max(devs))
+                big_deviation_threshold = max(devs) * 0.8
+                #print('big_deviation_threshold: ', big_deviation_threshold)
+            else:
+                diff_x = 0
+                diff_y = 0
+            
+                small_deviation = False
+                for j in range( 0, len(self.local_plan_x_list)):
+                    deviation_local = True  
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
+                        diff = math.sqrt(diff_x + diff_y)
+                        if diff <= small_deviation_threshold:
+                            deviation_local = False
+                            break
+                    if deviation_local == True:
+                        small_deviation = True
+                        break
+                if small_deviation == True:
+                    deviation_type = 'small_deviation'
+                    #print('max_dev: ', max(devs))
+                else:
+                    deviation_type = 'no_deviation'
+                    #print('max_dev: ', max(devs))
+
+        print('deviation_type: ', deviation_type)
+        
+        # deviation of local plan from global plan
+        self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
+        #print('self.local_plan_deviation: ', self.local_plan_deviation)
+
+        # MAIN PART
+        target_start = time.time()
+        # fill in deviation dataframe
+        dev_original = 0
+        for i in range(0, sampled_instance.shape[0]):
+            #print('\ni = ', i)
+            local_plan_xs = []
+            local_plan_ys = []
+            local_plan_found = False
+            
+            # find if there is local plan
+            self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+            for j in range(0, self.local_plans_local.shape[0]):
+                    x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                    y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                    if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                        local_plan_xs.append(x_temp)
+                        local_plan_ys.append(y_temp)
+                        local_plan_found = True
+            
+            if local_plan_found == False:
+                if deviation_type == 'stop':
+                    self.local_plan_deviation.iloc[i, 0] = dev_original
+                elif deviation_type == 'no_deviation':
+                    self.local_plan_deviation.iloc[i, 0] = 745.5 #1000
+                elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
+                    self.local_plan_deviation.iloc[i, 0] = 0.0
+                continue             
+
+            diff_x = 0
+            diff_y = 0
+            devs = []
+            for j in range(0, len(local_plan_xs)):
+                local_diffs = []
+                deviation_local = True  
+                for k in range(0, len(self.transformed_plan_xs)):
+                    diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
+                    diff = math.sqrt(diff_x + diff_y)
+                    local_diffs.append(diff)                        
+                devs.append(min(local_diffs))   
+
+            if i == 0:
+                dev_original = sum(devs)
+
+            self.local_plan_deviation.iloc[i, 0] = sum(devs)
+        
+        target_end = time.time()
+        target_calculation_time = target_end - target_start            
+           
+        #self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
+        
+        print('classifier_fn_image ended')
+
+        return np.array(self.local_plan_deviation), planner_time, target_calculation_time, costmap_save_time
+
+    def plotMinimalEvaluation(self, num_samples):
+        path_core = os.getcwd()
+
+        # plot explanation
+        fig = plt.figure(frameon=True)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/explanation_' + str(num_samples) + '.png', transparent=False)
+        fig.clf()
+        #fig.close()
+
+        '''
+        # plot segments
+        fig = plt.figure(frameon=True)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.segments.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        fig.savefig(path_core + '/segments_' + str(num_samples) + '.png', transparent=False)
+        fig.clf()
+        '''
+
+
+    def explain_instance_dataset(self, expID, iteration_ID):
+        print('explain_instance_dataset function starting\n')
+
+        self.expID = expID
+        self.index = expID
+
+        self.manual_instance_loading = False
+        self.manually_make_semantic_map = False
+        self.test_segmentation = False
+
+        if self.explanation_algorithm == 'LIME': 
+
+            # if explanation_mode is 'image'
+            if self.explanation_mode == 'image':
+
+                # Get local costmap
+                # Original costmap will be saved to self.local_costmap_original
+                self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
+
+                # Make image a np.array deepcopy of local_costmap_original
+                self.image = np.array(copy.deepcopy(self.local_costmap_original))
+
+                # Turn inflated area to free space and 100s to 99s
+                self.inflatedToStatic()
+
+                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+                self.image = self.image * 1.0
+                
+                # Saving data to .csv files for C++ node - local navigation planner
+                self.SaveImageDataForLocalPlanner()
+
+                # Saving important data to class variables
+                self.saveImportantData2ClassVars()
+
+                # Use new variable in the algorithm - possible time saving
+                img = copy.deepcopy(self.image)
+
+                segm_fn = 'custom_segmentation'
+                #print('segm_fn = ', segm_fn)
+
+                #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
+                devDistance_x = 0
+                sum_x = 0 
+                devDistance_y = 0 
+                sum_y = 0 
+                devDistance = 0
+
+                self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image_lime, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                                                                    self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
+                                                                                    self.plan_x_list, self.plan_y_list,
+                                                                                    hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
+                        
+                self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
+                                                                            hide_rest=False, min_weight=0.0)            
+                
+                self.plotMinimalDataset(iteration_ID, self.segments)
+
+        elif self.explanation_algorithm == 'Anchors':
+            pass
+
+    def plotMinimalDataset(self, iteration_ID, segments):
+        path_core = os.getcwd()
+
+        # import needed libraries
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+
+        # plot costmap small
+        fig = plt.figure(frameon=False)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        gray_shade = 180
+        white_shade = 255
+        image = gray2rgb(self.image)
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade    
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_costmap.png')
+        fig.clf()
+
+        # plot costmap big
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)    
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_costmap.png')
+        fig.clf()
+
+        # plot input big
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        #ax.imshow(self.image, aspect='auto')
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_input.png')
+        fig.clf()
+
+        # plot input small
+        fig = plt.figure(frameon=False)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        #ax.imshow(self.image, aspect='auto')
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_input.png')
+        fig.clf()
+
+        # plot input segmented small
+        fig = plt.figure(frameon=False)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        #ax.imshow(self.image, aspect='auto')
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        ax.imshow(self.segments.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_input_segmented.png')
+        fig.clf()
+
+        # plot input segmented big
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        #ax.imshow(self.image, aspect='auto')
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        ax.imshow(self.segments.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_input_segmented.png')
+        fig.clf()
+
+        # plot explanation small
+        fig = plt.figure(frameon=True)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)       
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto') 
+        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_output.png', transparent=False)
+        fig.clf()
+
+        # plot explanation big
+        fig = plt.figure(frameon=True)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)        
+        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_output.png', transparent=False)
+        fig.clf()
+
+        # plot weighted segments small
+        fig = plt.figure(frameon=False)
+        w = 1.6
+        h = 1.6
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.segments, aspect='auto')
+        self.segments += 1
+        regions = regionprops(self.segments.astype(int))
+        labels = []
+        for props in regions:
+            labels.append(props.label)
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            ax.scatter(cy, cx, c='white', marker='o')   
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == v - 1:
+                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))
+                    break
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_weighted_segments.png')
+        fig.clf()
+
+        # plot weighted segments big
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.segments, aspect='auto')
+        self.segments += 1
+        regions = regionprops(self.segments.astype(int))
+        labels = []
+        for props in regions:
+            labels.append(props.label)
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            ax.scatter(cy, cx, c='white', marker='o')   
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == v - 1:
+                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))
+                    break
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_weighted_segments.png')
+        fig.clf()
+                        
+        for i in range(1, self.local_plan_tmp.shape[0]):
+            x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:        
+                with open('local_plan_coordinates.csv', "a") as myfile:
+                     myfile.write(str(iteration_ID) + ',' + str(self.local_plan_tmp.iloc[i, 0]) + ',' + str(self.local_plan_tmp.iloc[i, 1]) + '\n')
+
+
+        for i in range(0, self.plan_tmp_tmp.shape[0], 3):
+            x_temp = int((self.plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((self.plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                with open('global_plan_coordinates.csv', "a") as myfile:
+                    myfile.write(str(iteration_ID) + ',' + str(self.plan_tmp_tmp.iloc[i, 0]) + ',' + str(self.plan_tmp_tmp.iloc[i, 1]) + '\n')
+       
+        with open('costmap_data.csv', "a") as myfile:
+                #myfile.write('picture_ID,width,heigth,origin_x,origin_y,resolution\n')
+                myfile.write(str(iteration_ID) + ',' + str(self.localCostmapWidth) + ',' + str(self.localCostmapHeight) + ',' + str(self.localCostmapOriginX) + ',' + str(self.localCostmapOriginY) + ',' + str(self.localCostmapResolution) + '\n')
+
+        with open('robot_coordinates.csv', "a") as myfile:
+                #myfile.write('picture_ID,position_x,position_y\n')
+                myfile.write(str(iteration_ID) + ',' + str(self.odom_x) + ',' + str(self.odom_y) + '\n')       
+        
+
+
+
+
+
+
+
     # helper function
     def findDevDistance(self):
         # indices of local plan's poses in local costmap
@@ -3034,690 +3690,6 @@ class ExplainRobotNavigation:
 
         print('Test segmentation function ending')    
             
-
-
-    def explain_instance_dataset(self, expID, iteration_ID):
-        print('explain_instance_dataset function starting\n')
-
-        # if explanation_mode is 'image'
-        if self.explanation_mode == 'image':
-            self.expID = expID
-            self.index = expID
-
-            self.manual_instance_loading = False
-            self.manually_make_semantic_map = False
-            self.test_segmentation = False 
-
-            # Get local costmap
-            # Original costmap will be saved to self.local_costmap_original
-            self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
-
-            # Make image a np.array deepcopy of local_costmap_original
-            self.image = np.array(copy.deepcopy(self.local_costmap_original))
-
-            # Turn inflated area to free space and 100s to 99s
-            self.inflatedToFree()
-
-            # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-            self.image = self.image * 1.0
-            
-            # Saving data to .csv files for C++ node - local navigation planner
-            self.limeImageSaveDataForLocalPlanner()
-
-            # Saving important data to class variables
-            self.saveImportantData2ClassVars()
-
-            # Use new variable in the algorithm - possible time saving
-            img = copy.deepcopy(self.image)
-
-            segm_fn = 'custom_segmentation'
-            print('segm_fn = ', segm_fn)
-
-            #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
-            devDistance_x = 0
-            sum_x = 0 
-            devDistance_y = 0 
-            sum_y = 0 
-            devDistance = 0
-
-            self.explanation, self.segments = self.explainer.explain_instance(img, self.classifier_fn_image, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                                                                self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
-                                                                                self.plan_x_list, self.plan_y_list,
-                                                                                hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
-                    
-            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
-                                                                        hide_rest=False, min_weight=0.0)            
-            
-            self.plotMinimalDataset(iteration_ID, self.segments)
-            
-    def plotMinimalDataset(self, iteration_ID, segments):
-        path_core = os.getcwd()
-
-        # import needed libraries
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
-
-        # plot costmap small
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        gray_shade = 180
-        white_shade = 255
-        image = gray2rgb(self.image)
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
-                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
-                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
-                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade    
-        ax.imshow(image.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_costmap.png')
-        fig.clf()
-
-        # plot costmap big
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)    
-        ax.imshow(image.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_costmap.png')
-        fig.clf()
-
-        # plot input big
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #ax.imshow(self.image, aspect='auto')
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-        ax.imshow(image.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_input.png')
-        fig.clf()
-
-        # plot input small
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #ax.imshow(self.image, aspect='auto')
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-        ax.imshow(image.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_input.png')
-        fig.clf()
-
-        # plot input segmented small
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #ax.imshow(self.image, aspect='auto')
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-        ax.imshow(self.segments.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_input_segmented.png')
-        fig.clf()
-
-        # plot input segmented big
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #ax.imshow(self.image, aspect='auto')
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-        ax.imshow(self.segments.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_input_segmented.png')
-        fig.clf()
-
-        # plot explanation small
-        fig = plt.figure(frameon=True)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)       
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto') 
-        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_output.png', transparent=False)
-        fig.clf()
-
-        # plot explanation big
-        fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)        
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_output.png', transparent=False)
-        fig.clf()
-
-        # plot weighted segments small
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.segments, aspect='auto')
-        self.segments += 1
-        regions = regionprops(self.segments.astype(int))
-        labels = []
-        for props in regions:
-            labels.append(props.label)
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            ax.scatter(cy, cx, c='white', marker='o')   
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == v - 1:
-                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))
-                    break
-            i = i + 1
-        # Save segments with nice numbering as a picture
-        fig.savefig(path_core + '/small/' + str(iteration_ID) + '_weighted_segments.png')
-        fig.clf()
-
-        # plot weighted segments big
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.segments, aspect='auto')
-        self.segments += 1
-        regions = regionprops(self.segments.astype(int))
-        labels = []
-        for props in regions:
-            labels.append(props.label)
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            ax.scatter(cy, cx, c='white', marker='o')   
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == v - 1:
-                    ax.text(cy, cx, str(round(self.exp[j][1], 4)))
-                    break
-            i = i + 1
-        # Save segments with nice numbering as a picture
-        fig.savefig(path_core + '/big/' + str(iteration_ID) + '_weighted_segments.png')
-        fig.clf()
-                        
-        for i in range(1, self.local_plan_tmp.shape[0]):
-            x_temp = int((self.local_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.local_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:        
-                with open('local_plan_coordinates.csv', "a") as myfile:
-                     myfile.write(str(iteration_ID) + ',' + str(self.local_plan_tmp.iloc[i, 0]) + ',' + str(self.local_plan_tmp.iloc[i, 1]) + '\n')
-
-
-        for i in range(0, self.plan_tmp_tmp.shape[0], 3):
-            x_temp = int((self.plan_tmp_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.plan_tmp_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                with open('global_plan_coordinates.csv', "a") as myfile:
-                    myfile.write(str(iteration_ID) + ',' + str(self.plan_tmp_tmp.iloc[i, 0]) + ',' + str(self.plan_tmp_tmp.iloc[i, 1]) + '\n')
-       
-        with open('costmap_data.csv', "a") as myfile:
-                #myfile.write('picture_ID,width,heigth,origin_x,origin_y,resolution\n')
-                myfile.write(str(iteration_ID) + ',' + str(self.localCostmapWidth) + ',' + str(self.localCostmapHeight) + ',' + str(self.localCostmapOriginX) + ',' + str(self.localCostmapOriginY) + ',' + str(self.localCostmapResolution) + '\n')
-
-        with open('robot_coordinates.csv', "a") as myfile:
-                #myfile.write('picture_ID,position_x,position_y\n')
-                myfile.write(str(iteration_ID) + ',' + str(self.odom_x) + ',' + str(self.odom_y) + '\n')       
-        
-
-
-    def explain_instance_evaluation(self, expID, ID):
-        print('explain_instance_evaluation function starting\n')
-
-        self.expID = expID
-            
-        # if explanation_mode is 'image'
-        if self.explanation_mode == 'image':
-            import time
-            before_explain_instance_start = time.time()
-            self.index = self.expID
-
-            self.manual_instance_loading = False
-            self.manually_make_semantic_map = False
-            self.test_segmentation = False 
-
-            # Get local costmap
-            # Original costmap will be saved to self.local_costmap_original
-            self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
-
-            # Make image a np.array deepcopy of local_costmap_original
-            self.image = np.array(copy.deepcopy(self.local_costmap_original))
-
-            # Turn inflated area to free space and 100s to 99s
-            self.inflatedToFree()
-
-            # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-            self.image = self.image * 1.0
-            
-            # Saving data to .csv files for C++ node - local navigation planner
-            self.limeImageSaveDataForLocalPlanner()
-
-            # Saving important data to class variables
-            self.saveImportantData2ClassVars()
-
-            segm_fn = 'custom_segmentation'
-
-            #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
-            devDistance_x = 0
-            sum_x = 0 
-            devDistance_y = 0 
-            sum_y = 0 
-            devDistance = 0
-
-            before_explain_instance_end = time.time()
-            before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
-
-            #samples_num, segments_num = self.calculateNumOfSamples(img)
-            segments_num = 8
- 
-            import time
-
-            nums_of_samples = [2,4,8,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256]
-
-            #with open('explanations' + str(self.expID) + '.csv', "w") as myfile:
-            with open('explanations' + str(ID) + '.csv', "a") as myfile:
-                myfile.write('num_samples,before_explain_instance_time,segmentation_time,classifier_fn_time,planner_time,target_calculation_time,costmap_save_time,distances_time,regressor_time,explain_instance_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5,weight_6,weight_7,weight_8\n')
-                
-                for i in nums_of_samples:
-                    #print('\i = ', i)
-                    num_of_iterations_for_one_num_of_segments = 10 #30 #50
-
-                    if i == 256:
-                        num_of_iterations_for_one_num_of_segments = 1
-                    
-                    for j in range(0, num_of_iterations_for_one_num_of_segments): 
-                        # measure explain_instance time
-                        start = time.time()
-                        self.explanation, self.segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time,costmap_save_time, distances_time, regressor_time = self.explainer.explain_instance_evaluation(
-                            self.image, self.classifier_fn_image_evaluation, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
-                            self.plan_x_list, self.plan_y_list,
-                            hide_color=perturb_hide_color_value,
-                            num_segments=segments_num,
-                            num_samples_current=i,
-                            batch_size=2048, segmentation_fn=segm_fn,
-                            top_labels=10)
-                        end = time.time()
-                        explain_instance_time = round(end - start, 3)
-
-                        # measure get explanation_picture time
-                        start = time.time()
-                        self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0,
-                                                                                                positive_only=False,
-                                                                                                negative_only=False,
-                                                                                                num_features=100,
-                                                                                                hide_rest=False,
-                                                                                                min_weight=0.0)  # min_weight=0.1 - default
-                        end = time.time()
-                        explanation_pics_time = round(end - start, 3)
-
-                        # measure plotting time
-                        self.segments += 1
-                        start = time.time()
-                        self.plotMinimalEvaluation(i)
-                        end = time.time()
-                        plotting_time = round(end - start, 3)
-
-                        # round measured times to 3 decimal places
-                        before_explain_instance_time = round(before_explain_instance_time, 3)
-                        segmentation_time = round(segmentation_time, 3)
-                        classifier_fn_time = round(classifier_fn_time, 3)
-                        planner_time = round(planner_time, 3)
-                        target_calculation_time = round(target_calculation_time,3)
-                        costmap_save_time = round(costmap_save_time,3)
-                        distances_time = round(distances_time,3)
-                        regressor_time = round(regressor_time,3)
-
-                        # write measured times to .csv file
-                        myfile.write(str(i) + ',' + str(before_explain_instance_time) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(planner_time) + ',' + str(target_calculation_time) + ',' + str(costmap_save_time) + ',' + str(distances_time) + ',' + str(regressor_time) + ',' + str(explain_instance_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
-                        for k in range(0, len(self.exp)):
-                            for l in range(0, len(self.exp)):
-                                if k == self.exp[l][0]:
-                                    if k != len(self.exp) - 1:
-                                        myfile.write(str(round(self.exp[l][1], 4)) + ',')
-                                    else:
-                                        myfile.write(str(round(self.exp[l][1], 4)))
-                                    break
-                        myfile.write('\n')
-                    myfile.write('\n')
-            
-    def calculateNumOfSamples(self, img):
-        # Turn gray image to rgb image
-        img_rgb = gray2rgb(img)
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        
-        # find segments_unique_1
-        #segments_unique_1 = np.unique(segments_1)
-        #print('segments_unique_1: ', segments_unique_1)
-        #print('segments_unique_1.shape: ', segments_unique_1.shape)
-
-        # Find segments_2
-        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        #print('segments_unique_2: ', segments_unique_2)
-        #print('segments_unique_2.shape: ', segments_unique_2.shape)
-
-        # Creating segments using segments_1 and segments_2
-        # '''
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        # '''
-        
-        # find segments_unique before nice segment numbering
-        segments_unique = np.unique(segments_1)
-        return 2 ** segments_unique.shape[0], segments_unique.shape[0]
-
-    def classifier_fn_image_evaluation(self, sampled_instance):
-
-        #print('classifier_fn_image started')
-
-        '''
-        # I will use channel 0 from sampled_instance as actual perturbed data
-        # Perturbed pixel intensity is perturb_hide_color_value
-        # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
-        for i in range(0, sampled_instance.shape[0]):
-            for j in range(0, sampled_instance[i].shape[0]):
-                for k in range(0, sampled_instance[i].shape[1]):
-                    if sampled_instance[i][j, k, 0] == perturb_hide_color_value:
-                        if self.image[j, k] == 0:
-                            sampled_instance[i][j, k, 0] = 99
-                            #print('free space')
-                        elif self.image[j, k] == 99:
-                            sampled_instance[i][j, k, 0] = 0
-                            #print('obstacle')
-        '''
-
-        # Save perturbed costmap_data to file for C++ node
-        costmap_start = time.time()
-
-        temp = sampled_instance.reshape(sampled_instance.shape[0]*160,160)
-        np.savetxt('./src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
-
-        costmap_end = time.time()
-        costmap_save_time = costmap_end - costmap_start
-        print('Save perturbed costmap_data runtime: ', costmap_save_time)
-
-        #print('starting C++ node')
-
-        planner_start = time.time()
-
-        # start perturbed_node_image ROS C++ node
-        Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
-
-        # Wait until perturb_node_image is finished
-        rospy.wait_for_service("/perturb_node_image/finished")
-        #print('perturb_node_image finishedn from python')
-
-        # kill ROS node
-        Popen(shlex.split('rosnode kill /perturb_node_image'))
-
-        planner_end = time.time()
-        planner_time = planner_end - planner_start
-
-        #rospy.sleep(1)
-
-        #print('C++ node ended')
-
-        # load command velocities
-        #self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
-        #print('self.cmd_vel: ', self.cmd_vel_perturb)
-        #print('self.cmd_vel.shape: ', self.cmd_vel_perturb.shape)
-
-        # load local plans
-        self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
-        #print('self.local_plans: ', self.local_plans)
-        #print('self.local_plans.shape: ', self.local_plans.shape)
-
-        # load transformed plan
-        self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
-        #print('self.transformed_plan: ', self.transformed_plan)
-        #print('self.transformed_plan.shape: ', self.transformed_plan.shape)
-
-        # fill the list of transformed plan coordinates
-        self.transformed_plan_xs = []
-        self.transformed_plan_ys = []
-        for i in range(0, self.transformed_plan.shape[0]):
-            x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                self.transformed_plan_xs.append(x_temp)
-                self.transformed_plan_ys.append(y_temp)
-
-        # DETERMINE THE DEVIATION TYPE
-        # thresholds
-        local_plan_gap_threshold = 48 #60 #48 #32
-        small_deviation_threshold = 7.0 #5 #7
-        big_deviation_threshold = 14
-        #no_deviation_threshold = 3.0
-
-        # test for the original local plan gap
-        local_plan_original_gap = False
-        local_plan_gaps = []
-        diff = 0
-        for j in range(0, len(self.local_plan_x_list) - 1):
-            diff = math.sqrt( (self.local_plan_x_list[j]-self.local_plan_x_list[j+1])**2 + (self.local_plan_y_list[j]-self.local_plan_y_list[j+1])**2 )
-            local_plan_gaps.append(diff)
-        if max(local_plan_gaps) > local_plan_gap_threshold:
-            local_plan_original_gap = True
-
-        # local gap too big - stop
-        if local_plan_original_gap == True or len(self.local_plan_x_list) == 0:
-            deviation_type = 'stop'
-            local_plan_gap_threshold = 55
-        # no local gap - test further    
-        else:        
-            diff_x = 0
-            diff_y = 0
-            
-            big_deviation = False
-            devs = []
-            for j in range( 0, len(self.local_plan_x_list)):
-                diffs = []
-                deviation_local = True  
-                for k in range(0, len(self.transformed_plan_xs)):
-                    diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
-                    diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
-                    diff = math.sqrt(diff_x + diff_y)
-                    diffs.append(diff)
-                    if diff <= big_deviation_threshold:
-                        deviation_local = False
-                        break # commented (comment out) because of big_deviation_threshold = max(devs) * 0.8
-                devs.append(min(diffs))    
-                if deviation_local == True:
-                    big_deviation = True
-                    break # commented (comment out) because of big_deviation_threshold = max(devs) * 0.8
-            
-            if big_deviation == True:
-                deviation_type = 'big_deviation'
-                local_plan_gap_threshold = 48
-                #print('max_dev: ', max(devs))
-                big_deviation_threshold = max(devs) * 0.8
-                #print('big_deviation_threshold: ', big_deviation_threshold)
-            else:
-                diff_x = 0
-                diff_y = 0
-            
-                small_deviation = False
-                for j in range( 0, len(self.local_plan_x_list)):
-                    deviation_local = True  
-                    for k in range(0, len(self.transformed_plan_xs)):
-                        diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
-                        diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
-                        diff = math.sqrt(diff_x + diff_y)
-                        if diff <= small_deviation_threshold:
-                            deviation_local = False
-                            break
-                    if deviation_local == True:
-                        small_deviation = True
-                        break
-                if small_deviation == True:
-                    deviation_type = 'small_deviation'
-                    #print('max_dev: ', max(devs))
-                else:
-                    deviation_type = 'no_deviation'
-                    #print('max_dev: ', max(devs))
-
-        print('deviation_type: ', deviation_type)
-        
-        # deviation of local plan from global plan
-        self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sampled_instance.shape[0]), columns=['deviate'])
-        #print('self.local_plan_deviation: ', self.local_plan_deviation)
-
-        # MAIN PART
-        target_start = time.time()
-        # fill in deviation dataframe
-        dev_original = 0
-        for i in range(0, sampled_instance.shape[0]):
-            #print('\ni = ', i)
-            local_plan_xs = []
-            local_plan_ys = []
-            local_plan_found = False
-            
-            # find if there is local plan
-            self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
-            for j in range(0, self.local_plans_local.shape[0]):
-                    x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                    y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-
-                    if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                        local_plan_xs.append(x_temp)
-                        local_plan_ys.append(y_temp)
-                        local_plan_found = True
-            
-            if local_plan_found == False:
-                if deviation_type == 'stop':
-                    self.local_plan_deviation.iloc[i, 0] = dev_original
-                elif deviation_type == 'no_deviation':
-                    self.local_plan_deviation.iloc[i, 0] = 745.5 #1000
-                elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
-                    self.local_plan_deviation.iloc[i, 0] = 0.0
-                continue             
-
-            diff_x = 0
-            diff_y = 0
-            devs = []
-            for j in range(0, len(local_plan_xs)):
-                local_diffs = []
-                deviation_local = True  
-                for k in range(0, len(self.transformed_plan_xs)):
-                    diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
-                    diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
-                    diff = math.sqrt(diff_x + diff_y)
-                    local_diffs.append(diff)                        
-                devs.append(min(local_diffs))   
-
-            if i == 0:
-                dev_original = sum(devs)
-
-            self.local_plan_deviation.iloc[i, 0] = sum(devs)
-        
-        target_end = time.time()
-        target_calculation_time = target_end - target_start            
-           
-        #self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
-        
-        print('classifier_fn_image ended')
-
-        return np.array(self.local_plan_deviation), planner_time, target_calculation_time, costmap_save_time
-
-    def plotMinimalEvaluation(self, num_samples):
-        path_core = os.getcwd()
-
-        # plot explanation
-        fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        
-        ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-
-        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/explanation_' + str(num_samples) + '.png', transparent=False)
-        fig.clf()
-        #fig.close()
-
-        '''
-        # plot segments
-        fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.segments.astype(np.uint8), aspect='auto')  # , aspect='auto')
-        fig.savefig(path_core + '/segments_' + str(num_samples) + '.png', transparent=False)
-        fig.clf()
-        '''
-
 
     def getSegmentsForGanLimeEval(self, image):
 

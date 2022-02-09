@@ -412,7 +412,7 @@ def Evaluate():
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        tabular_mode, explanation_mode, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     import time
@@ -440,11 +440,11 @@ def Evaluate():
             myfile.write(str(expID) + '\n')
         myfile.close() 
 
-        start = time.time()
+        total_exp_start = time.time()
         exp_nav.explain_instance_evaluation(expID, i)
-        end = time.time()
+        total_exp_end = time.time()
         with open("explanations.txt", "a") as myfile:
-            myfile.write(str(round(end - start, 2)) + '\n')
+            myfile.write(str(round(total_exp_end - total_exp_start, 2)) + '\n')
 
 def CreateDataset():
     import pandas as pd
@@ -571,7 +571,7 @@ def CreateDataset():
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        tabular_mode, explanation_mode, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     #'''
