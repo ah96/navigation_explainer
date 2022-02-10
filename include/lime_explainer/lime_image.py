@@ -58,14 +58,6 @@ class ImageExplanation(object):
 
         #print('get_image_and_mask starting')
 
-        #'''
-        # testing
-        import matplotlib.pyplot as plt
-        #print('self.local_exp: ', self.local_exp)
-        seg_unique = np.unique(self.segments)
-        #print('self.segments_unique: ', seg_unique)
-        #'''
-
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
         if positive_only & negative_only:
@@ -78,12 +70,9 @@ class ImageExplanation(object):
         if hide_rest:
             temp = np.zeros(self.image.shape)
         else:
-            #temp = self.image.copy()
             temp = np.zeros(self.image.shape)
-            #temp[segments == 1] = 0.0
         if positive_only:
             fs = [x[0] for x in exp if x[1] > 0 and x[1] > min_weight][:num_features]
-            #print('fs: ', fs)
         if negative_only:
             fs = [x[0] for x in exp if x[1] < 0 and abs(x[1]) > min_weight][:num_features]
         if positive_only == True and negative_only == False:
@@ -98,7 +87,7 @@ class ImageExplanation(object):
                     temp[segments == f, 2] = np.max(image)  # image[segments == f].copy()
                     if hide_rest == False:
                         temp[segments == f, 0] = 0.0
-                        # temp[segments == f, 2] = 0.0
+                        #temp[segments == f, 2] = 0.0
                 mask[segments == f] = 1
             #print('get_image_and_mask ending')
             return temp, mask, exp
@@ -122,111 +111,68 @@ class ImageExplanation(object):
             counter_local = 0
             import pandas as pd
 
+            color_free_space = False
+            use_maximum_weight = True
+            all_weights_zero = False
+
             w_sum = 0.0
             w_s = []
-            for f, w in exp[:num_features]:
-                w_sum += abs(w)
-                w_s.append(abs(w))
-            max_w = max(w_s)
-            if max_w == 0:
-                max_w = 1    
+            if use_maximum_weight == True:
+                for f, w in exp[:num_features]:
+                    w_sum += abs(w)
+                    w_s.append(abs(w))
+                max_w = max(w_s)
+                if max_w == 0:
+                    all_weights_zero = True
+                    max_w = 1
+                #print('max_w: ', max_w)
 
-            #pd.DataFrame(segments).to_csv('segments_lime_image.csv', index=False)
             for f, w in exp[:num_features]:
-                #print('(f, w): ', (f, w))
-                #print('w_sum: ', w_sum)
-
-                #if f == 0:
-                #    print(image[segments == f])
+                #print('\n(f, w): ', (f, w))
 
                 if np.abs(w) < min_weight:
                     continue
-                c = 0 if w < 0 else 1
-                #print('(f, w, c): ', (f, w, c))
-                mask[segments == f] = 120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
-                #temp[segments == f] = image[segments == f].copy()
+                if w < -0.01:
+                    c = -1
+                elif w > 0.01:
+                    c = 1
+                else:
+                    c = 0
+                #print('c = ', c)
+
+                mask[segments == f] = f + 1 #120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
+
                 val_low = 0.0
                 val_high = 255.0
-
                 gray_shade = 180
+                
+                x1 = np.bincount(image[segments == f][:,0] > 0.0)
+                x2 = len(image[segments == f][:,0])
+                free_space_percentage = x1[0] / x2
+                #print('free_space_percentage: ', free_space_percentage)
 
-                color_free_space = False
-                use_maximum_weight = True
-
-                # if free space
-                if image[segments == f].all() == 0.0:
-                    # if positive weight
-                    if c == 1:
-                        if color_free_space == True:
-                            temp[segments == f, 0] = 0 #180.0  # c is channel, RGB - 012
-                            if use_maximum_weight == False:
-                                temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / w_sum) #180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
-                            else:
-                                temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / max_w) #180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012    
-                            temp[segments == f, 2] = 0 #180.0
-                        else:
-                            temp[segments == f, 0] = gray_shade  # c is channel, RGB - 012
-                            temp[segments == f, 1] = gray_shade #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
-                            temp[segments == f, 2] = gray_shade
-                    # if negative weight
-                    else:
-                        if color_free_space == True:
-                            if use_maximum_weight == False:
-                                temp[segments == f, 0] = val_low + (val_high - val_low) * (abs(w) / w_sum) #180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
-                            else:
-                                temp[segments == f, 0] = val_low + (val_high - val_low) * (abs(w) / max_w) #180.0 #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
-                            temp[segments == f, 1] = 0 #180.0  # c is channel, RGB - 012
-                            temp[segments == f, 2] = 0 #180.0
-                        else:
-                            temp[segments == f, 0] = gray_shade  # c is channel, RGB - 012
-                            temp[segments == f, 1] = gray_shade #val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum # c is channel, RGB - 012
-                            temp[segments == f, 2] = gray_shade
-                # if obstacle
+                # free space
+                if free_space_percentage > 0.9:
+                    if color_free_space == False:
+                        temp[segments == f, 0] = gray_shade
+                        temp[segments == f, 1] = gray_shade
+                        temp[segments == f, 2] = gray_shade
+                # obstacle
                 else:
-                    # if positive weight
-                    if c == 1:
-                        temp[segments == f, 0] = 0.0  # c is channel, RGB - 012
-                        if use_maximum_weight == True:
-                            temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / max_w)  #120 + 100 * (abs(w) / max_w) #float(np.max(image)) * w / w_sum #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
-                        else:
-                            temp[segments == f, 1] = val_low + (val_high - val_low) * (abs(w) / w_sum)  #120 + 100 * (abs(w) / max_w) #float(np.max(image)) * w / w_sum #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
-                        temp[segments == f, 2] = 0.0 #50 + 170 * (abs(w) / max_w) #float(np.max(image)) * w / w_sum #1.0
-                    # if negative weight
-                    else:
-                        if use_maximum_weight == True:
-                            temp[segments == f, 0] = val_low + (val_high - val_low) * (abs(w) / max_w) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
-                        else:
-                            temp[segments == f, 0] = val_low + (val_high - val_low) * (abs(w) / w_sum) #float(np.max(image)) * w / w_sum  # c is channel, RGB - 012
-                        temp[segments == f, 1] = 0.0  # c is channel, RGB - 012
-                        temp[segments == f, 2] = 0.0 #50 + 170 * (abs(w) / max_w) #float(np.max(image)) * w / w_sum #1.0
-
-                counter_local += 1
-
-            #temp = temp.astype(np.uint8)
-            #mask = mask.astype(np.uint8)    
-            
-            '''
-            pd.DataFrame(temp[:,:,0]).to_csv('R.csv')
-            pd.DataFrame(temp[:,:,1]).to_csv('G.csv')
-            pd.DataFrame(temp[:,:,2]).to_csv('B.csv')
-
-            from PIL import Image
-            im = Image.fromarray(temp.astype(np.uint8))
-            im.save("temp.png")
-
-            im = Image.fromarray(mask.astype(np.uint8))
-            im.save("mask.png")
-
-            import matplotlib.pyplot as plt
-            fig = plt.figure(frameon=False)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            ax.imshow(temp.astype(np.uint8), aspect='auto')
-            fig.savefig('temp_plt.png')
-            fig.clf()
-            '''
-            
+                    if color_free_space == False:
+                        if c == 1:
+                            temp[segments == f, 0] = 0.0
+                            temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / max_w
+                            temp[segments == f, 2] = 0.0
+                        elif c == 0:
+                            temp[segments == f, 0] = 0.0
+                            temp[segments == f, 1] = 0.0
+                            temp[segments == f, 2] = 0.0
+                        elif c == -1:
+                            temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / max_w
+                            temp[segments == f, 1] = 0.0
+                            temp[segments == f, 2] = 0.0
+                                        
             #print('get_image_and_mask ending')
             return temp, mask, exp
 
@@ -271,6 +217,808 @@ class LimeImageExplainer(object):
         self.feature_selection = feature_selection
         self.base = lime_base.LimeBase(kernel_fn, verbose, random_state=self.random_state)
 
+    def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
+                         hide_color=None,
+                         top_labels=5, num_features=100000, num_samples=1000,
+                         batch_size=10,
+                         segmentation_fn=None,
+                         distance_metric='cosine',
+                         model_regressor=None,
+                         random_seed=None,
+                         progress_bar=True):
+        """Generates explanations for a prediction.
+
+        First, we generate neighborhood data by randomly perturbing features
+        from the instance (see __data_inverse). We then learn locally weighted
+        linear models on this neighborhood data to explain each of the classes
+        in an interpretable way (see lime_base.py).
+
+        Args:
+            image: 3 dimension RGB image. If this is only two dimensional,
+                we will assume it's a grayscale image and call gray2rgb.
+            classifier_fn: classifier prediction probability function, which
+                takes a numpy array and outputs prediction probabilities.  For
+                ScikitClassifiers , this is classifier.predict_proba.
+            labels: iterable with labels to be explained.
+            hide_color: If not None, will hide superpixels with this color.
+                Otherwise, use the mean pixel color of the image.
+            top_labels: if not None, ignore labels and produce explanations for
+                the K labels with highest prediction probabilities, where K is
+                this parameter.
+            num_features: maximum number of features present in explanation
+            num_samples: size of the neighborhood to learn the linear model
+            batch_size: batch size for model predictions
+            distance_metric: the distance metric to use for weights.
+            model_regressor: sklearn regressor to use in explanation. Defaults
+            to Ridge regression in LimeBase. Must have model_regressor.coef_
+            and 'sample_weight' as a parameter to model_regressor.fit()
+            segmentation_fn: SegmentationAlgorithm, wrapped skimage
+            segmentation function
+            random_seed: integer used as random seed for the segmentation
+                algorithm. If None, a random integer, between 0 and 1000,
+                will be generated using the internal random number generator.
+            progress_bar: if True, show tqdm progress bar.
+
+        Returns:
+            An ImageExplanation object (see lime_image.py) with the corresponding
+            explanations.
+        """
+
+        import copy
+        # save original (grayscale) image
+        image_orig = copy.deepcopy(image)
+
+        if len(image.shape) == 2:
+            image = gray2rgb(image)
+        if random_seed is None:
+            random_seed = self.random_state.randint(0, high=1000)
+
+        # my change
+        if segmentation_fn is None:
+            segmentation_fn = SegmentationAlgorithm('quickshift', kernel_size=4,
+                                                    max_dist=200, ratio=0.2,
+                                                    random_seed=random_seed)
+            segments = segmentation_fn(image)
+        elif segmentation_fn == 'custom_segmentation':
+            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm1(image)
+            #segments = self.sm2(image_orig, image, x_odom, y_odom)
+            #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
+            #segments = self.sm4(image_orig, image, x_odom, y_odom, devDistance, sum)
+            #segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
+            #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+        elif segmentation_fn == 'semantic_segmentation':
+            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
+        else:
+            segments = segmentation_fn(image)
+
+        '''
+        # original code
+        fudged_image = image.copy()
+        if hide_color is None:
+            for x in np.unique(segments):
+                fudged_image[segments == x] = (
+                    np.mean(image[segments == x][:, 0]),
+                    np.mean(image[segments == x][:, 1]),
+                    np.mean(image[segments == x][:, 2]))
+        else:
+            fudged_image[:] = hide_color
+        '''
+
+        # my change - to return grayscale to classifier_fn
+        fudged_image = image_orig.copy()
+        if hide_color is None:
+            for x in np.unique(segments):
+                fudged_image[segments == x] = (
+                    np.mean(image[segments == x][:, 0]),
+                    np.mean(image[segments == x][:, 1]),
+                    np.mean(image[segments == x][:, 2]))
+        else:
+            fudged_image[:] = hide_color
+
+        top = labels
+
+        data, labels = self.data_labels(image_orig, fudged_image, segments,
+                                        classifier_fn, num_samples,
+                                        batch_size=batch_size,
+                                        progress_bar=progress_bar)
+        #distance_metric = 'jaccard' - alternative distance metric
+        distances = sklearn.metrics.pairwise_distances(
+            data,
+            data[0].reshape(1, -1),
+            metric=distance_metric
+        ).ravel()
+
+        ret_exp = ImageExplanation(image, segments)
+        if top_labels:
+            top = np.argsort(labels[0])[-top_labels:]
+            ret_exp.top_labels = list(top)
+            ret_exp.top_labels.reverse()
+        for label in top:
+            (ret_exp.intercept[label],
+             ret_exp.local_exp[label],
+             ret_exp.score[label],
+             ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
+                data, labels, distances, label, num_features,
+                model_regressor=model_regressor,
+                feature_selection=self.feature_selection)
+        return ret_exp, segments
+
+    def data_labels(self,
+                    image,
+                    fudged_image,
+                    segments,
+                    classifier_fn,
+                    num_samples,
+                    batch_size=10,
+                    progress_bar=True):
+        """Generates images and predictions in the neighborhood of this image.
+
+        Args:
+            image: 3d numpy array, the image
+            fudged_image: 3d numpy array, image to replace original image when
+                superpixel is turned off
+            segments: segmentation of the image
+            classifier_fn: function that takes a list of images and returns a
+                matrix of prediction probabilities
+            num_samples: size of the neighborhood to learn the linear model
+            batch_size: classifier_fn will be called on batches of this size.
+            progress_bar: if True, show tqdm progress bar.
+
+        Returns:
+            A tuple (data, labels), where:
+                data: dense num_samples * num_superpixels
+                labels: prediction probabilities matrix
+        """
+
+        #print('data_labels starts')
+
+        n_features = np.unique(segments).shape[0]
+
+        '''
+        # Original perturbation
+        data = self.random_state.randint(0, 2, num_samples * n_features)\
+            .reshape((num_samples, n_features))
+        #print('data: ', data)
+        #print('data.shape: ', data.shape)
+        '''
+
+        #'''
+        # My perturbation - test all possible combinations
+        num_samples = 2 ** n_features
+        import itertools
+        lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
+        data = np.array(lst).reshape((num_samples, n_features))
+        #'''
+
+        labels = []
+
+        show_free_space = False
+
+        if show_free_space == True:
+            data[0, :] = 1
+            data[-1, :] = 0 # only if I use my perturbation
+        else:
+            data = data[int(data.shape[0]/2):, :]
+            data[0, 1:] = 1
+            data[-1, 1:] = 0 # only if I use my perturbation    
+        
+        imgs = []
+        rows = tqdm(data) if progress_bar else data
+        for row in rows:
+            temp = copy.deepcopy(image)
+            zeros = np.where(row == 0)[0]
+            mask = np.zeros(segments.shape).astype(bool)
+            for z in zeros:
+                mask[segments == z] = True
+            temp[mask] = fudged_image[mask]
+            imgs.append(temp)
+            if len(imgs) == batch_size:
+                preds = classifier_fn(np.array(imgs))
+                labels.extend(preds)
+                imgs = []
+        if len(imgs) > 0:
+            preds = classifier_fn(np.array(imgs))
+            labels.extend(preds)
+
+        #print('data_labels ends')
+
+        return data, np.array(labels)
+
+    def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
+        # import needed libraries
+        from skimage.segmentation import slic
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import copy
+        
+        print('\nsm_only_obstacles started')
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        sm_only_obstacles_start = time.time()
+
+        # Find segments_2
+        segments_slic = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_slic.astype('float64'), aspect='auto')
+        fig.savefig('segments_slic.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        d_x = plan_x_list[-1] - x_odom
+        if d_x == 0:
+            d_x = 1
+        k = (-plan_y_list[-1] + y_odom) / (d_x)
+        #print('\nabs(k) = ', abs(k)) 
+
+        # make one free space segment
+        ctr = 0
+        segments[:, :] = ctr
+        ctr = ctr + 1
+
+        num_of_wanted_obstacle_segments = 8
+
+        num_of_existing_obstacle_segments = 0
+        # add existing obstacle segments        
+        for i in np.unique(segments_slic):
+            temp = img[segments_slic == i]
+            count_of_99_s = np.count_nonzero(temp == 99)
+            if np.all(img[segments_slic == i] == 99) or count_of_99_s > 0.9 * temp.shape[0]:
+                segments[segments_slic == i] = ctr
+                ctr = ctr + 1
+                num_of_existing_obstacle_segments += 1
+
+        #print('\nnum_of_existing_obstacle_segments: ', num_of_existing_obstacle_segments)        
+
+        if num_of_wanted_obstacle_segments > num_of_existing_obstacle_segments > 0:
+            # divide segment obstacles    
+            current_segs_labels = np.unique(segments)[1:]        
+
+            #print('\nnumber of wanted segments: ', num_of_wanted_obstacle_segments)
+            #print('number of current segments: ', num_of_existing_obstacle_segments)
+
+            current_segs_sizes = []
+
+            if num_of_existing_obstacle_segments < num_of_wanted_obstacle_segments:
+                for i in range(0, num_of_existing_obstacle_segments):
+                    #print(len(segments[segments == seg_labels[i]]))
+                    current_segs_sizes.append(len(segments[segments == current_segs_labels[i]]))
+
+            #print('\nsizes of original segments: ', current_segs_sizes)
+            #print('labels of original segments: ', current_segs_labels)
+            sorted_segs_labels = [x for _, x in sorted(zip(current_segs_sizes, current_segs_labels))]
+            sorted_segs_labels.reverse()
+            #print('labels of sorted segments: ', sorted_segs_labels)
+
+            num_segs_missing = num_of_wanted_obstacle_segments - num_of_existing_obstacle_segments
+            #print('\nnumber of segments missing: ', num_segs_missing)
+
+            # if a number of missing segments is smaller or equal than the number of existing segments
+            # only divide existing segments into 2
+            if num_segs_missing <= num_of_existing_obstacle_segments:
+                label_current = len(sorted_segs_labels) + 1
+                # for loop from zero until the number of missing segments   
+                for i in range(0, num_segs_missing):
+                    temp = segments[segments == sorted_segs_labels[i]]
+                    #print('temp = ', temp)
+
+                    # check obstacle shape
+                    w_min = 161
+                    w_max = -1
+                    h_min = 161
+                    h_max = -1
+                    for j in range(0, segments.shape[0]):
+                        for q in range(0, segments.shape[1]):
+                            if segments[j, q] == sorted_segs_labels[i]:
+                                if j > h_max:
+                                    h_max = j
+                                if j < h_min:
+                                    h_min = j
+                                if q > w_max:
+                                    w_max = q
+                                if q < w_min:
+                                    w_min = q           
+
+                    #print('\n(h_min, h_max): ', (h_min, h_max))
+                    #print('(w_min, w_max): ', (w_min, w_max))
+
+                    height = h_max - h_min + 1
+                    #print('\nheight', height)
+                    width = w_max - w_min + 1
+                    #print('width', width)
+           
+                    # if upright
+                    if abs(k) >= 1:
+                        # divide by height
+                        if height > width:
+                            for j in range(0, int(len(temp) / 2)):
+                                temp[j] = label_current
+                            segments[segments == sorted_segs_labels[i]] = temp
+                        
+                        # divide by width    
+                        else:
+                            label_original = temp[0]
+                            num_of_pixels = len(temp)
+                            counter = 0
+                            for q in range(0, segments.shape[1]):
+                                for j in range(0, segments.shape[0]):
+                                    if segments[j, q] == label_original:
+                                        if 0 <= counter <= num_of_pixels / 2:
+                                            segments[j, q] = label_current
+                                        counter += 1
+
+                            '''
+                            # second method            
+                            label_original = temp[0]
+                            num_of_pixels = len(temp)
+                            counter = 0
+                            finished = False
+                            for q in range(0, segments.shape[1]):
+                                if finished == True:
+                                    break
+                                for j in range(0, segments.shape[0]):
+                                    if segments[j, q] == label_original:
+                                        segments[j, q] = label_current
+                                        counter += 1
+                                        if counter == int(num_of_pixels / 2 + 0.5):
+                                            #label_current += 1
+                                            finished = True
+                                            break
+                            '''
+
+                    # if to the side
+                    elif abs(k) < 1:
+                        # divide by height
+                        if width > height:
+                            for j in range(0, int(len(temp) / 2)):
+                                temp[j] = label_current
+                            segments[segments == sorted_segs_labels[i]] = temp
+                        
+                        # divide by width   
+                        else:
+                            label_original = temp[0]
+                            num_of_pixels = len(temp)
+                            counter = 0
+                            for q in range(0, segments.shape[1]):
+                                for j in range(0, segments.shape[0]):
+                                    if segments[j, q] == label_original:
+                                        if 0 <= counter <= num_of_pixels / 2:
+                                            segments[j, q] = label_current
+                                        counter += 1
+                    
+                    label_current += 1
+
+            # if a number of missing segments is greater than the number of existing segments
+            else:
+                num_of_new_seg_per_old_seg = int(num_segs_missing / num_of_existing_obstacle_segments)
+                #print('num_of_new_seg_per_old_seg = ', num_of_new_seg_per_old_seg)
+                
+                # if a number of new segment per old segments is integer and same for all old segments
+                # divide segments in num_of_new_seg_per_old_seg new segments
+                if num_of_new_seg_per_old_seg == num_segs_missing / num_of_existing_obstacle_segments:
+                    #print('\nnumber of new segments per existing segment: ', num_of_new_seg_per_old_seg)
+
+                    label_current = len(sorted_segs_labels) + 1
+                    
+                    for i in range(0, num_of_existing_obstacle_segments):
+                        temp = segments[segments == sorted_segs_labels[i]]
+
+                        # check obstacle shape
+                        w_min = 161
+                        w_max = -1
+                        h_min = 161
+                        h_max = -1
+                        for j in range(0, segments.shape[0]):
+                            for q in range(0, segments.shape[1]):
+                                if segments[j, q] == sorted_segs_labels[i]:
+                                    if j > h_max:
+                                        h_max = j
+                                    if j < h_min:
+                                        h_min = j
+                                    if q > w_max:
+                                        w_max = q
+                                    if q < w_min:
+                                        w_min = q
+
+                        #print('\n(h_min, h_max): ', (h_min, h_max))
+                        #print('(w_min, w_max): ', (w_min, w_max))
+
+                        height = h_max - h_min + 1
+                        #print('\nheight', height)
+                        width = w_max - w_min + 1
+                        #print('width', width)
+
+                        # if upright
+                        if abs(k) >= 1:
+                            # divide by height
+                            if height > width:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    label_current += 1
+                                segments[segments == sorted_segs_labels[i]] = temp
+                            else:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
+                                label_original = temp[0]
+                                num_of_pixels = len(temp)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if (counter + 1) % step == 0:
+                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg:
+                                                        label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                label_current += 1
+                                                finished = True
+                                                break
+                        # if to the side
+                        else:
+                            if width > height:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    label_current += 1
+                                segments[segments == sorted_segs_labels[i]] = temp
+                            else:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
+                                label_original = temp[0]
+                                num_of_pixels = len(temp)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if (counter + 1) % step == 0:
+                                                    label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                label_current += 1
+                                                finished = True
+                                                break
+
+                # if a number of new segment per old segments is integer and same for all old segments
+                else:
+                    #print('NON-CIO BROJ')
+                    whole_part = int(num_segs_missing / num_of_existing_obstacle_segments)
+                    #print('whole part = ', whole_part)
+                    rest = num_segs_missing % num_of_existing_obstacle_segments
+                    #print('rest = ', rest)
+
+                    put_rest_to_biggest_segment = True
+
+                    num_of_new_seg_per_old_seg_list = [whole_part] * num_of_existing_obstacle_segments
+
+                    if put_rest_to_biggest_segment == False:
+                        for i in range(0, rest):
+                            num_of_new_seg_per_old_seg_list[i] += 1
+                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)    
+                    else:
+                        num_of_new_seg_per_old_seg_list[0] += rest
+                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)
+
+                    #print('num_of_new_seg_per_old_seg_list = ', num_of_new_seg_per_old_seg_list)
+
+                    label_current = len(sorted_segs_labels) + 1
+                    #print('\nlabel_current = ', label_current)
+                    
+                    for i in range(0, num_of_existing_obstacle_segments):
+                        temp = segments[segments == sorted_segs_labels[i]]
+
+                        # check obstacle shape
+                        w_min = 161
+                        w_max = -1
+                        h_min = 161
+                        h_max = -1
+                        for j in range(0, segments.shape[0]):
+                            for q in range(0, segments.shape[1]):
+                                if segments[j, q] == sorted_segs_labels[i]:
+                                    if j > h_max:
+                                        h_max = j
+                                    if j < h_min:
+                                        h_min = j
+                                    if q > w_max:
+                                        w_max = q
+                                    if q < w_min:
+                                        w_min = q
+
+                        #print('\n(h_min, h_max): ', (h_min, h_max))
+                        #print('(w_min, w_max): ', (w_min, w_max))
+
+                        height = h_max - h_min + 1
+                        #print('\nheight', height)
+                        width = w_max - w_min + 1
+                        #print('width', width)
+
+                        # if upright
+                        if abs(k) >= 1:
+                            #print('UPRIGHT')
+                            if height > width:
+                                #print('height > width')
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    label_current += 1
+                                segments[segments == sorted_segs_labels[i]] = temp
+                            else:
+                                #print('height <= width')
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                #print('step = ', step)
+                                label_original = temp[0]
+                                #print('label_original = ', label_original)
+                                num_of_pixels = len(temp)
+                                #print('num_of_pixels = ', num_of_pixels)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if (counter + 1) % step == 0:
+                                                    label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                label_current += 1
+                                                finished = True
+                                                break
+
+                        # if to the side
+                        else:
+                            #print('SIDE')
+                            if width > height:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    label_current += 1
+                                segments[segments == sorted_segs_labels[i]] = temp
+                            else:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                label_original = temp[0]
+                                num_of_pixels = len(temp)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if (counter + 1) % step == 0:
+                                                    label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                label_current += 1
+                                                finished = True
+                                                break
+
+        '''
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments_final.png', transparent=False)
+        fig.clf()
+        '''
+
+        # fix labels of segments
+        seg_labels = np.unique(segments)
+        for i in range(0, len(seg_labels)):
+            label = seg_labels[i]
+            if label != i:
+                segments[segments == label] = i
+
+        #print('\nnp.unique(segments): ', np.unique(segments))
+        #print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
+
+        sm_only_obstacles_end = time.time()
+        sm_only_obstacles_time = sm_only_obstacles_end - sm_only_obstacles_start
+        print('\nsm_only_obstacles runtime: ', sm_only_obstacles_time)
+
+        print('\nsm_only_obstacles ended')
+
+        if len(seg_labels) != num_of_wanted_obstacle_segments + 1:
+            print('ERROR!!!')
+            return segments_slic
+
+        return segments
+
+
+    def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
+                         hide_color=None,
+                         top_labels=5, num_features=100000, num_segments=1,
+                         num_samples_current=1,
+                         batch_size=10,
+                         segmentation_fn=None,
+                         distance_metric='cosine',
+                         model_regressor=None,
+                         random_seed=None,
+                         progress_bar=True):
+
+        import copy
+        image_orig = copy.deepcopy(image)                 
+
+        if len(image.shape) == 2:
+            image = gray2rgb(image)
+        if random_seed is None:
+            random_seed = self.random_state.randint(0, high=1000)
+
+        # my change
+        if segmentation_fn is None:
+            segmentation_fn = SegmentationAlgorithm('quickshift', kernel_size=4,
+                                                    max_dist=200, ratio=0.2,
+                                                    random_seed=random_seed)
+            segments = segmentation_fn(image)
+        elif segmentation_fn == 'custom_segmentation':
+            start = time.time()
+            #segments = self.mySlic(image)
+            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            end = time.time()
+            segmentation_time = end - start
+            #segmentation_time = round(end - start, 3)
+        else:
+            segments = segmentation_fn(image)
+
+        fudged_image = image_orig.copy()
+        if hide_color is None:
+            for x in np.unique(segments):
+                fudged_image[segments == x] = (
+                    np.mean(image[segments == x][:, 0]),
+                    np.mean(image[segments == x][:, 1]),
+                    np.mean(image[segments == x][:, 2]))
+        else:
+            fudged_image[:] = hide_color
+
+        top = labels
+
+        data, labels, classifier_fn_time, planner_time, target_calculation_time, costmap_save_time = self.data_labels_evaluation(image_orig, fudged_image, segments,
+                                        classifier_fn, num_segments, num_samples_current,
+                                        batch_size=batch_size,
+                                        progress_bar=progress_bar)
+
+        distances_start = time.time()
+        distances = sklearn.metrics.pairwise_distances(
+            data,
+            data[0].reshape(1, -1),
+            metric=distance_metric
+        ).ravel()
+        distances_end = time.time()
+        distances_time = distances_end - distances_start
+
+        regressor_start = time.time()
+        ret_exp = ImageExplanation(image, segments)
+        if top_labels:
+            top = np.argsort(labels[0])[-top_labels:]
+            ret_exp.top_labels = list(top)
+            ret_exp.top_labels.reverse()
+        for label in top:
+            (ret_exp.intercept[label],
+             ret_exp.local_exp[label],
+             ret_exp.score[label],
+             ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
+                data, labels, distances, label, num_features,
+                model_regressor=model_regressor,
+                feature_selection=self.feature_selection)
+        regressor_end = time.time()
+        regressor_time = regressor_end - regressor_start
+
+        return ret_exp, segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time, costmap_save_time, distances_time, regressor_time
+
+    def data_labels_evaluation(self,
+                    image,
+                    fudged_image,
+                    segments,
+                    classifier_fn,
+                    num_segments,
+                    num_samples_current,
+                    batch_size=10,
+                    progress_bar=True):
+
+        num_samples = 2 ** (num_segments+1)
+        #print('num_samples: ', num_samples)
+        import itertools
+        lst = list(map(list, itertools.product([0, 1], repeat=(num_segments+1))))
+        data = np.array(lst).reshape((num_samples, num_segments+1))
+        #print('data.shape[0] - original - original: ', data.shape[0])
+        
+        labels = []
+
+        show_free_space = False
+
+        if show_free_space == True:
+            data[0, :] = 1
+            data[-1, :] = 0 # only if I use my perturbation
+        else:
+            data = data[int(data.shape[0]/2):, :]
+            data[0, 1:] = 1
+            data[-1, 1:] = 0    
+
+        labels = []
+
+        #print('data.shape[0] - original: ', data.shape[0])
+        if len(data) != num_samples_current:
+            data_copy = copy.deepcopy(data)
+            data = data_copy[np.random.choice(len(data_copy), num_samples_current, replace=False)]
+            data[0, :] = 1
+        #print('num_segments: ', num_segments)
+        #print('num_segments_current: ', num_segments_current)
+        #print('data.shape[0]: ', data.shape[0])    
+
+        imgs = []
+        rows = tqdm(data) if progress_bar else data
+        for row in rows:
+            temp = copy.deepcopy(image)
+            zeros = np.where(row == 0)[0]
+            mask = np.zeros(segments.shape).astype(bool)
+            for z in zeros:
+                mask[segments == z] = True
+            temp[mask] = fudged_image[mask]
+            imgs.append(temp)
+            if len(imgs) == batch_size:
+                #start = time.time()
+                preds = classifier_fn(np.array(imgs))
+                #end = time.time()
+                #classifier_fn_time = round(end - start, 3)
+                labels.extend(preds)
+                imgs = []
+        if len(imgs) > 0:
+            start = time.time()
+            preds, planner_time, target_calculation_time, costmap_save_time = classifier_fn(np.array(imgs))
+            end = time.time()
+            classifier_fn_time = end - start
+            #classifier_fn_time = round(end - start, 3)
+            labels.extend(preds)
+
+        #print('data_labels ends')
+
+        return data, np.array(labels), classifier_fn_time, planner_time, target_calculation_time, costmap_save_time
+
+
+
+
+
     def sm1(self, img_rgb):
         print('\nsm1 starts')
 
@@ -281,8 +1029,6 @@ class LimeImageExplainer(object):
 
         # show original image
         img = img_rgb[:, :, 0]
-
-        start = time.time()
 
         # segments_1 - good obstacles
         # Find segments_1
@@ -317,9 +1063,6 @@ class LimeImageExplainer(object):
 
         early_return = False
         if early_return == True:
-            end = time.time()
-            print('\nsm1 runtime: ', end-start)
-            print('\nsm1 ends')
             return segments_1 - 1                  
 
         # Find segments_2
@@ -393,9 +1136,6 @@ class LimeImageExplainer(object):
         fig.clf()
         segments_unique = np.unique(segments_1)
         '''
-        
-        end = time.time()
-        print('\nsm1 runtime: ', end-start)
 
         print('\nsm1 ends')
 
@@ -962,502 +1702,6 @@ class LimeImageExplainer(object):
 
         return segments
 
-    def sm7(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
-        # import needed libraries
-        from skimage.segmentation import slic
-        #from skimage.measure import regionprops
-        #import matplotlib.pyplot as plt
-        import numpy as np
-        #import pandas as pd
-        #from skimage.color import gray2rgb
-        import copy
-        #import time
-
-        print('\nsm7 started')
-        
-        # show original image
-        img = copy.deepcopy(image)
-
-        #start = time.time()
-
-        # Find segments_2
-        segments_slic = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                            multichannel=True, convert2lab=True,
-                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
-                            start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_slic.astype('float64'), aspect='auto')
-        fig.savefig('segments_slic.png', transparent=False)
-        fig.clf()
-        '''
-
-        segments = np.zeros(img.shape, np.uint8)
-
-        '''
-        devDistance_x = int(devDistance_x)
-        devDistance_x = abs(devDistance_x)
-        devDistance_y = int(devDistance_y)
-        devDistance_y = abs(devDistance_y)
-        devDistance = int(devDistance)
-        '''
-
-        '''
-        footprint_radius = 13
-        add = 15
-        '''
-
-        d_x = plan_x_list[-1] - x_odom
-        if d_x == 0:
-            d_x = 1
-        k = (-plan_y_list[-1] + y_odom) / (d_x)
-
-        #print('abs(k) = ', abs(k)) 
-
-        '''
-        delta_y = plan_y_list[-1] - y_odom
-        delta_x = plan_x_list[-1] - x_odom  
-        '''
-
-        # make one free space segment
-        ctr = 0
-        segments[:, :] = ctr
-        ctr = ctr + 1
-
-        num_of_obstacles = 0
-        # add obstacle segments        
-        for i in np.unique(segments_slic):
-            temp = img[segments_slic == i]
-            count_of_99_s = np.count_nonzero(temp == 99)
-            #print('count: ', count)
-            #print('temp: ', temp)
-            #print('len(temp): ', temp.shape[0])
-            if np.all(img[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
-                #print('obstacle')
-                segments[segments_slic == i] = ctr
-                ctr = ctr + 1
-                num_of_obstacles += 1
-
-        print('num_of_obstacles: ', num_of_obstacles)        
-
-        if 8 > num_of_obstacles > 0:
-            # divide segment obstacles    
-            seg_labels = np.unique(segments)[1:]        
-
-            num_of_seg = len(seg_labels)
-            num_of_wanted_seg = 8
-
-            #print('\nnumber of wanted segments: ', num_of_wanted_seg)
-            #print('number of current segments: ', num_of_seg)
-
-            seg_sizes = []
-
-            if num_of_seg < num_of_wanted_seg:
-                for i in range(0, num_of_seg):
-                    #print(len(segments[segments == seg_labels[i]]))
-                    seg_sizes.append(len(segments[segments == seg_labels[i]]))
-
-            #print('\nsizes of segments original: ', seg_sizes)
-            #print('labels of segments original: ', seg_labels)
-            seg_labels = [x for _, x in sorted(zip(seg_sizes, seg_labels))]
-            seg_labels.reverse()
-            #print('\nsizes of segemnts sorted: ', seg_sizes)
-            #print('labels of segemnts sorted: ', seg_labels)
-
-            seg_missing = num_of_wanted_seg - num_of_seg
-            print('\nnumber of segments missing: ', seg_missing)
-
-            # if a number of missing segments is smaller or equal than the number of existing segments
-            if seg_missing <= num_of_seg:
-                label_current = len(seg_labels) + 1
-                for i in range(0, seg_missing):
-                    temp = segments[segments == seg_labels[i]]
-                    #print('temp = ', temp)
-
-                    # check obstacle shape
-                    w_min = 161
-                    w_max = -1
-                    h_min = 161
-                    h_max = -1
-                    for j in range(0, segments.shape[0]):
-                        for q in range(0, segments.shape[1]):
-                            if segments[j, q] == seg_labels[i]:
-                                if j > h_max:
-                                    h_max = j
-                                if j < h_min:
-                                    h_min = j
-                                if q > w_max:
-                                    w_max = q
-                                if q < w_min:
-                                    w_min = q           
-
-                    #print('\n(h_min, h_max): ', (h_min, h_max))
-                    #print('(w_min, w_max): ', (w_min, w_max))
-
-                    height = h_max - h_min + 1
-                    #print('\nheight', height)
-                    width = w_max - w_min + 1
-                    #print('width', width)
-           
-
-                    # if upright
-                    if abs(k) >= 1:
-                        if height > width:
-                            for j in range(0, int(len(temp) / 2)):
-                                temp[j] = label_current
-                            segments[segments == seg_labels[i]] = temp
-                        else:
-                            label_original = temp[0]
-                            num_of_pixels = len(temp)
-                            counter = 0
-                            finished = False
-                            for q in range(0, segments.shape[1]):
-                                if finished == True:
-                                    break
-                                for j in range(0, segments.shape[0]):
-                                    if segments[j, q] == label_original:
-                                        segments[j, q] = label_current
-                                        counter += 1
-                                        if counter == int(num_of_pixels / 2 + 0.5):
-                                            label_current += 1
-                                            finished = True
-                                            break        
-
-                    # if to the side
-                    elif abs(k) < 1:
-                        #print('OVAJ SLUCAJ')
-                        if width > height:
-                            #print('width > height')
-                            #print('label_current: ', label_current)
-                            label_current
-                            for j in range(0, int(len(temp) / 2)):
-                                temp[j] = label_current
-                            segments[segments == seg_labels[i]] = temp   
-                        else:
-                            #print('width < height')
-                            #print('label_current: ', label_current)
-                            label_original = temp[0]
-                            #print('label_original = ', label_original)
-                            num_of_pixels = len(temp)
-                            counter = 0
-                            for q in range(0, segments.shape[1]):
-                                for j in range(0, segments.shape[0]):
-                                    if segments[j, q] == label_original:
-                                        #print('IN')
-                                        #print('counter = ', counter)
-                                        if 0 <= counter <= num_of_pixels / 2:
-                                            segments[j, q] = label_current
-                                        counter += 1
-
-                            '''
-                            for j in range(0, height):
-                                for q in range(0, int(width/2)):
-                                    if j * width + q > len(temp) - 1:
-                                        continue
-                                    temp[j * width + q] = label_original
-                                for q in range(int(width/2), width):
-                                    if j * width + q > len(temp) - 1:
-                                        continue
-                                    temp[j * width + q] = label_current
-                            '''
-                    
-                    label_current += 1
-
-            # if a number of missing segments is greater than the number of existing segments
-            else:
-                num_of_new_seg_per_old_seg = int(seg_missing / num_of_seg)
-                
-                # if a number of new segment per old segments is integer and same for all old segments
-                if num_of_new_seg_per_old_seg == seg_missing / num_of_seg:
-                    #print('CIO BROJ')
-                    #print('\nnumber of new segments per existing segment: ', num_of_new_seg_per_old_seg)
-
-                    label_current = len(seg_labels) + 1
-                    
-                    for i in range(0, num_of_seg):
-                        temp = segments[segments == seg_labels[i]]
-
-                        # check obstacle shape
-                        w_min = 161
-                        w_max = -1
-                        h_min = 161
-                        h_max = -1
-                        for j in range(0, segments.shape[0]):
-                            for q in range(0, segments.shape[1]):
-                                if segments[j, q] == seg_labels[i]:
-                                    if j > h_max:
-                                        h_max = j
-                                    if j < h_min:
-                                        h_min = j
-                                    if q > w_max:
-                                        w_max = q
-                                    if q < w_min:
-                                        w_min = q
-
-                        #print('\n(h_min, h_max): ', (h_min, h_max))
-                        #print('(w_min, w_max): ', (w_min, w_max))
-
-                        height = h_max - h_min + 1
-                        #print('\nheight', height)
-                        width = w_max - w_min + 1
-                        #print('width', width)
-
-                        # if upright
-                        if abs(k) >= 1:
-                            #print('UPRIGHT')
-                            if height > width:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if (counter + 1) % step == 0:
-                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg:
-                                                        label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                label_current += 1
-                                                finished = True
-                                                break
-                        # if to the side
-                        else:
-                            #print('UPRIGHT')
-                            if width > height:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if (counter + 1) % step == 0:
-                                                    label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                label_current += 1
-                                                finished = True
-                                                break
-
-                # if a number of new segment per old segments is integer and same for all old segments
-                else:
-                    #print('NON-CIO BROJ')
-
-                    whole_part = int(seg_missing / num_of_seg)
-                    #print('whole part = ', whole_part)
-                    rest = seg_missing % num_of_seg
-                    #print('rest = ', rest)
-
-                    put_rest_to_biggest_segment = False
-
-                    num_of_new_seg_per_old_seg_list = [whole_part] * num_of_seg
-
-                    if put_rest_to_biggest_segment == False:
-                        for i in range(0, rest):
-                            num_of_new_seg_per_old_seg_list[i] += 1
-                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)    
-                    else:
-                        num_of_new_seg_per_old_seg_list[0] += rest
-                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)
-
-
-                    label_current = len(seg_labels) + 1
-                    #print('\nlabel_current = ', label_current)
-                    
-                    for i in range(0, num_of_seg):
-                        temp = segments[segments == seg_labels[i]]
-
-                        # check obstacle shape
-                        w_min = 161
-                        w_max = -1
-                        h_min = 161
-                        h_max = -1
-                        for j in range(0, segments.shape[0]):
-                            for q in range(0, segments.shape[1]):
-                                if segments[j, q] == seg_labels[i]:
-                                    if j > h_max:
-                                        h_max = j
-                                    if j < h_min:
-                                        h_min = j
-                                    if q > w_max:
-                                        w_max = q
-                                    if q < w_min:
-                                        w_min = q
-
-                        #print('\n(h_min, h_max): ', (h_min, h_max))
-                        #print('(w_min, w_max): ', (w_min, w_max))
-
-                        height = h_max - h_min + 1
-                        #print('\nheight', height)
-                        width = w_max - w_min + 1
-                        #print('width', width)
-
-                        # if upright
-                        if abs(k) >= 1:
-                            #print('UPRIGHT')
-                            if height > width:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
-                                                        label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                label_current += 1
-                                                finished = True
-                                                break
-
-                        # if to the side
-                        else:
-                            #print('SIDE')
-                            if width > height:
-                                #print('WIDTH')
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    #print('label_current: ', label_current)
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                #print('HEIGHT')
-                                #print('len(temp): ', len(temp))
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
-                                #print('step: ', step)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if (counter + 1) % step == 0:
-                                                    #print('counter + 1 = ', counter + 1)
-                                                    #print('label_current = ', label_current)
-                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
-                                                        label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                #print('counter_end = ', counter)
-                                                label_current += 1
-                                                finished = True
-                                                break
-
-
-        #end = time.time()
-
-        #print("\nsm7 runtime: ", end - start)
-
-        '''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segments_final.png', transparent=False)
-        fig.clf()
-        '''
-
-        # fix labels of segments
-        seg_labels = np.unique(segments)
-        for i in range(1, len(seg_labels)):
-            label = seg_labels[i]
-            if label != i:
-                segments[segments == label] = i
-
-        #print('\nnp.unique(segments): ', np.unique(segments))
-        #print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
-
-        if len(np.unique(segments)) > 9:
-            # make one free space segment
-            ctr = 0
-            segments[:, :] = ctr
-            ctr = ctr + 1
-
-            num_of_obstacles = 0
-            # add obstacle segments        
-            for i in np.unique(segments_slic):
-                if np.all(img[segments_slic == i] == 99):
-                    #print('obstacle')
-                    segments[segments_slic == i] = ctr
-                    ctr = ctr + 1
-                    num_of_obstacles += 1
-            '''
-            fig = plt.figure(frameon=False)
-            w = 1.6 * 3
-            h = 1.6 * 3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            ax.imshow(segments.astype('float64'), aspect='auto')
-            fig.savefig('segments_final_corrected.png', transparent=False)
-            fig.clf()
-            '''
-
-        print('\nsm7 ended')
-
-        return segments
-
     def semantic_segment(self, image, img_rgb, costmap_info, map_info, tf_odom_map):
         print('\nsemantic_segment starts')
 
@@ -1589,378 +1833,3 @@ class LimeImageExplainer(object):
 
         return np.array(semantic_segments)        
 
-    def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
-                         hide_color=None,
-                         top_labels=5, num_features=100000, num_samples=1000,
-                         batch_size=10,
-                         segmentation_fn=None,
-                         distance_metric='cosine',
-                         model_regressor=None,
-                         random_seed=None,
-                         progress_bar=True):
-        """Generates explanations for a prediction.
-
-        First, we generate neighborhood data by randomly perturbing features
-        from the instance (see __data_inverse). We then learn locally weighted
-        linear models on this neighborhood data to explain each of the classes
-        in an interpretable way (see lime_base.py).
-
-        Args:
-            image: 3 dimension RGB image. If this is only two dimensional,
-                we will assume it's a grayscale image and call gray2rgb.
-            classifier_fn: classifier prediction probability function, which
-                takes a numpy array and outputs prediction probabilities.  For
-                ScikitClassifiers , this is classifier.predict_proba.
-            labels: iterable with labels to be explained.
-            hide_color: If not None, will hide superpixels with this color.
-                Otherwise, use the mean pixel color of the image.
-            top_labels: if not None, ignore labels and produce explanations for
-                the K labels with highest prediction probabilities, where K is
-                this parameter.
-            num_features: maximum number of features present in explanation
-            num_samples: size of the neighborhood to learn the linear model
-            batch_size: batch size for model predictions
-            distance_metric: the distance metric to use for weights.
-            model_regressor: sklearn regressor to use in explanation. Defaults
-            to Ridge regression in LimeBase. Must have model_regressor.coef_
-            and 'sample_weight' as a parameter to model_regressor.fit()
-            segmentation_fn: SegmentationAlgorithm, wrapped skimage
-            segmentation function
-            random_seed: integer used as random seed for the segmentation
-                algorithm. If None, a random integer, between 0 and 1000,
-                will be generated using the internal random number generator.
-            progress_bar: if True, show tqdm progress bar.
-
-        Returns:
-            An ImageExplanation object (see lime_image.py) with the corresponding
-            explanations.
-        """
-
-        import copy
-        image_orig = copy.deepcopy(image)
-
-        if len(image.shape) == 2:
-            image = gray2rgb(image)
-        if random_seed is None:
-            random_seed = self.random_state.randint(0, high=1000)
-
-        # my change
-        if segmentation_fn is None:
-            segmentation_fn = SegmentationAlgorithm('quickshift', kernel_size=4,
-                                                    max_dist=200, ratio=0.2,
-                                                    random_seed=random_seed)
-            segments = segmentation_fn(image)
-        elif segmentation_fn == 'custom_segmentation':
-            #segments = self.sm1(image)
-            #segments = self.sm2(image_orig, image, x_odom, y_odom)
-            #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
-            #segments = self.sm4(image_orig, image, x_odom, y_odom, devDistance, sum)
-            #segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
-            #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-            segments = self.sm7(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-        elif segmentation_fn == 'semantic_segmentation':
-            segments = self.sm7(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-            #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-            #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
-        else:
-            segments = segmentation_fn(image)
-
-        '''
-        fudged_image = image.copy()
-        if hide_color is None:
-            for x in np.unique(segments):
-                fudged_image[segments == x] = (
-                    np.mean(image[segments == x][:, 0]),
-                    np.mean(image[segments == x][:, 1]),
-                    np.mean(image[segments == x][:, 2]))
-        else:
-            fudged_image[:] = hide_color
-        '''
-
-        fudged_image = image_orig.copy()
-        if hide_color is None:
-            for x in np.unique(segments):
-                fudged_image[segments == x] = (
-                    np.mean(image[segments == x][:, 0]),
-                    np.mean(image[segments == x][:, 1]),
-                    np.mean(image[segments == x][:, 2]))
-        else:
-            fudged_image[:] = hide_color
-
-        top = labels
-
-        data, labels = self.data_labels(image_orig, fudged_image, segments,
-                                        classifier_fn, num_samples,
-                                        batch_size=batch_size,
-                                        progress_bar=progress_bar)
-        print('after data_labels fn.')
-        #distance_metric = 'jaccard'
-        distances = sklearn.metrics.pairwise_distances(
-            data,
-            data[0].reshape(1, -1),
-            metric=distance_metric
-        ).ravel()
-
-        ret_exp = ImageExplanation(image, segments)
-        if top_labels:
-            top = np.argsort(labels[0])[-top_labels:]
-            ret_exp.top_labels = list(top)
-            ret_exp.top_labels.reverse()
-        for label in top:
-            (ret_exp.intercept[label],
-             ret_exp.local_exp[label],
-             ret_exp.score[label],
-             ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
-                data, labels, distances, label, num_features,
-                model_regressor=model_regressor,
-                feature_selection=self.feature_selection)
-        return ret_exp, segments
-
-    def data_labels(self,
-                    image,
-                    fudged_image,
-                    segments,
-                    classifier_fn,
-                    num_samples,
-                    batch_size=10,
-                    progress_bar=True):
-        """Generates images and predictions in the neighborhood of this image.
-
-        Args:
-            image: 3d numpy array, the image
-            fudged_image: 3d numpy array, image to replace original image when
-                superpixel is turned off
-            segments: segmentation of the image
-            classifier_fn: function that takes a list of images and returns a
-                matrix of prediction probabilities
-            num_samples: size of the neighborhood to learn the linear model
-            batch_size: classifier_fn will be called on batches of this size.
-            progress_bar: if True, show tqdm progress bar.
-
-        Returns:
-            A tuple (data, labels), where:
-                data: dense num_samples * num_superpixels
-                labels: prediction probabilities matrix
-        """
-
-        #print('data_labels starts')
-
-        n_features = np.unique(segments).shape[0]
-
-        '''
-        # Original perturbation
-        data = self.random_state.randint(0, 2, num_samples * n_features)\
-            .reshape((num_samples, n_features))
-        #print('data: ', data)
-        #print('data.shape: ', data.shape)
-        '''
-
-        #'''
-        # My perturbation - test all possible combinations
-        num_samples = 2 ** n_features
-        import itertools
-        lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-        data = np.array(lst).reshape((num_samples, n_features))
-        #print('lst: ', lst)
-        #print('len(lst): ', len(lst))
-        #print('data: ', data)
-        #print('data.shape: ', data.shape)
-        #'''
-
-        labels = []
-
-        show_free_space = False
-
-        #print("data before: ", data)
-        if show_free_space == True:
-            data[0, :] = 1
-            data[-1, :] = 0 # only if I use my perturbation
-        else:
-            #print('data.shape[0]: ', data.shape[0])
-            data = data[int(data.shape[0]/2):, :]
-            data[0, 1:] = 1
-            data[-1, 1:] = 0    
-            #for i in range(0, data.shape[0]):
-            #    data[i, 0] = 1
-        #print("data after: ", data)
-        #import pandas as pd
-        #pd.DataFrame(data).to_csv('data.csv', index=False, header=False)
-
-        imgs = []
-        rows = tqdm(data) if progress_bar else data
-        #print('rows: ', rows)
-        for row in rows:
-            temp = copy.deepcopy(image)
-            zeros = np.where(row == 0)[0]
-            mask = np.zeros(segments.shape).astype(bool)
-            #print('mask.shape: ', mask.shape)
-            for z in zeros:
-                mask[segments == z] = True
-            temp[mask] = fudged_image[mask]
-            imgs.append(temp)
-            if len(imgs) == batch_size:
-                preds = classifier_fn(np.array(imgs))
-                labels.extend(preds)
-                imgs = []
-        if len(imgs) > 0:
-            preds = classifier_fn(np.array(imgs))
-            labels.extend(preds)
-
-        #print('data_labels ends')
-
-        #print('data: ', data)
-        #print('labels: ', np.array(labels))
-
-        return data, np.array(labels)
-
-
-
-
-    def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
-                         hide_color=None,
-                         top_labels=5, num_features=100000, num_segments=1,
-                         num_samples_current=1,
-                         batch_size=10,
-                         segmentation_fn=None,
-                         distance_metric='cosine',
-                         model_regressor=None,
-                         random_seed=None,
-                         progress_bar=True):
-
-        import copy
-        image_orig = copy.deepcopy(image)                 
-
-        if len(image.shape) == 2:
-            image = gray2rgb(image)
-        if random_seed is None:
-            random_seed = self.random_state.randint(0, high=1000)
-
-        # my change
-        if segmentation_fn is None:
-            segmentation_fn = SegmentationAlgorithm('quickshift', kernel_size=4,
-                                                    max_dist=200, ratio=0.2,
-                                                    random_seed=random_seed)
-            segments = segmentation_fn(image)
-        elif segmentation_fn == 'custom_segmentation':
-            start = time.time()
-            #segments = self.mySlic(image)
-            segments = self.sm7(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-            end = time.time()
-            segmentation_time = end - start
-            #segmentation_time = round(end - start, 3)
-        else:
-            segments = segmentation_fn(image)
-
-        fudged_image = image_orig.copy()
-        if hide_color is None:
-            for x in np.unique(segments):
-                fudged_image[segments == x] = (
-                    np.mean(image[segments == x][:, 0]),
-                    np.mean(image[segments == x][:, 1]),
-                    np.mean(image[segments == x][:, 2]))
-        else:
-            fudged_image[:] = hide_color
-
-        top = labels
-
-        data, labels, classifier_fn_time, planner_time, target_calculation_time, costmap_save_time = self.data_labels_evaluation(image_orig, fudged_image, segments,
-                                        classifier_fn, num_segments, num_samples_current,
-                                        batch_size=batch_size,
-                                        progress_bar=progress_bar)
-
-        distances_start = time.time()
-        distances = sklearn.metrics.pairwise_distances(
-            data,
-            data[0].reshape(1, -1),
-            metric=distance_metric
-        ).ravel()
-        distances_end = time.time()
-        distances_time = distances_end - distances_start
-
-        regressor_start = time.time()
-        ret_exp = ImageExplanation(image, segments)
-        if top_labels:
-            top = np.argsort(labels[0])[-top_labels:]
-            ret_exp.top_labels = list(top)
-            ret_exp.top_labels.reverse()
-        for label in top:
-            (ret_exp.intercept[label],
-             ret_exp.local_exp[label],
-             ret_exp.score[label],
-             ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
-                data, labels, distances, label, num_features,
-                model_regressor=model_regressor,
-                feature_selection=self.feature_selection)
-        regressor_end = time.time()
-        regressor_time = regressor_end - regressor_start
-
-        return ret_exp, segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time, costmap_save_time, distances_time, regressor_time
-
-    def data_labels_evaluation(self,
-                    image,
-                    fudged_image,
-                    segments,
-                    classifier_fn,
-                    num_segments,
-                    num_samples_current,
-                    batch_size=10,
-                    progress_bar=True):
-
-        num_samples = 2 ** (num_segments+1)
-        #print('num_samples: ', num_samples)
-        import itertools
-        lst = list(map(list, itertools.product([0, 1], repeat=(num_segments+1))))
-        data = np.array(lst).reshape((num_samples, num_segments+1))
-        #print('data.shape[0] - original - original: ', data.shape[0])
-        
-        labels = []
-
-        show_free_space = False
-
-        if show_free_space == True:
-            data[0, :] = 1
-            data[-1, :] = 0 # only if I use my perturbation
-        else:
-            data = data[int(data.shape[0]/2):, :]
-            data[0, 1:] = 1
-            data[-1, 1:] = 0    
-
-        labels = []
-
-        #print('data.shape[0] - original: ', data.shape[0])
-        if len(data) != num_samples_current:
-            data_copy = copy.deepcopy(data)
-            data = data_copy[np.random.choice(len(data_copy), num_samples_current, replace=False)]
-            data[0, :] = 1
-        #print('num_segments: ', num_segments)
-        #print('num_segments_current: ', num_segments_current)
-        #print('data.shape[0]: ', data.shape[0])    
-
-        imgs = []
-        rows = tqdm(data) if progress_bar else data
-        for row in rows:
-            temp = copy.deepcopy(image)
-            zeros = np.where(row == 0)[0]
-            mask = np.zeros(segments.shape).astype(bool)
-            for z in zeros:
-                mask[segments == z] = True
-            temp[mask] = fudged_image[mask]
-            imgs.append(temp)
-            if len(imgs) == batch_size:
-                #start = time.time()
-                preds = classifier_fn(np.array(imgs))
-                #end = time.time()
-                #classifier_fn_time = round(end - start, 3)
-                labels.extend(preds)
-                imgs = []
-        if len(imgs) > 0:
-            start = time.time()
-            preds, planner_time, target_calculation_time, costmap_save_time = classifier_fn(np.array(imgs))
-            end = time.time()
-            classifier_fn_time = end - start
-            #classifier_fn_time = round(end - start, 3)
-            labels.extend(preds)
-
-        #print('data_labels ends')
-
-        return data, np.array(labels), classifier_fn_time, planner_time, target_calculation_time, costmap_save_time
