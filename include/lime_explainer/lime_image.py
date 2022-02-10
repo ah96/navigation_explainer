@@ -466,7 +466,7 @@ class LimeImageExplainer(object):
         if d_x == 0:
             d_x = 1
         k = (-plan_y_list[-1] + y_odom) / (d_x)
-        #print('\nabs(k) = ', abs(k)) 
+        print('\nabs(k) = ', abs(k)) 
 
         # make one free space segment
         ctr = 0
@@ -649,13 +649,13 @@ class LimeImageExplainer(object):
                         if abs(k) >= 1:
                             # divide by height
                             if height > width:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg + 1):
                                     temp[j*step:(j+1)*step] = label_current
                                     label_current += 1
                                 segments[segments == sorted_segs_labels[i]] = temp
                             else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
                                 label_original = temp[0]
                                 num_of_pixels = len(temp)
                                 counter = 0
@@ -680,13 +680,13 @@ class LimeImageExplainer(object):
                         # if to the side
                         else:
                             if width > height:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg + 1):
                                     temp[j*step:(j+1)*step] = label_current
                                     label_current += 1
                                 segments[segments == sorted_segs_labels[i]] = temp
                             else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
                                 label_original = temp[0]
                                 num_of_pixels = len(temp)
                                 counter = 0
@@ -708,7 +708,7 @@ class LimeImageExplainer(object):
                                                 finished = True
                                                 break
 
-                # if a number of new segment per old segments is integer and same for all old segments
+                # if a number of new segment per old segments is not integer and not same for all old segments
                 else:
                     #print('NON-CIO BROJ')
                     whole_part = int(num_segs_missing / num_of_existing_obstacle_segments)
@@ -766,14 +766,14 @@ class LimeImageExplainer(object):
                             #print('UPRIGHT')
                             if height > width:
                                 #print('height > width')
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
                                     temp[j*step:(j+1)*step] = label_current
                                     label_current += 1
                                 segments[segments == sorted_segs_labels[i]] = temp
                             else:
                                 #print('height <= width')
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
                                 #print('step = ', step)
                                 label_original = temp[0]
                                 #print('label_original = ', label_original)
@@ -800,17 +800,22 @@ class LimeImageExplainer(object):
 
                         # if to the side
                         else:
-                            #print('SIDE')
+                            #print('\nSIDE')
                             if width > height:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                #print('\nwidth>height')
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
                                     temp[j*step:(j+1)*step] = label_current
                                     label_current += 1
                                 segments[segments == sorted_segs_labels[i]] = temp
                             else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                #print('\nwidth<=height')
+                                step = round(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                #print('\nstep = ', step)
                                 label_original = temp[0]
+                                #print('\nlabel_original = ', label_original)
                                 num_of_pixels = len(temp)
+                                #print('\nnum_of_pixels = ', num_of_pixels)
                                 counter = 0
                                 finished = False
                                 for q in range(0, segments.shape[1]):
@@ -823,12 +828,17 @@ class LimeImageExplainer(object):
                                             else:
                                                 segments[j, q] = label_current
                                                 if (counter + 1) % step == 0:
+                                                    #print('\ncounter = ', counter)
+                                                    #print('step = ', step)
+                                                    #print('label_current = ', label_current)
                                                     label_current += 1
+                                                    #print('label_current = ', label_current)
                                             counter += 1
                                             if counter == num_of_pixels:
-                                                label_current += 1
+                                                #label_current += 1
                                                 finished = True
-                                                break
+                                                #break
+                                label_current += 1
 
         '''
         fig = plt.figure(frameon=False)
