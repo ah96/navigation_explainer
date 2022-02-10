@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
 # Global variables
+ds_id = 8
+ds = 'ds' + str(ds_id)
+
+print('dataset: ', ds)
 
 # possible explanation algorithms: 'lime', 'anchors'
 explanation_alg = ''
@@ -152,14 +156,14 @@ def Single():
     from lime_explainer import DataLoader
     
     # load input data
-    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
+    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
     '''
     print("---input loaded---")
     print('\n')
     '''
 
     # load output data
-    cmd_vel = DataLoader.load_output_data()
+    cmd_vel = DataLoader.load_output_data(ds)
     '''
     print("---output loaded---")
     print('\n')
@@ -266,11 +270,14 @@ def Single():
                                                         tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
     
+    print('\nexpID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
+    print('\nnum_of_first_rows_to_delete = ', num_of_first_rows_to_delete)    
+
     choose_random_instance = True
 
     if choose_random_instance == True:
         # random instance selection
-        print('\nexpID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
+        #print('\nexpID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
         import random
         expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete)
         print('\nexpID: ', expID)
