@@ -447,7 +447,7 @@ class LimeImageExplainer(object):
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -458,7 +458,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_slic.astype('float64'), aspect='auto')
         fig.savefig('segments_slic.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -840,7 +840,7 @@ class LimeImageExplainer(object):
                                                 #break
                                 label_current += 1
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -851,7 +851,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments.astype('float64'), aspect='auto')
         fig.savefig('segments_final.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         # fix labels of segments
         seg_labels = np.unique(segments)
@@ -869,7 +869,16 @@ class LimeImageExplainer(object):
 
         print('\nsm_only_obstacles ended')
 
-        if len(seg_labels) != num_of_wanted_obstacle_segments + 1:
+        print('\nnp.unique(segments): ', np.unique(segments))
+
+        if len(np.unique(segments)) == 1:
+            step = round(segments.shape[0] / (num_of_wanted_obstacle_segments + 1))
+            for i in range(0, num_of_wanted_obstacle_segments + 1):
+                segments[i*step:(i+1)*step,:] = i
+
+        print('\nnp.unique(segments): ', np.unique(segments))
+        
+        if len(np.unique(segments)) != num_of_wanted_obstacle_segments + 1:
             print('ERROR!!!')
             return segments_slic
 

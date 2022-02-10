@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Global variables
-ds_id = 8
+ds_id = 6
 ds = 'ds' + str(ds_id)
 
 print('dataset: ', ds)
