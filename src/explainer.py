@@ -283,7 +283,7 @@ def Single():
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 103 #DS1: #51 #78 #84 #144; #DS2: #260
+        expID = 150 #DS1: #51 #78 #84 #144; #DS2: #260
         print('\nexpID: ', expID)
 
     import time
@@ -308,14 +308,14 @@ def Evaluate():
     from lime_explainer import DataLoader
     
     # load input data
-    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
+    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
     '''
     print("---input loaded---")
     print('\n')
     '''
 
     # load output data
-    cmd_vel = DataLoader.load_output_data()
+    cmd_vel = DataLoader.load_output_data(ds)
     '''
     print("---output loaded---")
     print('\n')
@@ -467,14 +467,14 @@ def CreateDataset():
     from lime_explainer import DataLoader
     
     # load input data
-    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
+    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
     '''
     print("---input loaded---")
     print('\n')
     '''
 
     # load output data
-    cmd_vel = DataLoader.load_output_data()
+    cmd_vel = DataLoader.load_output_data(ds)
     '''
     print("---output loaded---")
     print('\n')

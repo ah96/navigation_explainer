@@ -112,7 +112,7 @@ class ExplainRobotNavigation:
         self.case = 3
         self.eps = False
         self.semantic_seg = False
-        self.manual_instance_loading = True
+        self.manual_instance_loading = False
         self.manually_make_semantic_map = False
         self.test_segmentation = False
 
