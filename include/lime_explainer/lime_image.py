@@ -1,10 +1,10 @@
 """
 Functions for explaining classifiers that use Image data.
 """
-from cProfile import label
+#from cProfile import label
 import copy
 from functools import partial
-from itertools import count
+#from itertools import count
 
 import numpy as np
 import sklearn
@@ -966,12 +966,12 @@ class LimeImageExplainer(object):
         # import needed libraries
         from skimage.segmentation import slic
         #from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
+        #import matplotlib.pyplot as plt
         import numpy as np
         #import pandas as pd
-        from skimage.color import gray2rgb
+        #from skimage.color import gray2rgb
         import copy
-        import time
+        #import time
 
         print('\nsm7 started')
         
@@ -1019,7 +1019,7 @@ class LimeImageExplainer(object):
             d_x = 1
         k = (-plan_y_list[-1] + y_odom) / (d_x)
 
-        print('abs(k) = ', abs(k)) 
+        #print('abs(k) = ', abs(k)) 
 
         '''
         delta_y = plan_y_list[-1] - y_odom
@@ -1665,7 +1665,19 @@ class LimeImageExplainer(object):
         else:
             segments = segmentation_fn(image)
 
+        '''
         fudged_image = image.copy()
+        if hide_color is None:
+            for x in np.unique(segments):
+                fudged_image[segments == x] = (
+                    np.mean(image[segments == x][:, 0]),
+                    np.mean(image[segments == x][:, 1]),
+                    np.mean(image[segments == x][:, 2]))
+        else:
+            fudged_image[:] = hide_color
+        '''
+
+        fudged_image = image_orig.copy()
         if hide_color is None:
             for x in np.unique(segments):
                 fudged_image[segments == x] = (
@@ -1677,7 +1689,7 @@ class LimeImageExplainer(object):
 
         top = labels
 
-        data, labels = self.data_labels(image, fudged_image, segments,
+        data, labels = self.data_labels(image_orig, fudged_image, segments,
                                         classifier_fn, num_samples,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
@@ -1807,7 +1819,7 @@ class LimeImageExplainer(object):
     def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_segments=1,
-                         num_segments_current=1,
+                         num_samples_current=1,
                          batch_size=10,
                          segmentation_fn=None,
                          distance_metric='cosine',
@@ -1839,7 +1851,7 @@ class LimeImageExplainer(object):
         else:
             segments = segmentation_fn(image)
 
-        fudged_image = image.copy()
+        fudged_image = image_orig.copy()
         if hide_color is None:
             for x in np.unique(segments):
                 fudged_image[segments == x] = (
@@ -1851,17 +1863,21 @@ class LimeImageExplainer(object):
 
         top = labels
 
-        data, labels, classifier_fn_time, planner_time = self.data_labels_evaluation(image, fudged_image, segments,
-                                        classifier_fn, num_segments, num_segments_current,
+        data, labels, classifier_fn_time, planner_time, target_calculation_time, costmap_save_time = self.data_labels_evaluation(image_orig, fudged_image, segments,
+                                        classifier_fn, num_segments, num_samples_current,
                                         batch_size=batch_size,
                                         progress_bar=progress_bar)
 
+        distances_start = time.time()
         distances = sklearn.metrics.pairwise_distances(
             data,
             data[0].reshape(1, -1),
             metric=distance_metric
         ).ravel()
+        distances_end = time.time()
+        distances_time = distances_end - distances_start
 
+        regressor_start = time.time()
         ret_exp = ImageExplanation(image, segments)
         if top_labels:
             top = np.argsort(labels[0])[-top_labels:]
@@ -1875,7 +1891,10 @@ class LimeImageExplainer(object):
                 data, labels, distances, label, num_features,
                 model_regressor=model_regressor,
                 feature_selection=self.feature_selection)
-        return ret_exp, segments, segmentation_time, classifier_fn_time, planner_time
+        regressor_end = time.time()
+        regressor_time = regressor_end - regressor_start
+
+        return ret_exp, segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time, costmap_save_time, distances_time, regressor_time
 
     def data_labels_evaluation(self,
                     image,
@@ -1883,7 +1902,7 @@ class LimeImageExplainer(object):
                     segments,
                     classifier_fn,
                     num_segments,
-                    num_segments_current,
+                    num_samples_current,
                     batch_size=10,
                     progress_bar=True):
 
@@ -1909,9 +1928,9 @@ class LimeImageExplainer(object):
         labels = []
 
         #print('data.shape[0] - original: ', data.shape[0])
-        if num_segments != num_segments_current:
+        if len(data) != num_samples_current:
             data_copy = copy.deepcopy(data)
-            data = data_copy[np.random.choice(len(data_copy), 2**num_segments_current, replace=False)]
+            data = data_copy[np.random.choice(len(data_copy), num_samples_current, replace=False)]
             data[0, :] = 1
         #print('num_segments: ', num_segments)
         #print('num_segments_current: ', num_segments_current)
@@ -1936,7 +1955,7 @@ class LimeImageExplainer(object):
                 imgs = []
         if len(imgs) > 0:
             start = time.time()
-            preds, planner_time = classifier_fn(np.array(imgs))
+            preds, planner_time, target_calculation_time, costmap_save_time = classifier_fn(np.array(imgs))
             end = time.time()
             classifier_fn_time = end - start
             #classifier_fn_time = round(end - start, 3)
@@ -1944,4 +1963,4 @@ class LimeImageExplainer(object):
 
         #print('data_labels ends')
 
-        return data, np.array(labels), classifier_fn_time, planner_time
+        return data, np.array(labels), classifier_fn_time, planner_time, target_calculation_time, costmap_save_time

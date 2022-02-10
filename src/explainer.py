@@ -266,7 +266,7 @@ def LimeSingle():
                                                         tabular_mode, explanation_mode, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
     
-    choose_random_instance = False
+    choose_random_instance = True
 
     if choose_random_instance == True:
         # random instance selection
@@ -279,7 +279,11 @@ def LimeSingle():
         expID = 8 #DS1: #51 #78 #84 #144, #DS2: #260
         print('\nexpID: ', expID)
 
+    import time
+    start = time.time()
     exp_nav.explain_instance(expID)
+    end = time.time()
+    print('EXP TIME: ', end - start)
     #exp_nav.testSegmentation(expID)
 
 def CreateDataset():
@@ -568,13 +572,13 @@ def EvaluateLIME():
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     import time
-    evaluation_sample_size = 100
+    evaluation_sample_size = 50
     
     with open("explanations.txt", "a") as myfile:
         myfile.write('explain_instance_time\n')
     
-    for i in range(47, 59):
-        print('i = ', i)
+    for i in range(0, evaluation_sample_size):
+        print('\ni = ', i)
         choose_random_instance = True
 
         if choose_random_instance == True:
