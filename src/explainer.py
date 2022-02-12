@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Global variables
-ds_id = 6
+ds_id = 9
 ds = 'ds' + str(ds_id)
 
 print('dataset: ', ds)
@@ -598,8 +598,9 @@ def CreateDataset():
     dataset_size = local_costmap_info.shape[0] - num_of_first_rows_to_delete
     print('local_costmap_info.shape[0]: ', local_costmap_info.shape[0])
     print('num_of_first_rows_to_delete: ', num_of_first_rows_to_delete)
+    print('dataset_size: ', dataset_size)
     #import random    
-    for i in range(0, dataset_size):
+    for i in range(0, dataset_size, 1):
         # optional instance selection - deterministic
         expID = i
         print('expID: ', expID)
