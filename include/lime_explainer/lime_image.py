@@ -485,7 +485,9 @@ class LimeImageExplainer(object):
                 ctr = ctr + 1
                 num_of_existing_obstacle_segments += 1
 
-        #print('\nnum_of_existing_obstacle_segments: ', num_of_existing_obstacle_segments)        
+        #print('\nnum_of_existing_obstacle_segments: ', num_of_existing_obstacle_segments)
+
+        num_of_wanted_obstacle_segments = max(num_of_wanted_obstacle_segments, num_of_existing_obstacle_segments)        
 
         if num_of_wanted_obstacle_segments > num_of_existing_obstacle_segments > 0:
             # divide segment obstacles    
