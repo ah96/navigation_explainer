@@ -43,7 +43,7 @@ class ExplainRobotNavigation:
     # constructor
     def __init__(self, cmd_vel, odom, plan, global_plan, local_plan, current_goal, local_costmap_data,
                  local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, tabular_mode, explanation_mode, explanation_alg,
-                 num_of_first_rows_to_delete, footprints, output_class_name, X_train, X_test, y_train, y_test, num_samples):
+                 num_of_first_rows_to_delete, footprints, output_class_name, X_train, X_test, y_train, y_test, num_samples, plot=True):
         print('\nConstructor starting')
 
         # save variables as class variables
@@ -72,6 +72,7 @@ class ExplainRobotNavigation:
         self.y_test = y_test
         self.num_samples = num_samples
         self.output_class_name = output_class_name
+        self.plot = plot
 
         if self.explanation_algorithm == 'LIME':
             # manually modified LIME image
@@ -218,12 +219,56 @@ class ExplainRobotNavigation:
                         self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
                                                                                     hide_rest=False, min_weight=0.0)            
                         
-                        plotting_time_start = time.time()
-                        self.plotExplanation()
-                        plotting_time_end = time.time()
-                        plotting_time_start = plotting_time_end - plotting_time_start
-                        print('\nPlotting time = ', plotting_time_start)
-                        
+                        if self.plot == True:
+                            plotting_time_start = time.time()
+                            self.plotExplanation()
+                            plotting_time_end = time.time()
+                            plotting_time_start = plotting_time_end - plotting_time_start
+                            print('\nPlotting time = ', plotting_time_start)
+                        else:
+                            path_core = os.getcwd()
+                            # plot explanation
+                            fig = plt.figure(frameon=True)
+                            w = 1.6
+                            h = 1.6
+                            fig.set_size_inches(w, h)
+                            ax = plt.Axes(fig, [0., 0., 1., 1.])
+                            ax.set_axis_off()
+                            fig.add_axes(ax)
+                            
+                            ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
+                            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+                            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+                            ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
+                            fig.savefig(path_core + '/explanation.png', transparent=False)
+                            fig.clf()
+
+                            gray_shade = 180
+                            white_shade = 255
+                            image = gray2rgb(self.image)
+                            for i in range(0, image.shape[0]):
+                                for j in range(0, image.shape[1]):
+                                    if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                                    elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade    
+                            
+                            # plot costmap with plans
+                            fig = plt.figure(frameon=False)
+                            w = 1.6
+                            h = 1.6
+                            fig.set_size_inches(w, h)
+                            ax = plt.Axes(fig, [0., 0., 1., 1.])
+                            ax.set_axis_off()
+                            fig.add_axes(ax)
+                            ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
+                            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+                            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+                            ax.imshow(image.astype(np.uint8), aspect='auto')
+                            fig.savefig(path_core + '/input.png')
+                            fig.clf()
+                                            
 
             elif self.explanation_mode == 'tabular':
                 # search for instance queue index (original instance queue name in almost (haman) input data frames)

@@ -33,43 +33,10 @@ def convert_rgb_to_names(rgb_tuple):
     return names[index]
     #return f'closest match: {names[index]}'
 
-#create_dict()
-#print(convert_rgb_to_names((255,127,255)))
-
-'''
-# black - for robot position
-print(convert_rgb_to_names((0,0,0)))
-# white - for obstacles with weights below threshold
-print(convert_rgb_to_names((255,255,255)))
-# gray - for free space with weights below threshold
-print(convert_rgb_to_names((127,127,127)))
-# yellow - for boundaries between superpixels
-print(convert_rgb_to_names((255,255,0)))
-# red - for local plan
-print(convert_rgb_to_names((255,0,0)))
-# blue - for global plan
-print(convert_rgb_to_names((0,0,255)))
-# salmon - for free space with absolute negative weights above threshold
-print(convert_rgb_to_names((255,127,127)))
-# aquamarine - for obstacles with positive weights above threshold
-print(convert_rgb_to_names((127,255,255)))
-# lightgreen - for free space with positive weights above threshold
-print(convert_rgb_to_names((127,255,127)))
-# violet - for free space with absolute negative weights above threshold
-print(convert_rgb_to_names((255,127,255)))
-
-# other colors currently not used:
-# lime
-print(convert_rgb_to_names((0,255,0)))
-# springgreen
-print(convert_rgb_to_names((61,255,125)))
-# magenta
-print(convert_rgb_to_names((255,0,255)))
-'''
-
-
+# MY CODE
 def create_dict_my():
     global kdt_db, names, predefined_names, rgb_values
+    '''
     predefined_names = [
     'black',
     'white',
@@ -81,7 +48,35 @@ def create_dict_my():
     'aquamarine',
     'lightgreen',
     'violet']
+    '''
 
+    '''
+    # for RAAD and IROS - reduced set of colors
+    predefined_names = [
+    'yellow',
+    'blue',
+    'white',
+    'darkgray',
+    'red',
+    'lime'
+    'black',
+    ]
+    '''
+
+    # for RAAD and IROS
+    predefined_names = [
+    'yellow',
+    'blue',
+    'white',
+    'darkgray',
+    'red',
+    'darkred',
+    'maroon',
+    'lime'
+    'green'
+    'darkgreen'
+    'black',
+    ]
 
     # a dictionary of all the hex and their respective names in css3
     css3_db = CSS3_HEX_TO_NAMES
@@ -109,6 +104,44 @@ def convert_rgb_to_names_my(rgb_tuple):
     #return f'closest match: {names[index]}'
 
 '''
+# for RAAD and IROS
+create_dict()
+# darkgray
+print(convert_rgb_to_names((180,180,180)))
+
+# red
+print(convert_rgb_to_names((255,0,0)))
+# red
+print(convert_rgb_to_names((220,0,0)))
+# darkred
+print(convert_rgb_to_names((180,0,0)))
+# darkred
+print(convert_rgb_to_names((150,0,0)))
+# maroon
+print(convert_rgb_to_names((128,0,0)))
+# maroon
+print(convert_rgb_to_names((90,0,0)))
+# black
+print(convert_rgb_to_names((50,0,0)))
+
+# lime
+print(convert_rgb_to_names((0,255,0)))
+# lime
+print(convert_rgb_to_names((0,220,0)))
+# green
+print(convert_rgb_to_names((0,180,0)))
+# green
+print(convert_rgb_to_names((0,150,0)))
+# green
+print(convert_rgb_to_names((0,128,0)))
+# darkgreen
+print(convert_rgb_to_names((0,90,0)))
+# black
+print(convert_rgb_to_names((0,50,0)))
+'''
+
+'''
+create_dict()
 # black
 print(convert_rgb_to_names_my((0,0,0)))
 # white

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Global variables
-ds_id = 9
+ds_id = 5
 ds = 'ds' + str(ds_id)
 
 print('dataset: ', ds)
@@ -616,14 +616,14 @@ def RunGAN():
     from lime_explainer import DataLoader
     
     # load input data
-    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
+    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
     '''
     print("---input loaded---")
     print('\n')
     '''
 
     # load output data
-    cmd_vel = DataLoader.load_output_data()
+    cmd_vel = DataLoader.load_output_data(ds)
     '''
     print("---output loaded---")
     print('\n')
@@ -637,18 +637,23 @@ def RunGAN():
     # Dataset creation
     X_train = []
     X_test = []
+    y_train = []
+    y_test = []
+    num_samples = 0
 
     # output_class_name - not important for LIME image
-    output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
+    #output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
 
     # Explanation
     from lime_explainer import ExplainNavigation
 
+    '''
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        X_train, X_test, tabular_mode, explanation_mode, num_samples,
-                                                        output_class_name, num_of_first_rows_to_delete, footprints, costmap_size)
+                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        X_train, X_test, y_train, y_test, num_samples)
+    '''
 
     # optional instance selection - deterministic
     #expID = 28
@@ -663,6 +668,9 @@ def RunGAN():
     index = expID
     offset = num_of_first_rows_to_delete
 
+    import time
+    before_gan_predict_start = time.time()
+
     # Get local costmap
     # Original costmap will be saved to self.local_costmap_original
     local_costmap_original = local_costmap_data.iloc[(index) * costmap_size:(index + 1) * costmap_size, :]
@@ -674,271 +682,167 @@ def RunGAN():
 
     # '''
     # Turn inflated area to free space and 100s to 99s
-    for i in range(0, image.shape[0]):
-        for j in range(0, image.shape[1]):
-            if 99 > image[i, j] > 0:
-                image[i, j] = 0
-            elif image[i, j] == 100:
-                image[i, j] = 99
+    image[image == 100] = 99
+    image[image != 99] = 0
     # '''
 
     # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
     image = image * 1.0
 
-    flipped = False
+    gray_shade = 180
+    white_shade = 255
+    from skimage.color import gray2rgb
+    image = gray2rgb(image)
+    for i in range(0, image.shape[0]):
+        for j in range(0, image.shape[1]):
+            if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+            elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade
 
-    if flipped == True:
-        # za prvu verziju GAN-a
-        image_flipped = np.flip(image, axis=1)
+    import os
+    path_core = os.getcwd()
 
-        import matplotlib.pyplot as plt
-        fig = plt.figure(frameon=False)
-        w = 1.6 #* 3
-        h = 1.6 #* 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(image_flipped.astype('float64'), aspect='auto')
+    # plot costmap with plans
+    import matplotlib.pyplot as plt
+    fig = plt.figure(frameon=False)
+    w = 1.6
+    h = 1.6
+    fig.set_size_inches(w, h)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    ax.imshow(image.astype(np.uint8), aspect='auto')
 
-        import pandas as pd
+    import pandas as pd
 
-        costmap_info_tmp = local_costmap_info.iloc[index, :]
-        costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
-        costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
+    costmap_info_tmp = local_costmap_info.iloc[index, :]
+    costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
+    costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
 
-        # save costmap info to class variables
-        localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
-        localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
-        localCostmapResolution = costmap_info_tmp.iloc[0, 0]
-        localCostmapHeight = costmap_info_tmp.iloc[0, 2]
-        localCostmapWidth = costmap_info_tmp.iloc[0, 1]
+    # save costmap info to class variables
+    localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
+    localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
+    localCostmapResolution = costmap_info_tmp.iloc[0, 0]
+    #localCostmapHeight = costmap_info_tmp.iloc[0, 2]
+    #localCostmapWidth = costmap_info_tmp.iloc[0, 1]
 
-        odom_tmp = odom.iloc[index, :]
-        odom_tmp = pd.DataFrame(odom_tmp).transpose()
-        odom_tmp = odom_tmp.iloc[:, 2:]
-        # save robot odometry location to class variables
-        odom_x = odom_tmp.iloc[0, 0]
-        odom_y = odom_tmp.iloc[0, 1]
+    odom_tmp = odom.iloc[index, :]
+    odom_tmp = pd.DataFrame(odom_tmp).transpose()
+    odom_tmp = odom_tmp.iloc[:, 2:]
+    # save robot odometry location to class variables
+    odom_x = odom_tmp.iloc[0, 0]
+    odom_y = odom_tmp.iloc[0, 1]
 
-        # save indices of robot's odometry location in local costmap to class variables
-        localCostmapIndex_x_odom = 160 - int((odom_x - localCostmapOriginX) / localCostmapResolution)
-        localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
+    # save indices of robot's odometry location in local costmap to class variables
+    localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
+    localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
 
-        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-        x_odom_index = [localCostmapIndex_x_odom]
-        y_odom_index = [localCostmapIndex_y_odom]
+    # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
+    x_odom_index = [localCostmapIndex_x_odom]
+    y_odom_index = [localCostmapIndex_y_odom]
 
-        # save robot odometry orientation to class variables
-        # save robot odometry orientation to class variables
-        #odom_z = odom_tmp.iloc[0, 2] # minus je upitan
-        #odom_w = odom_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
-        #yaw_sign = math.copysign(1, self.yaw_odom)
-        #self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
-        # find yaw angles projections on x and y axes and save them to class variables
-        #yaw_odom_x = math.cos(yaw_odom)
-        #yaw_odom_y = math.sin(yaw_odom)
+    # save robot odometry orientation to class variables
+    #odom_z = odom_tmp.iloc[0, 2]
+    #odom_w = odom_tmp.iloc[0, 3]
+    # calculate Euler angles based on orientation quaternion
+    #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+    # find yaw angles projections on x and y axes and save them to class variables
+    #yaw_odom_x = math.cos(yaw_odom)
+    #yaw_odom_y = math.sin(yaw_odom)
 
-        local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
-        local_plan_tmp = local_plan_tmp.iloc[:, 1:]
-        # indices of local plan's poses in local costmap
-        local_plan_x_list = []
-        local_plan_y_list = []
-        for i in range(1, local_plan_tmp.shape[0]):
-            x_temp = 160 - int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
-            y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                local_plan_x_list.append(x_temp)
-                local_plan_y_list.append(y_temp)
+    local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
+    local_plan_tmp = local_plan_tmp.iloc[:, 1:]
+    # indices of local plan's poses in local costmap
+    local_plan_x_list = []
+    local_plan_y_list = []
+    for i in range(1, local_plan_tmp.shape[0]):
+        x_temp = int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+        y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
+        if 0 <= x_temp < costmap_size and 0 <= y_temp < costmap_size:
+            local_plan_x_list.append(x_temp)
+            local_plan_y_list.append(y_temp)
 
-        tf_map_odom_tmp = tf_map_odom.iloc[index, :]
-        tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
+    tf_map_odom_tmp = tf_map_odom.iloc[index, :]
+    tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
 
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
+    # transform global plan from /map to /odom frame
+    # rotation matrix
+    from scipy.spatial.transform import Rotation as R
 
-        r = R.from_quat(
-            [tf_map_odom_tmp.iloc[0, 3], tf_map_odom_tmp.iloc[0, 4], tf_map_odom_tmp.iloc[0, 5],
-            tf_map_odom_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        # translation vector
-        t = np.array(
-            [tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
-        # print('t: ', t)
-        global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
-        global_plan_tmp = global_plan_tmp.iloc[:, 1:]
-        plan_tmp_tmp = copy.deepcopy(global_plan_tmp)
-        for i in range(0, global_plan_tmp.shape[0]):
-            p = np.array(
-                [global_plan_tmp.iloc[i, 0], global_plan_tmp.iloc[i, 1], global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+    r = R.from_quat(
+        [tf_map_odom_tmp.iloc[0, 3], tf_map_odom_tmp.iloc[0, 4], tf_map_odom_tmp.iloc[0, 5],
+        tf_map_odom_tmp.iloc[0, 6]])
+    # print('r: ', r.as_matrix())
+    r_array = np.asarray(r.as_matrix())
+    # print('r_array: ', r_array)
+    # print('r_array.shape: ', r_array.shape)
+    # translation vector
+    t = np.array([tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
+    # print('t: ', t)
+    global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
+    global_plan_tmp = global_plan_tmp.iloc[:, 1:]
+    plan_tmp_tmp = copy.deepcopy(global_plan_tmp)
+    for i in range(0, global_plan_tmp.shape[0]):
+        p = np.array(
+            [global_plan_tmp.iloc[i, 0], global_plan_tmp.iloc[i, 1], global_plan_tmp.iloc[i, 2]])
+        # print('p: ', p)
+        pnew = p.dot(r_array) + t
+        # print('pnew: ', pnew)
+        plan_tmp_tmp.iloc[i, 0] = pnew[0]
+        plan_tmp_tmp.iloc[i, 1] = pnew[1]
+        plan_tmp_tmp.iloc[i, 2] = pnew[2]
 
-        # Get coordinates of the global plan in the local costmap
-        # '''
-        plan_x_list = []
-        plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = 160 - int(
-                (plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
-            y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                #print('x_temp: ', x_temp)
-                #print('y_temp: ', y_temp)
-                #print('\n')
-                plan_x_list.append(x_temp)
-                plan_y_list.append(y_temp)
-        # '''
-        
-        ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
-        ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
-        # plot robots' location, orientation and local plan
-        ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
-        #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
+    # Get coordinates of the global plan in the local costmap
+    # '''
+    plan_x_list = []
+    plan_y_list = []
+    for i in range(0, plan_tmp_tmp.shape[0], 3):
+        x_temp = int(
+            (plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+        y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
+        if 0 <= x_temp < costmap_size and 0 <= y_temp < costmap_size:
+            plan_x_list.append(x_temp)
+            plan_y_list.append(y_temp)
+    
+    ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
+    ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
+    # plot robots' location, orientation and local plan
+    ax.scatter(x_odom_index, y_odom_index, c='white', marker='o')
+    # za novu verziju GAN-a isključiti crtanje orijentacije
+    #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
+    # '''
+    
+    fig.savefig('input.png', transparent=False)
+    fig.clf()
 
-        fig.savefig('input.png', transparent=False)
-        fig.clf()
-
-    elif flipped == False:
-        import matplotlib.pyplot as plt
-        fig = plt.figure(frameon=False)
-        w = 1.6 #* 3
-        h = 1.6 #* 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(image.astype('float64'), aspect='auto')
-
-        import pandas as pd
-
-        costmap_info_tmp = local_costmap_info.iloc[index, :]
-        costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
-        costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
-
-        # save costmap info to class variables
-        localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
-        localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
-        localCostmapResolution = costmap_info_tmp.iloc[0, 0]
-        localCostmapHeight = costmap_info_tmp.iloc[0, 2]
-        localCostmapWidth = costmap_info_tmp.iloc[0, 1]
-
-        odom_tmp = odom.iloc[index, :]
-        odom_tmp = pd.DataFrame(odom_tmp).transpose()
-        odom_tmp = odom_tmp.iloc[:, 2:]
-        # save robot odometry location to class variables
-        odom_x = odom_tmp.iloc[0, 0]
-        odom_y = odom_tmp.iloc[0, 1]
-
-        # save indices of robot's odometry location in local costmap to class variables
-        localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
-        localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
-
-        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-        x_odom_index = [localCostmapIndex_x_odom]
-        y_odom_index = [localCostmapIndex_y_odom]
-
-        # save robot odometry orientation to class variables
-        #odom_z = odom_tmp.iloc[0, 2]
-        #odom_w = odom_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
-        # find yaw angles projections on x and y axes and save them to class variables
-        #yaw_odom_x = math.cos(yaw_odom)
-        #yaw_odom_y = math.sin(yaw_odom)
-
-        local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
-        local_plan_tmp = local_plan_tmp.iloc[:, 1:]
-        # indices of local plan's poses in local costmap
-        local_plan_x_list = []
-        local_plan_y_list = []
-        for i in range(1, local_plan_tmp.shape[0]):
-            x_temp = int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
-            y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                local_plan_x_list.append(x_temp)
-                local_plan_y_list.append(y_temp)
-
-        tf_map_odom_tmp = tf_map_odom.iloc[index, :]
-        tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
-
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-
-        r = R.from_quat(
-            [tf_map_odom_tmp.iloc[0, 3], tf_map_odom_tmp.iloc[0, 4], tf_map_odom_tmp.iloc[0, 5],
-            tf_map_odom_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        # translation vector
-        t = np.array([tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
-        # print('t: ', t)
-        global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
-        global_plan_tmp = global_plan_tmp.iloc[:, 1:]
-        plan_tmp_tmp = copy.deepcopy(global_plan_tmp)
-        for i in range(0, global_plan_tmp.shape[0]):
-            p = np.array(
-                [global_plan_tmp.iloc[i, 0], global_plan_tmp.iloc[i, 1], global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
-
-        # Get coordinates of the global plan in the local costmap
-        # '''
-        plan_x_list = []
-        plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = int(
-                (plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
-            y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                plan_x_list.append(x_temp)
-                plan_y_list.append(y_temp)
-        
-        ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
-        ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
-        # plot robots' location, orientation and local plan
-        ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
-        # za novu verziju GAN-a isključiti crtanje orijentacije
-        #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
-        # '''
-        
-        fig.savefig('input.png', transparent=False)
-        fig.clf() 
-
-
+    before_gan_predict_end = time.time()
+    before_gan_predict_time = before_gan_predict_end - before_gan_predict_start
+    print('\nbefore_gan_predict_time = ', before_gan_predict_time)
+ 
+    #import time
+    gan_predict_start = time.time()
     from GAN import gan            
     gan.predict()
+    gan_predict_end = time.time()
+    gan_predict_time = gan_predict_end - gan_predict_start
+    print('\ngan_predict_time = ', gan_predict_time)
+
+    print('\nEND!!!')
 
 def EvaluateLIMEvsGAN():
     # Data loading
     from lime_explainer import DataLoader
     
     # load input data
-    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data()
+    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
     '''
     print("---input loaded---")
     print('\n')
     '''
 
     # load output data
-    cmd_vel = DataLoader.load_output_data()
+    cmd_vel = DataLoader.load_output_data(ds)
     '''
     print("---output loaded---")
     print('\n')
@@ -952,6 +856,9 @@ def EvaluateLIMEvsGAN():
     # Dataset creation
     X_train = []
     X_test = []
+    y_train = []
+    y_test = []
+    num_samples = 0
 
     # output_class_name - not important for LIME image
     output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
@@ -962,10 +869,10 @@ def EvaluateLIMEvsGAN():
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        X_train, X_test, tabular_mode, explanation_mode, num_samples,
-                                                        output_class_name, num_of_first_rows_to_delete, footprints, costmap_size)
+                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        X_train, X_test, y_train, y_test, num_samples, plot=False)
 
-    from test_color import create_dict_my
+    from test_color import create_dict_my, convert_rgb_to_names_my
     create_dict_my()
 
     import pandas as pd
@@ -974,28 +881,28 @@ def EvaluateLIMEvsGAN():
     import copy
     import matplotlib.pyplot as plt
 
-    with open("times.csv", "w") as myfile:
+    with open("times.csv", "a") as myfile:
             myfile.write("lime,gan\n")
 
-    with open("percentages.csv", "w") as myfile:
+    with open("percentages.csv", "a") as myfile:
             myfile.write("color,R,G,B,RGB_after,RGB_from_iter\n")
 
-    with open("local_plan.csv", "w") as myfile:
+    with open("local_plan.csv", "a") as myfile:
             myfile.write("color,RGB_after,RGB_from_iter\n")
 
-    with open("global_plan.csv", "w") as myfile:
+    with open("global_plan.csv", "a") as myfile:
             myfile.write("color,RGB_after,RGB_from_iter\n")
 
-    with open("obstacles.csv", "w") as myfile:
+    with open("obstacles.csv", "a") as myfile:
             myfile.write("color,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
 
-    with open("free_space.csv", "w") as myfile:
+    with open("free_space.csv", "a") as myfile:
             myfile.write("color,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
 
-    with open("obstacles_weighted.csv", "w") as myfile:
+    with open("obstacles_weighted.csv", "a") as myfile:
             myfile.write("color,R,G,B,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
 
-    with open("free_space_weighted.csv", "w") as myfile:
+    with open("free_space_weighted.csv", "a") as myfile:
             myfile.write("color,R,G,B,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
 
     #with open("robot_position.csv", "w") as myfile:
@@ -1006,11 +913,9 @@ def EvaluateLIMEvsGAN():
     lime_time_avg = 0
     gan_time_avg = 0
 
-    R_PERC = [0.0] * 10
-    G_PERC = [0.0] * 10
-    B_PERC = [0.0] * 10
-
-    flipped = False
+    #R_PERC = [0.0] * 10
+    #G_PERC = [0.0] * 10
+    #B_PERC = [0.0] * 10
 
     exp_IDs_list_test_ds1 = [5, 23, 44, 52, 75, 88, 94, 104, 118, 128, 136, 150, 151, 189, 190, 209, 223, 225, 229, 242, 252]
     exp_IDs_list_test_ds2 = [6, 9, 12, 13, 22, 45, 63, 75, 103, 105, 109, 123, 126, 128, 150, 153, 154, 161, 166, 167, 182, 203, 214, 215, 220, 234, 237, 247, 249, 252, 257, 258, 262, 271, 275, 277, 278, 294, 337, 348, 366, 373, 387, 390, 391, 413, 420, 426, 430, 436, 441, 445, 446, 451, 455, 466, 468, 482, 492, 495, 505, 507, 514, 525, 580, 585, 599, 602, 612, 620, 625, 639, 640, 641, 667, 676, 688, 690, 698]
@@ -1028,21 +933,17 @@ def EvaluateLIMEvsGAN():
         #expID = exp_IDs_list_test_ds2[num]
         #expID = 203
 
-        # random instance selection
-        #import random
-        #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) # expID se trazi iz local_costmap_info
-
         # call LIME    
-        time_before = time.time()
+        time_before_lime = time.time()
         exp_nav.explain_instance(expID)
-        time_after = time.time()
-        lime_time_avg += time_after - time_before
+        time_after_lime = time.time()
+        lime_time_avg += time_after_lime - time_before_lime
         #print('LIME exp time: ', time_after - time_before)           
 
 
         # call GAN
         # Prepare data for GAN
-        time_before = time.time()
+        time_before_gan = time.time()
         index = expID
         offset = num_of_first_rows_to_delete
 
@@ -1052,47 +953,37 @@ def EvaluateLIMEvsGAN():
         # Make image a np.array deepcopy of local_costmap_original
         image = np.array(copy.deepcopy(local_costmap_original))
 
-        #'''
+        # '''
         # Turn inflated area to free space and 100s to 99s
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if 99 > image[i, j] > 0:
-                    image[i, j] = 0
-                elif image[i, j] == 100:
-                    image[i, j] = 99
-        #'''
+        image[image == 100] = 99
+        image[image != 99] = 0
+        # '''
 
-        # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+        # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
         image = image * 1.0
 
+        gray_shade = 180
+        white_shade = 255
+        from skimage.color import gray2rgb
+        image = gray2rgb(image)
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade
+
         '''
+        # plot input image - now done in self.explainer
+        import matplotlib.pyplot as plt
         fig = plt.figure(frameon=False)
-        #w = 1.6 #* 3
-        #h = 1.6 #* 3
-        #fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(image.astype('float64'), aspect='auto')
-        fig.savefig('costmap_original.png', transparent=False)
-        fig.clf()
-        '''                
-
-        # Get flipped input image if wanted
-        if flipped == True:    
-            image_flipped = np.flip(image, axis=1)
-        elif flipped == False:
-            image_flipped = image
-
-        # plot input image
-        fig = plt.figure(frameon=False)
-        w = 1.6 #* 3
-        h = 1.6 #* 3
+        w = 1.6
+        h = 1.6
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.imshow(image_flipped.astype('float64'), aspect='auto')
+        ax.imshow(image.astype(np.uint8), aspect='auto')
 
         # get costmap info
         costmap_info_tmp = local_costmap_info.iloc[index, :]
@@ -1103,8 +994,8 @@ def EvaluateLIMEvsGAN():
         localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
         localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
         localCostmapResolution = costmap_info_tmp.iloc[0, 0]
-        localCostmapHeight = costmap_info_tmp.iloc[0, 2]
-        localCostmapWidth = costmap_info_tmp.iloc[0, 1]
+        #localCostmapHeight = costmap_info_tmp.iloc[0, 2]
+        #localCostmapWidth = costmap_info_tmp.iloc[0, 1]
 
         # get odometry info
         odom_tmp = odom.iloc[index, :]
@@ -1115,10 +1006,7 @@ def EvaluateLIMEvsGAN():
         odom_y = odom_tmp.iloc[0, 1]
 
         # save indices of robot's odometry location in local costmap to class variables
-        if flipped == True:
-            localCostmapIndex_x_odom = 160 - int((odom_x - localCostmapOriginX) / localCostmapResolution)
-        elif flipped == False:
-            localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
+        localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
         localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
 
         # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
@@ -1130,11 +1018,10 @@ def EvaluateLIMEvsGAN():
         #odom_w = odom_tmp.iloc[0, 3]
         # calculate Euler angles based on orientation quaternion
         #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
-        '''
-        if flipped == True:
-            yaw_sign = math.copysign(1, self.yaw_odom)
-            self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
-        '''
+        
+        #if flipped == True:
+        #    yaw_sign = math.copysign(1, self.yaw_odom)
+        #    self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
         # find yaw angles projections on x and y axes and save them to class variables
         #yaw_odom_x = math.cos(yaw_odom)
         #yaw_odom_y = math.sin(yaw_odom)
@@ -1146,12 +1033,9 @@ def EvaluateLIMEvsGAN():
         local_plan_x_list = []
         local_plan_y_list = []
         for i in range(1, local_plan_tmp.shape[0]):
-            if flipped == True:
-                x_temp = 160 - int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
-            elif flipped == False:
-                x_temp = int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+            x_temp = int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
             y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+            if 0 <= x_temp < costmap_size and 0 <= y_temp < costmap_size:
                 local_plan_x_list.append(x_temp)
                 local_plan_y_list.append(y_temp)
 
@@ -1188,14 +1072,10 @@ def EvaluateLIMEvsGAN():
             plan_tmp_tmp.iloc[i, 2] = pnew[2]
 
         # Get coordinates of the global plan in the local costmap
-        # '''
         plan_x_list = []
         plan_y_list = []
         for i in range(0, plan_tmp_tmp.shape[0], 3):
-            if flipped == True:
-                x_temp = 160 - int((plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
-            elif flipped == False:
-                x_temp = int((plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)    
+            x_temp = int((plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)    
             y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
             if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
                 #print('x_temp: ', x_temp)
@@ -1203,24 +1083,24 @@ def EvaluateLIMEvsGAN():
                 #print('\n')
                 plan_x_list.append(x_temp)
                 plan_y_list.append(y_temp)
-        # '''
 
         # plot global plan        
         ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
         # plot local plan
-        ax.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='o')
+        ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
         # plot robots' location and orientation
-        ax.scatter(x_odom_index, y_odom_index, c='black', marker='o')
+        ax.scatter(x_odom_index, y_odom_index, c='white', marker='o')
         #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
 
         fig.savefig('input.png', transparent=False)
         fig.clf()
+        '''
 
         from GAN import gan            
         gan.predict()
 
-        time_after = time.time()
-        gan_time_avg += time_after - time_before
+        time_after_gan = time.time()
+        gan_time_avg += time_after_gan - time_before_gan
 
         print('LIME time: ', lime_time_avg / num_iter)
         print('\n')
@@ -1230,24 +1110,15 @@ def EvaluateLIMEvsGAN():
         with open("times.csv", "a") as myfile:
             myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
 
-        segments = exp_nav.getSegmentsForGanLimeEval(image)
-        #print('exp_nav.exp: ', exp_nav.exp)
+        segments = exp_nav.segments
+        #print('\nexp_nav.exp: ', exp_nav.exp)
         #plt.imshow(segments)
         #plt.savefig('SEGMENTS.png')
-
-        if flipped == True:
-            segments = np.flip(segments, axis=1)
-
-        #pd.DataFrame(segments).to_csv('SEGMENTS.csv', index=False)
-
 
         # RGB evaluation
         import PIL.Image
         import os
-        if flipped == True:
-            path1 = os.getcwd() + '/flipped_explanation.png'
-        elif flipped == False:
-            path1 = os.getcwd() + '/explanation.png'
+        path1 = os.getcwd() + '/explanation.png'
         exp_lime_orig = PIL.Image.open(path1).convert('RGB')
         path1 = os.getcwd() + '/GAN.png'
         exp_gan_orig = PIL.Image.open(path1).convert('RGB')
@@ -1270,6 +1141,7 @@ def EvaluateLIMEvsGAN():
         '''
 
         #seg_unique = np.unique(segments)
+        #print('seg_unique = ', seg_unique)
 
         # weighted eval
         color_coverage_percent = []
@@ -1683,9 +1555,9 @@ def EvaluateLIMEvsGAN():
         avg_avg = 0
         avg_diff = 0
 
-        for i in range(0, image_flipped.shape[0]):
-            for j in range(0, image_flipped.shape[1]):
-                if image_flipped[i, j] == 99:
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j] == 99:
                     row = i
                     columns = j
                     
@@ -1814,9 +1686,9 @@ def EvaluateLIMEvsGAN():
         avg_avg = 0
         avg_diff = 0
 
-        for i in range(0, image_flipped.shape[0]):
-            for j in range(0, image_flipped.shape[1]):
-                if image_flipped[i, j] == 0:
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j] == 0:
                     row = i
                     columns = j
                     
@@ -1975,7 +1847,7 @@ def EvaluateLIMEvsGAN():
                 for row in range(0, segments.shape[0]):
                     for columns in range(0, segments.shape[1]):
                         if segments[row, columns] == e[0]:
-                            if image_flipped[row, columns] == 99:
+                            if image[row, columns] == 99:
                                 obstacle = True
                                 '''
                                 print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
@@ -2255,7 +2127,7 @@ def EvaluateLIMEvsGAN():
                 for row in range(0, segments.shape[0]):
                     for columns in range(0, segments.shape[1]):
                         if segments[row, columns] == e[0]:
-                            if image_flipped[row, columns] == 0:
+                            if image[row, columns] == 0:
                                 free_space = True
                                 '''
                                 print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))

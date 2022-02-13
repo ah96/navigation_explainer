@@ -117,15 +117,14 @@ class ImageExplanation(object):
 
             w_sum = 0.0
             w_s = []
-            if use_maximum_weight == True:
-                for f, w in exp[:num_features]:
-                    w_sum += abs(w)
-                    w_s.append(abs(w))
-                max_w = max(w_s)
-                if max_w == 0:
-                    all_weights_zero = True
-                    max_w = 1
-                #print('max_w: ', max_w)
+            for f, w in exp[:num_features]:
+                w_sum += abs(w)
+                w_s.append(abs(w))
+            max_w = max(w_s)
+            if max_w == 0:
+                all_weights_zero = True
+                max_w = 1
+            #print('max_w: ', max_w)
 
             for f, w in exp[:num_features]:
                 #print('\n(f, w): ', (f, w))
@@ -162,14 +161,20 @@ class ImageExplanation(object):
                     if color_free_space == False:
                         if c == 1:
                             temp[segments == f, 0] = 0.0
-                            temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / max_w
+                            if use_maximum_weight == True:
+                                temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / max_w
+                            else:
+                                temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / w_sum 
                             temp[segments == f, 2] = 0.0
                         elif c == 0:
                             temp[segments == f, 0] = 0.0
                             temp[segments == f, 1] = 0.0
                             temp[segments == f, 2] = 0.0
                         elif c == -1:
-                            temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / max_w
+                            if use_maximum_weight == True:
+                                temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / max_w
+                            else:
+                                temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / w_sum 
                             temp[segments == f, 1] = 0.0
                             temp[segments == f, 2] = 0.0
                                         
