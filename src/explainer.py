@@ -884,7 +884,7 @@ def EvaluateLIMEvsGAN():
     with open("times.csv", "a") as myfile:
             myfile.write("lime,gan\n")
 
-    with open("percentages.csv", "a") as myfile:
+    with open("segments_percentages.csv", "a") as myfile:
             myfile.write("color,R,G,B,RGB_after,RGB_from_iter\n")
 
     with open("local_plan.csv", "a") as myfile:
@@ -1193,30 +1193,46 @@ def EvaluateLIMEvsGAN():
                                 diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
                                 diff_R_rel += diff_R_abs / int(exp_lime[row, columns, 0])
                             else:
-                                count_R -= 1     
+                                #print('\n' + str(abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))))
+                                diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                                if diff_R_abs != 0:
+                                    diff_R_rel += 1
+                                else:
+                                    diff_R_rel += 0     
 
                             # relative G channel difference
                             if int(exp_lime[row, columns, 1]) != 0:
                                 diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
                                 diff_G_rel += diff_G_abs / int(exp_lime[row, columns, 1])
                             else:
-                                count_G -= 1    
+                                diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                                if diff_G_abs != 0:
+                                    diff_G_rel += 1
+                                else:
+                                    diff_G_rel += 0        
                             
                             # relative B channel difference
                             if int(exp_lime[row, columns, 2]) != 0:
                                 diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
                                 diff_B_rel += diff_B_abs / int(exp_lime[row, columns, 2]) 
                             else:
-                                count_B -= 1    
+                                diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+                                if diff_B_abs != 0:
+                                    diff_B_rel += 1
+                                else:
+                                    diff_B_rel += 0    
 
                             #avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
 
                             temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
                             if temp_avg_sum != 0:
-                                avg_diff += abs( (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
-                                - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3 ) / ( int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2]) ) / 3
+                                gan_avg = (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                                lime_avg = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                                avg_diff += abs(gan_avg - lime_avg) / lime_avg 
                             else:
-                                count_avg -= 1   
+                                gan_avg = (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                                lime_avg = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                                avg_diff += abs(gan_avg - lime_avg)   
 
                 if count_R == 0:
                     count_R = 1
@@ -1242,6 +1258,8 @@ def EvaluateLIMEvsGAN():
                 diff_R_rel /= count_R
                 diff_G_rel /= count_G
                 diff_B_rel /= count_B
+
+                print('diff_R_rel = ', diff_R_rel)
                 
                 diff_R_abs_list.append(diff_R_abs)
                 diff_G_abs_list.append(diff_G_abs)
@@ -1265,6 +1283,9 @@ def EvaluateLIMEvsGAN():
         if weights_sum == 0.0:
             weights = [1.0] * len(weights)
             weights_sum = sum(weights)
+
+        print('\nweights = ', weights)
+        print('\nweights_sum = ', weights_sum)    
         
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
@@ -1274,69 +1295,69 @@ def EvaluateLIMEvsGAN():
             explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
             weights_percentage.append(100 * weights[i] / weights_sum)
     
-        with open("percentages.csv", "a") as myfile:
+        with open("segments_percentages.csv", "a") as myfile:
             myfile.write(str(explanation_saved_percentage) + ",")
 
 
         avg_similarity_percentage = []
         for i in range(0, len(diff_R_rel_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_R_rel_list[i]))
+            avg_similarity_percentage.append(100 * (diff_R_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
             explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
             explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("percentages.csv", "a") as myfile:
+        with open("segments_percentages.csv", "a") as myfile:
             myfile.write(str(explanation_saved_percentage) + ",") 
 
 
         avg_similarity_percentage = []
         for i in range(0, len(diff_G_rel_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_G_rel_list[i]))
+            avg_similarity_percentage.append(100 * (diff_G_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
             explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
             explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("percentages.csv", "a") as myfile:
+        with open("segments_percentages.csv", "a") as myfile:
             myfile.write(str(explanation_saved_percentage) + ",")
 
 
         avg_similarity_percentage = []
         for i in range(0, len(diff_B_rel_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_B_rel_list[i]))
+            avg_similarity_percentage.append(100 * (diff_B_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
             explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
             explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("percentages.csv", "a") as myfile:
+        with open("segments_percentages.csv", "a") as myfile:
             myfile.write(str(explanation_saved_percentage) + ",")           
 
 
         avg_similarity_percentage = []
         for i in range(0, len(diff_rel_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_rel_list[i]))
+            avg_similarity_percentage.append(100 * (diff_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
             explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
             explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)
 
-        with open("percentages.csv", "a") as myfile:
+        with open("segments_percentages.csv", "a") as myfile:
             myfile.write(str(explanation_saved_percentage) + ",")
 
 
         avg_avg_similarity_percentage = []
         for i in range(0, len(avg_diff_list)):
-            avg_avg_similarity_percentage.append(100 * (1.0 - avg_diff_list[i]))
+            avg_avg_similarity_percentage.append(100 * (avg_diff_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
             explanation_saved_percentage += avg_avg_similarity_percentage[i] * weights[i] / weights_sum
             explanation_saved_percentage_list.append(avg_avg_similarity_percentage[i] * weights[i] / weights_sum)
 
-        with open("percentages.csv", "a") as myfile:
+        with open("segments_percentages.csv", "a") as myfile:
             myfile.write(str(explanation_saved_percentage) + "\n")
 
 
