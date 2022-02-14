@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Global variables
-ds_id = 5
+ds_id = 1
 ds = 'ds' + str(ds_id)
 
 print('dataset: ', ds)
@@ -961,7 +961,8 @@ def EvaluateLIMEvsGAN():
 
         # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
         image = image * 1.0
-
+        
+        '''
         gray_shade = 180
         white_shade = 255
         from skimage.color import gray2rgb
@@ -972,19 +973,9 @@ def EvaluateLIMEvsGAN():
                     image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
                 elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
                     image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade
-
         '''
-        # plot input image - now done in self.explainer
-        import matplotlib.pyplot as plt
-        fig = plt.figure(frameon=False)
-        w = 1.6
-        h = 1.6
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(image.astype(np.uint8), aspect='auto')
 
+        #'''
         # get costmap info
         costmap_info_tmp = local_costmap_info.iloc[index, :]
         costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
@@ -1084,17 +1075,7 @@ def EvaluateLIMEvsGAN():
                 plan_x_list.append(x_temp)
                 plan_y_list.append(y_temp)
 
-        # plot global plan        
-        ax.scatter(plan_x_list, plan_y_list, c='blue', marker='o')
-        # plot local plan
-        ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
-        # plot robots' location and orientation
-        ax.scatter(x_odom_index, y_odom_index, c='white', marker='o')
-        #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
-
-        fig.savefig('input.png', transparent=False)
-        fig.clf()
-        '''
+        #'''
 
         from GAN import gan            
         gan.predict()
@@ -1148,19 +1129,22 @@ def EvaluateLIMEvsGAN():
 
         weights = []
 
-        avg_R_list = []
-        avg_G_list = []
-        avg_B_list = []
+        diff_R_rel_list = []
+        diff_G_rel_list = []
+        diff_B_rel_list = []
 
-        diff_R_list = []
-        diff_G_list = []
-        diff_B_list = []
+        diff_R_abs_list = []
+        diff_G_abs_list = []
+        diff_B_abs_list = []
 
-        diff_list = []
+        diff_rel_list = []
+        diff_abs_list = []
         
         avg_diff_list = []
         
-        for e in exp_nav.exp:
+        for e in exp_nav.exp[1:]:
+            print('e = ', e)
+            # if weight is greater than 0
             if abs(e[1]) >= 0.0:
                 
                 count_R = 0
@@ -1170,16 +1154,15 @@ def EvaluateLIMEvsGAN():
 
                 same_color_count = 0
                 color_count = 0
-                
-                avg_R = 0
-                avg_G = 0
-                avg_B = 0
 
-                diff_R = 0
-                diff_G = 0
-                diff_B = 0
+                diff_R_rel = 0
+                diff_G_rel = 0
+                diff_B_rel = 0
 
-                avg_avg = 0
+                diff_R_abs = 0
+                diff_G_abs = 0
+                diff_B_abs = 0
+
                 avg_diff = 0
 
                 weights.append(abs(e[1]))
@@ -1187,16 +1170,16 @@ def EvaluateLIMEvsGAN():
                 for row in range(0, segments.shape[0]):
                     for columns in range(0, segments.shape[1]):
                         if segments[row, columns] == e[0]:
-                            '''
-                            print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
-                            print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
-                            print('\n')
-                            '''
-
                             lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
                             gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
                             if lime_color_name == gan_color_name:
                                 same_color_count += 1
+
+                            '''
+                            print('lime_color_name: ', lime_color_name)
+                            print('gan_color_name: ', gan_color_name)
+                            print('\n')
+                            '''    
 
                             color_count += 1
                             count_R += 1
@@ -1204,18 +1187,25 @@ def EvaluateLIMEvsGAN():
                             count_B += 1
                             count_avg += 1
 
+
+                            # relative R channel difference
                             if int(exp_lime[row, columns, 0]) != 0:
-                                diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0])) / int(exp_lime[row, columns, 0])
+                                diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                                diff_R_rel += diff_R_abs / int(exp_lime[row, columns, 0])
                             else:
                                 count_R -= 1     
 
+                            # relative G channel difference
                             if int(exp_lime[row, columns, 1]) != 0:
-                                diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1])) / int(exp_lime[row, columns, 1])
+                                diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                                diff_G_rel += diff_G_abs / int(exp_lime[row, columns, 1])
                             else:
                                 count_G -= 1    
                             
+                            # relative B channel difference
                             if int(exp_lime[row, columns, 2]) != 0:
-                                diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) / int(exp_lime[row, columns, 2]) 
+                                diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+                                diff_B_rel += diff_B_abs / int(exp_lime[row, columns, 2]) 
                             else:
                                 count_B -= 1    
 
@@ -1245,16 +1235,27 @@ def EvaluateLIMEvsGAN():
 
                 color_coverage_percent.append(100 * same_color_count / color_count)
                 
-                diff_R /= count_R
-                diff_G /= count_G
-                diff_B /= count_B
-                
-                diff_R_list.append(diff_R)
-                diff_G_list.append(diff_G)
-                diff_B_list.append(diff_B)
+                diff_R_abs /= count_R
+                diff_G_abs /= count_G
+                diff_B_abs /= count_B
 
-                diff = (diff_R + diff_G + diff_B) / 3
-                diff_list.append(diff)
+                diff_R_rel /= count_R
+                diff_G_rel /= count_G
+                diff_B_rel /= count_B
+                
+                diff_R_abs_list.append(diff_R_abs)
+                diff_G_abs_list.append(diff_G_abs)
+                diff_B_abs_list.append(diff_B_abs)
+
+                diff_R_rel_list.append(diff_R_rel)
+                diff_G_rel_list.append(diff_G_rel)
+                diff_B_rel_list.append(diff_B_rel)
+
+                diff = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+                diff_abs_list.append(diff)
+
+                diff = (diff_R_rel + diff_G_rel + diff_B_rel) / 3
+                diff_rel_list.append(diff)
 
                 avg_diff /= count_avg
                 avg_diff_list.append(avg_diff)
@@ -1278,8 +1279,8 @@ def EvaluateLIMEvsGAN():
 
 
         avg_similarity_percentage = []
-        for i in range(0, len(diff_R_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_R_list[i]))
+        for i in range(0, len(diff_R_rel_list)):
+            avg_similarity_percentage.append(100 * (1.0 - diff_R_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
@@ -1290,8 +1291,8 @@ def EvaluateLIMEvsGAN():
 
 
         avg_similarity_percentage = []
-        for i in range(0, len(diff_G_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_G_list[i]))
+        for i in range(0, len(diff_G_rel_list)):
+            avg_similarity_percentage.append(100 * (1.0 - diff_G_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
@@ -1302,8 +1303,8 @@ def EvaluateLIMEvsGAN():
 
 
         avg_similarity_percentage = []
-        for i in range(0, len(diff_B_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_B_list[i]))
+        for i in range(0, len(diff_B_rel_list)):
+            avg_similarity_percentage.append(100 * (1.0 - diff_B_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
@@ -1314,8 +1315,8 @@ def EvaluateLIMEvsGAN():
 
 
         avg_similarity_percentage = []
-        for i in range(0, len(diff_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_list[i]))
+        for i in range(0, len(diff_rel_list)):
+            avg_similarity_percentage.append(100 * (1.0 - diff_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
@@ -1424,9 +1425,9 @@ def EvaluateLIMEvsGAN():
         diff_G /= count_G
         diff_B /= count_B
         
-        diff_R_list.append(diff_R)
-        diff_G_list.append(diff_G)
-        diff_B_list.append(diff_B)
+        diff_R_rel_list.append(diff_R)
+        diff_G_rel_list.append(diff_G)
+        diff_B_rel_list.append(diff_B)
 
         diff = (diff_R + diff_G + diff_B) / 3
 
@@ -1519,9 +1520,9 @@ def EvaluateLIMEvsGAN():
         diff_G /= count_G
         diff_B /= count_B
         
-        diff_R_list.append(diff_R)
-        diff_G_list.append(diff_G)
-        diff_B_list.append(diff_B)
+        diff_R_rel_list.append(diff_R)
+        diff_G_rel_list.append(diff_G)
+        diff_B_rel_list.append(diff_B)
 
         diff = (diff_R + diff_G + diff_B) / 3
 
@@ -1650,9 +1651,9 @@ def EvaluateLIMEvsGAN():
         diff_G /= count_G
         diff_B /= count_B
         
-        diff_R_list.append(diff_R)
-        diff_G_list.append(diff_G)
-        diff_B_list.append(diff_B)
+        diff_R_rel_list.append(diff_R)
+        diff_G_rel_list.append(diff_G)
+        diff_B_rel_list.append(diff_B)
 
         diff = (diff_R + diff_G + diff_B) / 3
 
@@ -1780,9 +1781,9 @@ def EvaluateLIMEvsGAN():
         diff_G /= count_G
         diff_B /= count_B
         
-        diff_R_list.append(diff_R)
-        diff_G_list.append(diff_G)
-        diff_B_list.append(diff_B)
+        diff_R_rel_list.append(diff_R)
+        diff_G_rel_list.append(diff_G)
+        diff_B_rel_list.append(diff_B)
 
         diff = (diff_R + diff_G + diff_B) / 3
 
@@ -1938,9 +1939,9 @@ def EvaluateLIMEvsGAN():
                     diff_G /= count_G
                     diff_B /= count_B
                     
-                    diff_R_list.append(diff_R)
-                    diff_G_list.append(diff_G)
-                    diff_B_list.append(diff_B)
+                    diff_R_rel_list.append(diff_R)
+                    diff_G_rel_list.append(diff_G)
+                    diff_B_rel_list.append(diff_B)
 
                     diff = (diff_R + diff_G + diff_B) / 3
                     diff_list.append(diff)
@@ -1953,9 +1954,9 @@ def EvaluateLIMEvsGAN():
                     color_flip_percent.append(0.0)
                     color_turn_percent.append(0.0)
                     color_other_percent.append(0.0)
-                    diff_R_list.append(1.0)
-                    diff_G_list.append(1.0)
-                    diff_B_list.append(1.0)
+                    diff_R_rel_list.append(1.0)
+                    diff_G_rel_list.append(1.0)
+                    diff_B_rel_list.append(1.0)
                     diff_list.append(1.0)
                     avg_diff_list.append(1.0)    
 
@@ -1978,8 +1979,8 @@ def EvaluateLIMEvsGAN():
 
 
         avg_similarity_percentage = []
-        for i in range(0, len(diff_R_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_R_list[i]))
+        for i in range(0, len(diff_R_rel_list)):
+            avg_similarity_percentage.append(100 * (1.0 - diff_R_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
@@ -1990,8 +1991,8 @@ def EvaluateLIMEvsGAN():
 
 
         avg_similarity_percentage = []
-        for i in range(0, len(diff_G_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_G_list[i]))
+        for i in range(0, len(diff_G_rel_list)):
+            avg_similarity_percentage.append(100 * (1.0 - diff_G_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
@@ -2002,8 +2003,8 @@ def EvaluateLIMEvsGAN():
 
 
         avg_similarity_percentage = []
-        for i in range(0, len(diff_B_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_B_list[i]))
+        for i in range(0, len(diff_B_rel_list)):
+            avg_similarity_percentage.append(100 * (1.0 - diff_B_rel_list[i]))
         explanation_saved_percentage = 0.0
         explanation_saved_percentage_list = []
         for i in range(0, len(weights)):
