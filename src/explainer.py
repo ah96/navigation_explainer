@@ -884,29 +884,56 @@ def EvaluateLIMEvsGAN():
     with open("times.csv", "a") as myfile:
             myfile.write("lime,gan\n")
 
-    with open("segments_percentages.csv", "a") as myfile:
-            myfile.write("color,R,G,B,RGB_after,RGB_from_iter\n")
+    with open("weights.csv", "a") as myfile:
+            myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")        
+
+    with open("segments.csv", "a") as myfile:
+            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
     with open("local_plan.csv", "a") as myfile:
-            myfile.write("color,RGB_after,RGB_from_iter\n")
+            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
     with open("global_plan.csv", "a") as myfile:
-            myfile.write("color,RGB_after,RGB_from_iter\n")
+            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
     with open("obstacles.csv", "a") as myfile:
-            myfile.write("color,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
+            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
     with open("free_space.csv", "a") as myfile:
-            myfile.write("color,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
+            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-    with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write("color,R,G,B,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
+    with open("robot_position.csv", "a") as myfile:
+            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-    with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write("color,R,G,B,RGB_after,RGB_from_iter,color_flip,color_turn,color_other\n")
+    with open("gan_times.csv", "a") as myfile:
+            myfile.write("predict_time\n")
 
-    #with open("robot_position.csv", "w") as myfile:
-    #        myfile.write("color,RGB_after,RGB_from_iter\n")
+    with open("R_avg_lime.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("R_avg_gan.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("R_diff.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("G_avg_lime.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("G_avg_gan.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("G_diff.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("B_avg_lime.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("B_avg_gan.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+    with open("B_diff.csv", "a") as myfile:
+        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
     num_iter = 1
     
@@ -920,7 +947,7 @@ def EvaluateLIMEvsGAN():
     exp_IDs_list_test_ds1 = [5, 23, 44, 52, 75, 88, 94, 104, 118, 128, 136, 150, 151, 189, 190, 209, 223, 225, 229, 242, 252]
     exp_IDs_list_test_ds2 = [6, 9, 12, 13, 22, 45, 63, 75, 103, 105, 109, 123, 126, 128, 150, 153, 154, 161, 166, 167, 182, 203, 214, 215, 220, 234, 237, 247, 249, 252, 257, 258, 262, 271, 275, 277, 278, 294, 337, 348, 366, 373, 387, 390, 391, 413, 420, 426, 430, 436, 441, 445, 446, 451, 455, 466, 468, 482, 492, 495, 505, 507, 514, 525, 580, 585, 599, 602, 612, 620, 625, 639, 640, 641, 667, 676, 688, 690, 698]
         
-    for num in range(0, len(exp_IDs_list_test_ds1)):
+    for num in range(10, 11):
     #for num in range(0, len(exp_IDs_list_test_ds2)):
     #for num in range(0, num_iter):
         print('iteration: ', num)
@@ -962,19 +989,6 @@ def EvaluateLIMEvsGAN():
         # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
         image = image * 1.0
         
-        '''
-        gray_shade = 180
-        white_shade = 255
-        from skimage.color import gray2rgb
-        image = gray2rgb(image)
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
-                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
-                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
-                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade
-        '''
-
         #'''
         # get costmap info
         costmap_info_tmp = local_costmap_info.iloc[index, :]
@@ -1109,41 +1123,35 @@ def EvaluateLIMEvsGAN():
         exp_gan = np.array(exp_gan_orig)
         #print('exp_gan.shape: ', exp_gan.shape)
 
-        '''
-        pd.DataFrame(exp_lime[:,:,0]).to_csv("exp_lime_R.csv")
-        pd.DataFrame(exp_lime[:,:,1]).to_csv("exp_lime_G.csv")
-        pd.DataFrame(exp_lime[:,:,2]).to_csv("exp_lime_B.csv")
-        '''
-
-        '''
-        pd.DataFrame(exp_gan[:,:,0]).to_csv("exp_gan_R.csv")
-        pd.DataFrame(exp_gan[:,:,1]).to_csv("exp_gan_G.csv")
-        pd.DataFrame(exp_gan[:,:,2]).to_csv("exp_gan_B.csv")
-        '''
+        #exp_lime = exp_nav.temp_img.astype(np.uint8)
 
         #seg_unique = np.unique(segments)
         #print('seg_unique = ', seg_unique)
 
-        # weighted eval
+        # SEGMENTS eval STARTS
+        weights = []
+        weights_raw = []
+
         color_coverage_percent = []
 
-        weights = []
+        R_abs_list_lime = []
+        G_abs_list_lime = []
+        B_abs_list_lime = []
 
-        diff_R_rel_list = []
-        diff_G_rel_list = []
-        diff_B_rel_list = []
+        R_abs_list_gan = []
+        G_abs_list_gan = []
+        B_abs_list_gan = []
 
         diff_R_abs_list = []
         diff_G_abs_list = []
         diff_B_abs_list = []
 
-        diff_rel_list = []
-        diff_abs_list = []
+        diff_abs_from_RGB_list = []
         
-        avg_diff_list = []
+        channel_avg_diff_list = []
         
-        for e in exp_nav.exp[1:]:
-            print('e = ', e)
+        for e in exp_nav.exp[0:-1]:
+            print('\ne = ', e)
             # if weight is greater than 0
             if abs(e[1]) >= 0.0:
                 
@@ -1155,84 +1163,64 @@ def EvaluateLIMEvsGAN():
                 same_color_count = 0
                 color_count = 0
 
-                diff_R_rel = 0
-                diff_G_rel = 0
-                diff_B_rel = 0
+                R_abs_lime = 0
+                G_abs_lime = 0
+                B_abs_lime = 0
+
+                R_abs_gan = 0
+                G_abs_gan = 0
+                B_abs_gan = 0
 
                 diff_R_abs = 0
                 diff_G_abs = 0
                 diff_B_abs = 0
 
-                avg_diff = 0
+                channel_avg_diff = 0
 
+                # add segment weight
                 weights.append(abs(e[1]))
+                weights_raw.append(e[1])
 
                 for row in range(0, segments.shape[0]):
                     for columns in range(0, segments.shape[1]):
+                        # if a segment pixel
                         if segments[row, columns] == e[0]:
-                            lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                            gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                            if lime_color_name == gan_color_name:
-                                same_color_count += 1
+                            if row not in local_plan_y_list and row not in plan_y_list and row != y_odom_index[0] and columns not in local_plan_x_list and columns not in plan_x_list and columns != x_odom_index[0]:
+    
+                                # increase counts
+                                count_R += 1
+                                count_G += 1
+                                count_B += 1
+                                count_avg += 1
+                                color_count += 1
 
-                            '''
-                            print('lime_color_name: ', lime_color_name)
-                            print('gan_color_name: ', gan_color_name)
-                            print('\n')
-                            '''    
+                                # compare colors
+                                lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                                gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                                if lime_color_name == gan_color_name:
+                                    same_color_count += 1
 
-                            color_count += 1
-                            count_R += 1
-                            count_G += 1
-                            count_B += 1
-                            count_avg += 1
-
-
-                            # relative R channel difference
-                            if int(exp_lime[row, columns, 0]) != 0:
-                                diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
-                                diff_R_rel += diff_R_abs / int(exp_lime[row, columns, 0])
-                            else:
-                                #print('\n' + str(abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))))
-                                diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
-                                if diff_R_abs != 0:
-                                    diff_R_rel += 1
-                                else:
-                                    diff_R_rel += 0     
-
-                            # relative G channel difference
-                            if int(exp_lime[row, columns, 1]) != 0:
-                                diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
-                                diff_G_rel += diff_G_abs / int(exp_lime[row, columns, 1])
-                            else:
-                                diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
-                                if diff_G_abs != 0:
-                                    diff_G_rel += 1
-                                else:
-                                    diff_G_rel += 0        
-                            
-                            # relative B channel difference
-                            if int(exp_lime[row, columns, 2]) != 0:
-                                diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
-                                diff_B_rel += diff_B_abs / int(exp_lime[row, columns, 2]) 
-                            else:
-                                diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
-                                if diff_B_abs != 0:
-                                    diff_B_rel += 1
-                                else:
-                                    diff_B_rel += 0    
-
-                            #avg_avg += (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-
-                            temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                            if temp_avg_sum != 0:
-                                gan_avg = (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
-                                lime_avg = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                                avg_diff += abs(gan_avg - lime_avg) / lime_avg 
-                            else:
-                                gan_avg = (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
-                                lime_avg = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                                avg_diff += abs(gan_avg - lime_avg)   
+                                # R channel
+                                R_abs_lime += float(exp_lime[row, columns, 0])
+                                R_abs_gan += float(exp_gan[row, columns, 0])
+                                diff_R_abs += abs(float(exp_gan[row, columns, 0]) - float(exp_lime[row, columns, 0]))
+                                
+                                # G channel
+                                G_abs_lime += float(exp_lime[row, columns, 1])
+                                G_abs_gan += float(exp_gan[row, columns, 1])
+                                diff_G_abs = abs(float(exp_gan[row, columns, 1]) - float(exp_lime[row, columns, 1]))
+                                    
+                                # B channel
+                                print('\nexp_lime[row, columns, 2] = ', exp_lime[row, columns, 2])
+                                B_abs_lime += float(exp_lime[row, columns, 2])
+                                B_abs_gan += float(exp_gan[row, columns, 2])
+                                diff_B_abs = abs(float(exp_gan[row, columns, 2]) - float(exp_lime[row, columns, 2]))
+                                
+                                # average channel intensity
+                                channel_avg_lime = float(float(exp_lime[row, columns, 0]) + float(exp_lime[row, columns, 1]) + float(exp_lime[row, columns, 2])) / 3
+                                channel_avg_gan = float(float(exp_gan[row, columns, 0]) + float(exp_gan[row, columns, 1]) + float(exp_gan[row, columns, 2])) / 3
+                                
+                                channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)  
 
                 if count_R == 0:
                     count_R = 1
@@ -1250,33 +1238,40 @@ def EvaluateLIMEvsGAN():
                     color_count = 1    
 
                 color_coverage_percent.append(100 * same_color_count / color_count)
-                
+
+                R_abs_lime /= count_R
+                G_abs_lime /= count_G
+                B_abs_lime /= count_B
+
+                R_abs_gan /= count_R
+                G_abs_gan /= count_G
+                B_abs_gan /= count_B
+
+                if B_abs_lime > 0:
+                    B_abs_gan = abs(B_abs_gan - B_abs_lime)
+                    B_abs_lime = 0
+
                 diff_R_abs /= count_R
                 diff_G_abs /= count_G
                 diff_B_abs /= count_B
 
-                diff_R_rel /= count_R
-                diff_G_rel /= count_G
-                diff_B_rel /= count_B
+                R_abs_list_lime.append(R_abs_lime)
+                G_abs_list_lime.append(G_abs_lime)
+                B_abs_list_lime.append(B_abs_lime)
 
-                print('diff_R_rel = ', diff_R_rel)
-                
+                R_abs_list_gan.append(R_abs_gan)
+                G_abs_list_gan.append(G_abs_gan)
+                B_abs_list_gan.append(B_abs_gan)
+
                 diff_R_abs_list.append(diff_R_abs)
                 diff_G_abs_list.append(diff_G_abs)
                 diff_B_abs_list.append(diff_B_abs)
 
-                diff_R_rel_list.append(diff_R_rel)
-                diff_G_rel_list.append(diff_G_rel)
-                diff_B_rel_list.append(diff_B_rel)
+                diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+                diff_abs_from_RGB_list.append(diff_abs_from_RGB)
 
-                diff = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
-                diff_abs_list.append(diff)
-
-                diff = (diff_R_rel + diff_G_rel + diff_B_rel) / 3
-                diff_rel_list.append(diff)
-
-                avg_diff /= count_avg
-                avg_diff_list.append(avg_diff)
+                channel_avg_diff /= count_avg
+                channel_avg_diff_list.append(channel_avg_diff)
 
         weights_sum = sum(weights)
 
@@ -1294,75 +1289,72 @@ def EvaluateLIMEvsGAN():
             explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
             explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
             weights_percentage.append(100 * weights[i] / weights_sum)
+
+        print('\ndiff_R_abs_list = ', diff_R_abs_list)
+        print('\ndiff_G_abs_list = ', diff_G_abs_list)
+        print('\ndiff_B_abs_list = ', diff_B_abs_list)
+
+        with open("weights.csv", "a") as myfile:
+            for id in range(0, len(weights_raw) - 1):
+                myfile.write(str(weights_raw[id]) + ",")
+            myfile.write(str(weights_raw[-1]) + "\n")
+
+        with open("R_avg_lime.csv", "a") as myfile:
+            for id in range(0, len(R_abs_list_lime) - 1):
+                myfile.write(str(R_abs_list_lime[id]) + ",")
+            myfile.write(str(R_abs_list_lime[-1]) + "\n")
+
+        with open("G_avg_lime.csv", "a") as myfile:
+            for id in range(0, len(G_abs_list_lime) - 1):
+                myfile.write(str(G_abs_list_lime[id]) + ",")
+            myfile.write(str(G_abs_list_lime[-1]) + "\n")
+
+        with open("B_avg_lime.csv", "a") as myfile:
+            for id in range(0, len(B_abs_list_lime) - 1):
+                myfile.write(str(B_abs_list_lime[id]) + ",")
+            myfile.write(str(B_abs_list_lime[-1]) + "\n")
+
+        with open("R_avg_gan.csv", "a") as myfile:
+            for id in range(0, len(R_abs_list_gan) - 1):
+                myfile.write(str(R_abs_list_gan[id]) + ",")
+            myfile.write(str(R_abs_list_gan[-1]) + "\n")
+
+        with open("G_avg_gan.csv", "a") as myfile:
+            for id in range(0, len(G_abs_list_gan) - 1):
+                myfile.write(str(G_abs_list_gan[id]) + ",")
+            myfile.write(str(G_abs_list_gan[-1]) + "\n")
+
+        with open("B_avg_gan.csv", "a") as myfile:
+            for id in range(0, len(B_abs_list_gan) - 1):
+                myfile.write(str(B_abs_list_gan[id]) + ",")
+            myfile.write(str(B_abs_list_gan[-1]) + "\n")
+
+        with open("R_diff.csv", "a") as myfile:
+            for id in range(0, len( diff_R_abs_list) - 1):
+                myfile.write(str( diff_R_abs_list[id]) + ",")
+            myfile.write(str( diff_R_abs_list[-1]) + "\n")
+
+        with open("G_diff.csv", "a") as myfile:
+            for id in range(0, len( diff_G_abs_list) - 1):
+                myfile.write(str( diff_G_abs_list[id]) + ",")
+            myfile.write(str( diff_G_abs_list[-1]) + "\n")
+
+        with open("B_diff.csv", "a") as myfile:
+            for id in range(0, len( diff_B_abs_list) - 1):
+                myfile.write(str( diff_B_abs_list[id]) + ",")
+            myfile.write(str( diff_B_abs_list[-1]) + "\n")
+
+        with open("segments.csv", "a") as myfile:
+            myfile.write(str(explanation_saved_percentage) + ",")
+            myfile.write(str(sum(diff_R_abs_list) / len(diff_R_abs_list)) + ",")
+            myfile.write(str(sum(diff_G_abs_list) / len(diff_G_abs_list)) + ",")
+            myfile.write(str(sum(diff_B_abs_list) / len(diff_B_abs_list)) + ",")
+            myfile.write(str(sum(diff_abs_from_RGB_list) / len(diff_abs_from_RGB_list)) + ",") 
+            myfile.write(str(sum(channel_avg_diff_list) / len(channel_avg_diff_list)) + "\n")
+        # SEGMENTS eval ENDS
+
     
-        with open("segments_percentages.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_R_rel_list)):
-            avg_similarity_percentage.append(100 * (diff_R_rel_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("segments_percentages.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",") 
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_G_rel_list)):
-            avg_similarity_percentage.append(100 * (diff_G_rel_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("segments_percentages.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_B_rel_list)):
-            avg_similarity_percentage.append(100 * (diff_B_rel_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("segments_percentages.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")           
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_rel_list)):
-            avg_similarity_percentage.append(100 * (diff_rel_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)
-
-        with open("segments_percentages.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_avg_similarity_percentage = []
-        for i in range(0, len(avg_diff_list)):
-            avg_avg_similarity_percentage.append(100 * (avg_diff_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_avg_similarity_percentage[i] * weights[i] / weights_sum)
-
-        with open("segments_percentages.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + "\n")
-
-
-
-        # LOCAL PLAN eval 
+        # LOCAL PLAN eval STARTS 
         count_R = 0
         count_G = 0
         count_B = 0
@@ -1370,60 +1362,44 @@ def EvaluateLIMEvsGAN():
 
         same_color_count = 0
         color_count = 0
-        
-        avg_R = 0
-        avg_G = 0
-        avg_B = 0
 
-        diff_R = 0
-        diff_G = 0
-        diff_B = 0
+        diff_R_abs = 0
+        diff_G_abs = 0
+        diff_B_abs = 0
 
-        avg_avg = 0
-        avg_diff = 0
+        channel_avg_diff = 0
 
         for i in range(0, len(local_plan_x_list)):
             row = local_plan_y_list[i]
             columns = local_plan_x_list[i]
 
-            '''
-            print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
-            print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
-            print('\n')
-            '''
+            # increase counts
+            count_R += 1
+            count_G += 1
+            count_B += 1
+            count_avg += 1
+            color_count += 1
 
+            # compare colors
             lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
             gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
             if lime_color_name == gan_color_name:
                 same_color_count += 1
 
-            color_count += 1
-            count_R += 1
-            count_G += 1
-            count_B += 1
-            count_avg += 1
-
-            if int(exp_lime[row, columns, 0]) != 0:
-                diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0])) / int(exp_lime[row, columns, 0])
-            else:
-                count_R -= 1     
-
-            if int(exp_lime[row, columns, 1]) != 0:
-                diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1])) / int(exp_lime[row, columns, 1])
-            else:
-                count_G -= 1    
+            # absolute R channel difference
+            diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                
+            # absolute G channel difference
+            diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                
+            # absolute B channel difference
+            diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
             
-            if int(exp_lime[row, columns, 2]) != 0:
-                diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) / int(exp_lime[row, columns, 2]) 
-            else:
-                count_B -= 1    
-
-            temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-            if temp_avg_sum != 0:
-                avg_diff += abs( (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
-                - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3 ) / ( int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2]) ) / 3
-            else:
-                count_avg -= 1
+            # average channel intensity
+            channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+            channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+            
+            channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
 
         if count_R == 0:
             count_R = 1
@@ -1442,22 +1418,25 @@ def EvaluateLIMEvsGAN():
 
         color_coverage_percent = 100 * same_color_count / color_count
         
-        diff_R /= count_R
-        diff_G /= count_G
-        diff_B /= count_B
-        
-        diff_R_rel_list.append(diff_R)
-        diff_G_rel_list.append(diff_G)
-        diff_B_rel_list.append(diff_B)
+        diff_R_abs /= count_R
+        diff_G_abs /= count_G
+        diff_B_abs /= count_B
 
-        diff = (diff_R + diff_G + diff_B) / 3
+        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
 
-        avg_diff /= count_avg
+        channel_avg_diff /= count_avg
+
         with open("local_plan.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0 - diff)) + "," + str(100 * (1.0 - avg_diff)) + "\n")
+            myfile.write(str(color_coverage_percent) + ",")
+            myfile.write(str(diff_R_abs) + ",")
+            myfile.write(str(diff_G_abs) + ",")
+            myfile.write(str(diff_B_abs) + ",")
+            myfile.write(str(diff_abs_from_RGB) + ",") 
+            myfile.write(str(channel_avg_diff) + "\n")
+        # LOCAL PLAN eval ENDS
 
 
-        # GLOBAL PLAN eval 
+        # GLOBAL PLAN eval STARTS 
         count_R = 0
         count_G = 0
         count_B = 0
@@ -1465,60 +1444,44 @@ def EvaluateLIMEvsGAN():
 
         same_color_count = 0
         color_count = 0
-        
-        avg_R = 0
-        avg_G = 0
-        avg_B = 0
 
-        diff_R = 0
-        diff_G = 0
-        diff_B = 0
+        diff_R_abs = 0
+        diff_G_abs = 0
+        diff_B_abs = 0
 
-        avg_avg = 0
-        avg_diff = 0
+        channel_avg_diff = 0
 
         for i in range(0, len(plan_x_list)):
             row = plan_y_list[i]
             columns = plan_x_list[i]
-            
-            '''
-            print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
-            print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
-            print('\n')
-            '''
 
+            # increase counts
+            count_R += 1
+            count_G += 1
+            count_B += 1
+            count_avg += 1
+            color_count += 1
+
+            # compare colors
             lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
             gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
             if lime_color_name == gan_color_name:
                 same_color_count += 1
 
-            color_count += 1
-            count_R += 1
-            count_G += 1
-            count_B += 1
-            count_avg += 1
-        
-            if int(exp_lime[row, columns, 0]) != 0:
-                diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0])) / int(exp_lime[row, columns, 0])
-            else:
-                count_R -= 1     
-
-            if int(exp_lime[row, columns, 1]) != 0:
-                diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1])) / int(exp_lime[row, columns, 1])
-            else:
-                count_G -= 1    
+            # absolute R channel difference
+            diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                
+            # absolute G channel difference
+            diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                
+            # absolute B channel difference
+            diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
             
-            if int(exp_lime[row, columns, 2]) != 0:
-                diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) / int(exp_lime[row, columns, 2]) 
-            else:
-                count_B -= 1    
-
-            temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-            if temp_avg_sum != 0:
-                avg_diff += abs( (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
-                - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3 ) / ( int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2]) ) / 3
-            else:
-                count_avg -= 1
+            # average channel intensity
+            channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+            channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+            
+            channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
 
         if count_R == 0:
             count_R = 1
@@ -1537,22 +1500,25 @@ def EvaluateLIMEvsGAN():
 
         color_coverage_percent = 100 * same_color_count / color_count
         
-        diff_R /= count_R
-        diff_G /= count_G
-        diff_B /= count_B
-        
-        diff_R_rel_list.append(diff_R)
-        diff_G_rel_list.append(diff_G)
-        diff_B_rel_list.append(diff_B)
+        diff_R_abs /= count_R
+        diff_G_abs /= count_G
+        diff_B_abs /= count_B
 
-        diff = (diff_R + diff_G + diff_B) / 3
+        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
 
-        avg_diff /= count_avg
+        channel_avg_diff /= count_avg
+
         with open("global_plan.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0 - diff)) + "," + str(100 * (1.0 - avg_diff)) + "\n")
+            myfile.write(str(color_coverage_percent) + ",")
+            myfile.write(str(diff_R_abs) + ",")
+            myfile.write(str(diff_G_abs) + ",")
+            myfile.write(str(diff_B_abs) + ",")
+            myfile.write(str(diff_abs_from_RGB) + ",") 
+            myfile.write(str(channel_avg_diff) + "\n")
+        # GLOBAL PLAN eval ENDS
 
 
-        # OBSTACLES eval 
+        # ROBOT POSITION eval STARTS 
         count_R = 0
         count_G = 0
         count_B = 0
@@ -1561,21 +1527,96 @@ def EvaluateLIMEvsGAN():
         same_color_count = 0
         color_count = 0
 
-        color_change_count = 0
-        color_flip_count = 0
-        color_turn_count = 0
-        color_other_count = 0
+        diff_R_abs = 0
+        diff_G_abs = 0
+        diff_B_abs = 0
+
+        channel_avg_diff = 0
+
+        for i in range(0, 1):
+            row = y_odom_index[0]
+            print('\ny_odom_index = ', y_odom_index)
+            columns = x_odom_index[0]
+            print('\nx_odom_index = ', x_odom_index)
+
+            # increase counts
+            count_R += 1
+            count_G += 1
+            count_B += 1
+            count_avg += 1
+            color_count += 1
+
+            # compare colors
+            lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+            gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+            if lime_color_name == gan_color_name:
+                same_color_count += 1
+
+            # absolute R channel difference
+            diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                
+            # absolute G channel difference
+            diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                
+            # absolute B channel difference
+            diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+            
+            # average channel intensity
+            channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+            channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+            
+            channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
+
+        if count_R == 0:
+            count_R = 1
+
+        if count_G == 0:
+            count_G = 1
+
+        if count_B == 0:
+            count_B = 1
+
+        if count_avg == 0:
+            count_avg = 1
+
+        if color_count == 0:
+            color_count = 1    
+
+        color_coverage_percent = 100 * same_color_count / color_count
         
-        avg_R = 0
-        avg_G = 0
-        avg_B = 0
+        diff_R_abs /= count_R
+        diff_G_abs /= count_G
+        diff_B_abs /= count_B
 
-        diff_R = 0
-        diff_G = 0
-        diff_B = 0
+        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
 
-        avg_avg = 0
-        avg_diff = 0
+        channel_avg_diff /= count_avg
+
+        with open("robot_position.csv", "a") as myfile:
+            myfile.write(str(color_coverage_percent) + ",")
+            myfile.write(str(diff_R_abs) + ",")
+            myfile.write(str(diff_G_abs) + ",")
+            myfile.write(str(diff_B_abs) + ",")
+            myfile.write(str(diff_abs_from_RGB) + ",") 
+            myfile.write(str(channel_avg_diff) + "\n")
+        # ROBOT POSITION eval ENDS
+
+
+        
+        # OBSTACLES eval STARTS
+        count_R = 0
+        count_G = 0
+        count_B = 0
+        count_avg = 0
+
+        same_color_count = 0
+        color_count = 0
+
+        diff_R_abs = 0
+        diff_G_abs = 0
+        diff_B_abs = 0
+
+        channel_avg_diff = 0
 
         for i in range(0, image.shape[0]):
             for j in range(0, image.shape[1]):
@@ -1583,69 +1624,33 @@ def EvaluateLIMEvsGAN():
                     row = i
                     columns = j
                     
-                    '''
-                    print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
-                    print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
-                    print('\n')
-                    '''
-
-                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                    if lime_color_name == gan_color_name:
-                        same_color_count += 1
-                    else:
-                        # if positive
-                        if lime_color_name == 'aquamarine':
-                            color_change_count += 1
-                            if gan_color_name == 'violet':
-                                color_flip_count += 1
-                            elif gan_color_name == 'white':
-                                color_turn_count += 1
-                            else:
-                                color_other_count += 1    
-                        # if negative        
-                        elif lime_color_name == 'violet':
-                            color_change_count += 1
-                            if gan_color_name == 'aquamarine':
-                                color_flip_count += 1
-                            elif gan_color_name == 'white':
-                                color_turn_count += 1
-                            else:
-                                color_other_count += 1
-                        elif lime_color_name == 'white':
-                            color_change_count += 1
-                            if gan_color_name == 'aquamarine' or gan_color_name == 'violet':
-                                color_turn_count += 1
-                            else:
-                                color_other_count += 1                                        
-
-                    color_count += 1
+                    # increase counts
                     count_R += 1
                     count_G += 1
                     count_B += 1
                     count_avg += 1
+                    color_count += 1
 
-                    if int(exp_lime[row, columns, 0]) != 0:
-                        diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0])) / int(exp_lime[row, columns, 0])
-                    else:
-                        count_R -= 1     
+                    # compare colors
+                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                    if lime_color_name == gan_color_name:
+                        same_color_count += 1
 
-                    if int(exp_lime[row, columns, 1]) != 0:
-                        diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1])) / int(exp_lime[row, columns, 1])
-                    else:
-                        count_G -= 1    
+                    # absolute R channel difference
+                    diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                        
+                    # absolute G channel difference
+                    diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                        
+                    # absolute B channel difference
+                    diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
                     
-                    if int(exp_lime[row, columns, 2]) != 0:
-                        diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) / int(exp_lime[row, columns, 2]) 
-                    else:
-                        count_B -= 1    
-
-                    temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                    if temp_avg_sum != 0:
-                        avg_diff += abs( (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
-                        - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3 ) / ( int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2]) ) / 3
-                    else:
-                        count_avg -= 1
+                    # average channel intensity
+                    channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                    channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                    
+                    channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)                                        
 
         if count_R == 0:
             count_R = 1
@@ -1663,27 +1668,26 @@ def EvaluateLIMEvsGAN():
             color_count = 1    
 
         color_coverage_percent = 100 * same_color_count / color_count
-
-        color_flip_percent = 100 * color_flip_count / color_count #color_change_count
-        color_turn_percent = 100 * color_turn_count / color_count #color_change_count
-        color_other_percent = 100 * color_other_count / color_count #color_change_count
         
-        diff_R /= count_R
-        diff_G /= count_G
-        diff_B /= count_B
-        
-        diff_R_rel_list.append(diff_R)
-        diff_G_rel_list.append(diff_G)
-        diff_B_rel_list.append(diff_B)
+        diff_R_abs /= count_R
+        diff_G_abs /= count_G
+        diff_B_abs /= count_B
 
-        diff = (diff_R + diff_G + diff_B) / 3
+        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
 
-        avg_diff /= count_avg
+        channel_avg_diff /= count_avg
+
         with open("obstacles.csv", "a") as myfile:
-                                myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0 - diff)) + "," + str(100 * (1.0 - avg_diff)) + ","  + str(color_flip_percent) + ","  + str(color_turn_percent) + "," + str(color_other_percent) + "\n")
+            myfile.write(str(color_coverage_percent) + ",")
+            myfile.write(str(diff_R_abs) + ",")
+            myfile.write(str(diff_G_abs) + ",")
+            myfile.write(str(diff_B_abs) + ",")
+            myfile.write(str(diff_abs_from_RGB) + ",") 
+            myfile.write(str(channel_avg_diff) + "\n")
+        # OBSTACLES eval ENDS
 
 
-        # FREE SPACE eval 
+        # FREE SPACE eval STARTS
         count_R = 0
         count_G = 0
         count_B = 0
@@ -1692,21 +1696,11 @@ def EvaluateLIMEvsGAN():
         same_color_count = 0
         color_count = 0
 
-        color_change_count = 0
-        color_flip_count = 0
-        color_turn_count = 0
-        color_other_count = 0
-        
-        avg_R = 0
-        avg_G = 0
-        avg_B = 0
+        diff_R_abs = 0
+        diff_G_abs = 0
+        diff_B_abs = 0
 
-        diff_R = 0
-        diff_G = 0
-        diff_B = 0
-
-        avg_avg = 0
-        avg_diff = 0
+        channel_avg_diff = 0
 
         for i in range(0, image.shape[0]):
             for j in range(0, image.shape[1]):
@@ -1714,69 +1708,33 @@ def EvaluateLIMEvsGAN():
                     row = i
                     columns = j
                     
-                    '''
-                    print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
-                    print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
-                    print('\n')
-                    '''
-
-                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                    if lime_color_name == gan_color_name:
-                        same_color_count += 1
-                    else:
-                        # if positive
-                        if lime_color_name == 'lightgreen':
-                            color_change_count += 1
-                            if gan_color_name == 'salmon':
-                                color_flip_count += 1
-                            elif gan_color_name == 'gray':
-                                color_turn_count += 1
-                            else:
-                                color_other_count += 1    
-                        # if negative        
-                        elif lime_color_name == 'salmon':
-                            color_change_count += 1
-                            if gan_color_name == 'lightgreen':
-                                color_flip_count += 1
-                            elif gan_color_name == 'gray':
-                                color_turn_count += 1
-                            else:
-                                color_other_count += 1
-                        elif lime_color_name == 'gray':
-                            color_change_count += 1
-                            if gan_color_name == 'lightgreen' or gan_color_name == 'salmon':
-                                color_turn_count += 1
-                            else:
-                                color_other_count += 1    
-
-                    color_count += 1
+                    # increase counts
                     count_R += 1
                     count_G += 1
                     count_B += 1
                     count_avg += 1
+                    color_count += 1
 
-                    if int(exp_lime[row, columns, 0]) != 0:
-                        diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0])) / int(exp_lime[row, columns, 0])
-                    else:
-                        count_R -= 1     
+                    # compare colors
+                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                    if lime_color_name == gan_color_name:
+                        same_color_count += 1
 
-                    if int(exp_lime[row, columns, 1]) != 0:
-                        diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1])) / int(exp_lime[row, columns, 1])
-                    else:
-                        count_G -= 1    
+                    # absolute R channel difference
+                    diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                        
+                    # absolute G channel difference
+                    diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                        
+                    # absolute B channel difference
+                    diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
                     
-                    if int(exp_lime[row, columns, 2]) != 0:
-                        diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) / int(exp_lime[row, columns, 2]) 
-                    else:
-                        count_B -= 1    
-
-                    temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                    if temp_avg_sum != 0:
-                        avg_diff += abs( (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
-                        - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3 ) / ( int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2]) ) / 3
-                    else:
-                        count_avg -= 1
+                    # average channel intensity
+                    channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                    channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                    
+                    channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)    
 
         if count_R == 0:
             count_R = 1
@@ -1794,586 +1752,23 @@ def EvaluateLIMEvsGAN():
             color_count = 1    
 
         color_coverage_percent = 100 * same_color_count / color_count
-        color_flip_percent = 100 * color_flip_count / color_count #color_change_count
-        color_turn_percent = 100 * color_turn_count / color_count #color_change_count
-        color_other_percent = 100 * color_other_count / color_count #color_change_count
         
-        diff_R /= count_R
-        diff_G /= count_G
-        diff_B /= count_B
-        
-        diff_R_rel_list.append(diff_R)
-        diff_G_rel_list.append(diff_G)
-        diff_B_rel_list.append(diff_B)
+        diff_R_abs /= count_R
+        diff_G_abs /= count_G
+        diff_B_abs /= count_B
 
-        diff = (diff_R + diff_G + diff_B) / 3
+        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
 
-        avg_diff /= count_avg
-        
+        channel_avg_diff /= count_avg
+
         with open("free_space.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + "," + str(100 * (1.0 - diff)) + "," + str(100 * (1.0 - avg_diff)) + ","  + str(color_flip_percent) + ","  + str(color_turn_percent) + "," + str(color_other_percent) + "\n")
-
-
-
-        # obstacles weighted eval
-        color_coverage_percent = []
-        color_flip_percent = []
-        color_turn_percent = []
-        color_other_percent = []
-
-        weights = []
-
-        avg_R_list = []
-        avg_G_list = []
-        avg_B_list = []
-
-        diff_R_list = []
-        diff_G_list = []
-        diff_B_list = []
-
-        diff_list = []
-        
-        avg_diff_list = []
-        
-        for e in exp_nav.exp:
-            if abs(e[1]) >= 0.0:
-                
-                count_R = 0
-                count_G = 0
-                count_B = 0
-                count_avg = 0
-
-                same_color_count = 0
-                color_count = 0
-
-                color_change_count = 0
-                color_flip_count = 0
-                color_turn_count = 0
-                color_other_count = 0
-                
-                avg_R = 0
-                avg_G = 0
-                avg_B = 0
-
-                diff_R = 0
-                diff_G = 0
-                diff_B = 0
-
-                avg_avg = 0
-                avg_diff = 0
-
-                weights.append(abs(e[1]))
-
-                obstacle = False
-
-                for row in range(0, segments.shape[0]):
-                    for columns in range(0, segments.shape[1]):
-                        if segments[row, columns] == e[0]:
-                            if image[row, columns] == 99:
-                                obstacle = True
-                                '''
-                                print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
-                                print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
-                                print('\n')
-                                '''
-
-                                lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                                gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                                if lime_color_name == gan_color_name:
-                                    same_color_count += 1
-                                else:
-                                    # if positive
-                                    if lime_color_name == 'aquamarine':
-                                        color_change_count += 1
-                                        if gan_color_name == 'violet':
-                                            color_flip_count += 1
-                                        elif gan_color_name == 'white':
-                                            color_turn_count += 1
-                                        else:
-                                            color_other_count += 1    
-                                    # if negative        
-                                    elif lime_color_name == 'violet':
-                                        color_change_count += 1
-                                        if gan_color_name == 'aquamarine':
-                                            color_flip_count += 1
-                                        elif gan_color_name == 'white':
-                                            color_turn_count += 1
-                                        else:
-                                            color_other_count += 1
-                                    elif lime_color_name == 'white':
-                                        color_change_count += 1
-                                        if gan_color_name == 'aquamarine' or gan_color_name == 'violet':
-                                            color_turn_count += 1
-                                        else:
-                                            color_other_count += 1                                        
-
-                                color_count += 1
-                                count_R += 1
-                                count_G += 1
-                                count_B += 1
-                                count_avg += 1
-            
-                                if int(exp_lime[row, columns, 0]) != 0:
-                                    diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0])) / int(exp_lime[row, columns, 0])
-                                else:
-                                    count_R -= 1     
-
-                                if int(exp_lime[row, columns, 1]) != 0:
-                                    diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1])) / int(exp_lime[row, columns, 1])
-                                else:
-                                    count_G -= 1    
-                                
-                                if int(exp_lime[row, columns, 2]) != 0:
-                                    diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) / int(exp_lime[row, columns, 2]) 
-                                else:
-                                    count_B -= 1    
-
-                                temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                                if temp_avg_sum != 0:
-                                    avg_diff += abs( (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
-                                    - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3 ) / ( int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2]) ) / 3
-                                else:
-                                    count_avg -= 1   
-
-                if obstacle == True:
-                    if count_R == 0:
-                        count_R = 1
-
-                    if count_G == 0:
-                        count_G = 1
-
-                    if count_B == 0:
-                        count_B = 1
-
-                    if count_avg == 0:
-                        count_avg = 1
-
-                    if color_count == 0:
-                        color_count = 1    
-
-                    color_coverage_percent.append(100 * same_color_count / color_count)
-                    color_flip_percent.append(100 * color_flip_count / color_count)
-                    color_turn_percent.append(100 * color_turn_count / color_count)
-                    color_other_percent.append(100 * color_other_count / color_count)
-                    
-                    diff_R /= count_R
-                    diff_G /= count_G
-                    diff_B /= count_B
-                    
-                    diff_R_rel_list.append(diff_R)
-                    diff_G_rel_list.append(diff_G)
-                    diff_B_rel_list.append(diff_B)
-
-                    diff = (diff_R + diff_G + diff_B) / 3
-                    diff_list.append(diff)
-
-                    avg_diff /= count_avg
-                    avg_diff_list.append(avg_diff)
-
-                else:
-                    color_coverage_percent.append(0.0)
-                    color_flip_percent.append(0.0)
-                    color_turn_percent.append(0.0)
-                    color_other_percent.append(0.0)
-                    diff_R_rel_list.append(1.0)
-                    diff_G_rel_list.append(1.0)
-                    diff_B_rel_list.append(1.0)
-                    diff_list.append(1.0)
-                    avg_diff_list.append(1.0)    
-
-        weights_sum = sum(weights)
-
-        if weights_sum == 0.0:
-            weights = [1.0] * len(weights)
-            weights_sum = sum(weights)
-        
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_R_rel_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_R_rel_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",") 
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_G_rel_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_G_rel_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_B_rel_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_B_rel_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")           
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)
-
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_avg_similarity_percentage = []
-        for i in range(0, len(avg_diff_list)):
-            avg_avg_similarity_percentage.append(100 * (1.0 - avg_diff_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_avg_similarity_percentage[i] * weights[i] / weights_sum)
-
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_flip_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_flip_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_turn_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_turn_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_other_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_other_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("obstacles_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + "\n")
-
-
-        # free space weighted eval
-        color_coverage_percent = []
-        color_flip_percent = []
-        color_turn_percent = []
-        color_other_percent = []
-
-        weights = []
-
-        avg_R_list = []
-        avg_G_list = []
-        avg_B_list = []
-
-        diff_R_list = []
-        diff_G_list = []
-        diff_B_list = []
-
-        diff_list = []
-        
-        avg_diff_list = []
-        
-        for e in exp_nav.exp:
-            if abs(e[1]) >= 0.0:
-                
-                count_R = 0
-                count_G = 0
-                count_B = 0
-                count_avg = 0
-
-                same_color_count = 0
-                color_count = 0
-
-                color_change_count = 0
-                color_flip_count = 0
-                color_turn_count = 0
-                color_other_count = 0
-                
-                avg_R = 0
-                avg_G = 0
-                avg_B = 0
-
-                diff_R = 0
-                diff_G = 0
-                diff_B = 0
-
-                avg_avg = 0
-                avg_diff = 0
-
-                weights.append(abs(e[1]))
-
-                free_space = False
-
-                for row in range(0, segments.shape[0]):
-                    for columns in range(0, segments.shape[1]):
-                        if segments[row, columns] == e[0]:
-                            if image[row, columns] == 0:
-                                free_space = True
-                                '''
-                                print('lime_color_name: ', convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2])))
-                                print('gan_color_name: ', convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2])))
-                                print('\n')
-                                '''
-
-                                lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                                gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                                if lime_color_name == gan_color_name:
-                                    same_color_count += 1
-                                else:
-                                    # if positive
-                                    if lime_color_name == 'lightgreen':
-                                        color_change_count += 1
-                                        if gan_color_name == 'salmon':
-                                            color_flip_count += 1
-                                        elif gan_color_name == 'gray':
-                                            color_turn_count += 1
-                                        else:
-                                            color_other_count += 1    
-                                    # if negative        
-                                    elif lime_color_name == 'salmon':
-                                        color_change_count += 1
-                                        if gan_color_name == 'lightgreen':
-                                            color_flip_count += 1
-                                        elif gan_color_name == 'gray':
-                                            color_turn_count += 1
-                                        else:
-                                            color_other_count += 1
-                                    elif lime_color_name == 'gray':
-                                        color_change_count += 1
-                                        if gan_color_name == 'lightgreen' or gan_color_name == 'salmon':
-                                            color_turn_count += 1
-                                        else:
-                                            color_other_count += 1                                        
-
-                                color_count += 1
-                                count_R += 1
-                                count_G += 1
-                                count_B += 1
-                                count_avg += 1
-            
-                                if int(exp_lime[row, columns, 0]) != 0:
-                                    diff_R += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0])) / int(exp_lime[row, columns, 0])
-                                else:
-                                    count_R -= 1     
-
-                                if int(exp_lime[row, columns, 1]) != 0:
-                                    diff_G += abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1])) / int(exp_lime[row, columns, 1])
-                                else:
-                                    count_G -= 1    
-                                
-                                if int(exp_lime[row, columns, 2]) != 0:
-                                    diff_B += abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2])) / int(exp_lime[row, columns, 2]) 
-                                else:
-                                    count_B -= 1    
-
-                                temp_avg_sum = (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                                if temp_avg_sum != 0:
-                                    avg_diff += abs( (int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3 
-                                    - (int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3 ) / ( int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2]) ) / 3
-                                else:
-                                    count_avg -= 1   
-
-                if free_space == True:
-                    if count_R == 0:
-                        count_R = 1
-
-                    if count_G == 0:
-                        count_G = 1
-
-                    if count_B == 0:
-                        count_B = 1
-
-                    if count_avg == 0:
-                        count_avg = 1
-
-                    if color_count == 0:
-                        color_count = 1    
-
-                    color_coverage_percent.append(100 * same_color_count / color_count)
-                    color_flip_percent.append(100 * color_flip_count / color_count)
-                    color_turn_percent.append(100 * color_turn_count / color_count)
-                    color_other_percent.append(100 * color_other_count / color_count)
-                    
-                    diff_R /= count_R
-                    diff_G /= count_G
-                    diff_B /= count_B
-                    
-                    diff_R_list.append(diff_R)
-                    diff_G_list.append(diff_G)
-                    diff_B_list.append(diff_B)
-
-                    diff = (diff_R + diff_G + diff_B) / 3
-                    diff_list.append(diff)
-
-                    avg_diff /= count_avg
-                    avg_diff_list.append(avg_diff)
-
-                else:
-                    color_coverage_percent.append(0.0)
-                    color_flip_percent.append(0.0)
-                    color_turn_percent.append(0.0)
-                    color_other_percent.append(0.0)
-                    diff_R_list.append(1.0)
-                    diff_G_list.append(1.0)
-                    diff_B_list.append(1.0)
-                    diff_list.append(1.0)
-                    avg_diff_list.append(1.0)    
-
-        weights_sum = sum(weights)
-
-        if weights_sum == 0.0:
-            weights = [1.0] * len(weights)
-            weights_sum = sum(weights)
-        
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_R_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_R_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",") 
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_G_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_G_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_B_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_B_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)    
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")           
-
-
-        avg_similarity_percentage = []
-        for i in range(0, len(diff_list)):
-            avg_similarity_percentage.append(100 * (1.0 - diff_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_similarity_percentage[i] * weights[i] / weights_sum)
-
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        avg_avg_similarity_percentage = []
-        for i in range(0, len(avg_diff_list)):
-            avg_avg_similarity_percentage.append(100 * (1.0 - avg_diff_list[i]))
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += avg_avg_similarity_percentage[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(avg_avg_similarity_percentage[i] * weights[i] / weights_sum)
-
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_flip_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_flip_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_turn_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_turn_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_other_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_other_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
-    
-        with open("free_space_weighted.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + "\n")
-
+            myfile.write(str(color_coverage_percent) + ",")
+            myfile.write(str(diff_R_abs) + ",")
+            myfile.write(str(diff_G_abs) + ",")
+            myfile.write(str(diff_B_abs) + ",")
+            myfile.write(str(diff_abs_from_RGB) + ",") 
+            myfile.write(str(channel_avg_diff) + "\n")
+        # FREE SPACE eval ENDS
 
 
 ###### TKINTER START ######
