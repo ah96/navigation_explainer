@@ -153,7 +153,7 @@ def Single():
     num_samples = 100
 
     # Data loading
-    from lime_explainer import DataLoader
+    from navigation_explainer import DataLoader
     
     # load input data
     odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
@@ -173,7 +173,7 @@ def Single():
     num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
         
     if explanation_mode == 'tabular' or explanation_mode == 'tabular_costmap':
-        from lime_explainer import DatasetCreator
+        from navigation_explainer import DatasetCreator
     
         # Select input for explanation algorithm
         X = odom.iloc[:, 6:8]  # input for explanation are odometry velocities
@@ -262,7 +262,7 @@ def Single():
         print(y_test)
 
     # Explanation
-    from lime_explainer import ExplainNavigation
+    from navigation_explainer import ExplainNavigation
 
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
@@ -305,7 +305,8 @@ def Evaluate():
     num_samples = 100
 
     # Data loading
-    from lime_explainer import DataLoader
+    from 
+    import DataLoader
     
     # load input data
     odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
@@ -325,7 +326,7 @@ def Evaluate():
     num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
         
     if explanation_mode == 'tabular' or explanation_mode == 'tabular_costmap':
-        from lime_explainer import DatasetCreator
+        from navigation_explainer import DatasetCreator
     
         # Select input for explanation algorithm
         X = odom.iloc[:, 6:8]  # input for explanation are odometry velocities
@@ -414,7 +415,7 @@ def Evaluate():
         print(y_test)
 
     # Explanation
-    from lime_explainer import ExplainNavigation
+    from navigation_explainer import ExplainNavigation
 
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
@@ -464,7 +465,7 @@ def CreateDataset():
     num_samples = 100
 
     # Data loading
-    from lime_explainer import DataLoader
+    from navigation_explainer import DataLoader
     
     # load input data
     odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
@@ -484,7 +485,7 @@ def CreateDataset():
     num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
         
     if explanation_mode == 'tabular' or explanation_mode == 'tabular_costmap':
-        from lime_explainer import DatasetCreator
+        from navigation_explainer import DatasetCreator
     
         # Select input for explanation algorithm
         X = odom.iloc[:, 6:8]  # input for explanation are odometry velocities
@@ -573,7 +574,7 @@ def CreateDataset():
         print(y_test)
 
     # Explanation
-    from lime_explainer import ExplainNavigation
+    from navigation_explainer import ExplainNavigation
 
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
@@ -613,7 +614,7 @@ def CreateDataset():
 
 def RunGAN():
     # Data loading
-    from lime_explainer import DataLoader
+    from navigation_explainer import DataLoader
     
     # load input data
     odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
@@ -645,7 +646,7 @@ def RunGAN():
     #output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
 
     # Explanation
-    from lime_explainer import ExplainNavigation
+    from navigation_explainer import ExplainNavigation
 
     '''
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
@@ -854,7 +855,7 @@ def EvaluateLIMEvsGAN():
         ds = 'ds' + str(ds_id + 7)
 
         # Data loading
-        from lime_explainer import DataLoader
+        from navigation_explainer import DataLoader
         
         # load input data
         odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
@@ -886,7 +887,7 @@ def EvaluateLIMEvsGAN():
         output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
 
         # Explanation
-        from lime_explainer import ExplainNavigation
+        from navigation_explainer import ExplainNavigation
 
         exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                             current_goal, local_costmap_data, local_costmap_info,
