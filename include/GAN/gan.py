@@ -11,7 +11,7 @@ def predict():
 
     import PIL.Image
     import matplotlib.pyplot as plt
-    import numpy as np
+    import time
 
     #rgb_image = PIL.Image.open('/home/amar/amar_ws/input.png')
     #rgb_image = rgba_image.convert('RGB')
@@ -46,6 +46,7 @@ def predict():
 
 
     from data.base_dataset import get_params, get_transform
+    gan_predict_start = time.time()
     transform_params = get_params(opt, input.size)
     input_nc = 3
     input_transform = get_transform(opt, transform_params, grayscale=(input_nc == 1))       
@@ -56,6 +57,12 @@ def predict():
     model.forward()
 
     output = tensor2im(model.fake_B)
+
+    gan_predict_end = time.time()
+    gan_predict_time = gan_predict_end - gan_predict_start
+    with open("gan_times.csv", "a") as myfile:
+            myfile.write(str(gan_predict_time) + "\n")
+
     fig = plt.figure(frameon=False)
     w = 1.6 #* 3
     h = 1.6 #* 3
