@@ -9,10 +9,10 @@ import time
 import os
 
 # lime image - my implementation
-from lime_explainer import lime_image
+from navigation_explainer import lime_image
 
 # anchor_image - my implementation
-from lime_explainer import anchor_image
+from navigation_explainer import anchor_image
 
 # for managing data
 import numpy as np

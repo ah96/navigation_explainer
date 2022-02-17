@@ -1737,7 +1737,7 @@ class LimeImageExplainer(object):
         import pandas as pd
         import time
 
-        semantic_map = np.array(pd.read_csv('~/amar_ws/src/lime_explainer/include/lime_explainer/Input/semantic_global_map.csv'))
+        semantic_map = np.array(pd.read_csv('~/amar_ws/src/navigation_explainer/include/lime_explainer/Input/semantic_global_map.csv'))
 
         start = time.time()
 
