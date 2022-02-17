@@ -113,7 +113,7 @@ class ExplainRobotNavigation:
         self.case = 3
         self.eps = False
         self.semantic_seg = False
-        self.manual_instance_loading = False
+        self.manual_instance_loading = True
         self.manually_make_semantic_map = False
         self.test_segmentation = False
 
@@ -1512,8 +1512,8 @@ class ExplainRobotNavigation:
 
         # plot costmap with plans
         fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
+        w = 1.6#*3
+        h = 1.6#*3
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
@@ -1532,8 +1532,8 @@ class ExplainRobotNavigation:
 
         # plot explanation
         fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
+        w = 1.6#*3
+        h = 1.6#*3
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()

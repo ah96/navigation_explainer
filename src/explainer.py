@@ -831,944 +831,960 @@ def RunGAN():
     print('\nEND!!!')
 
 def EvaluateLIMEvsGAN():
-    # Data loading
-    from lime_explainer import DataLoader
-    
-    # load input data
-    odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
-    '''
-    print("---input loaded---")
-    print('\n')
-    '''
-
-    # load output data
-    cmd_vel = DataLoader.load_output_data(ds)
-    '''
-    print("---output loaded---")
-    print('\n')
+    ''' 
+    # test indices for RAAD   
+    ds1_test = [1, 6, 12, 17, 20, 35, 44, 52, 58, 64, 66, 71] * 3
+    ds2_test_ = [81, 86, 91, 97, 100, 103, 116, 118, 133, 136, 139, 150, 151, 163, 166, 169, 180, 183, 201, 204, 209, 214, 216, 218, 221, 237, 246, 249, 256, 259, 260]
+    ds2_test = [(i-81)*3 for i in ds2_test_]
+    ds3_test_ = [272, 282, 286, 288, 289, 293, 295, 297, 302, 304, 307, 309, 317, 330, 333, 337, 338, 339]
+    ds3_test = [(i-264)*3 for i in ds3_test_]
+    ds4_test_ = [351, 360, 365, 372, 382, 387, 399, 401, 405, 411, 415, 421, 426, 436, 446, 453, 458, 461, 465, 474, 475, 485, 496, 507, 519, 523, 530, 541, 546, 547, 548, 553, 555, 578, 582, 588, 590, 593, 595]
+    ds4_test = [(i-342)*3 for i in ds4_test_]
+    dss_test = [ds1_test,ds2_test,ds3_test,ds4_test]
     '''
 
-    num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
+    ds8_test = [170,185,190,205,215,220,225,250,275,280,285]
+    ds9_test = [10,25,45,110,145]
+    ds10_test = [5,355,375,420,425,555,605,620]
+    dss_test = [ds8_test,ds9_test,ds10_test]
 
-    costmap_size = local_costmap_info.iloc[0, 2]
-    #print('costmap_size: ', costmap_size)
-    
-    # Dataset creation
-    X_train = []
-    X_test = []
-    y_train = []
-    y_test = []
-    num_samples = 0
 
-    # output_class_name - not important for LIME image
-    output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
+    for ID in range(1, len(dss_test)+1): 
+        ds_id = ID
+        ds = 'ds' + str(ds_id + 7)
 
-    # Explanation
-    from lime_explainer import ExplainNavigation
-
-    exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
-                                                        current_goal, local_costmap_data, local_costmap_info,
-                                                        amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
-                                                        X_train, X_test, y_train, y_test, num_samples, plot=False)
-
-    from test_color import create_dict_my, convert_rgb_to_names_my
-    create_dict_my()
-
-    import pandas as pd
-    import time
-    import numpy as np
-    import copy
-    import matplotlib.pyplot as plt
-
-    with open("times.csv", "a") as myfile:
-            myfile.write("lime,gan\n")
-
-    with open("weights.csv", "a") as myfile:
-            myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")        
-
-    with open("segments.csv", "a") as myfile:
-            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
-
-    with open("local_plan.csv", "a") as myfile:
-            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
-
-    with open("global_plan.csv", "a") as myfile:
-            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
-
-    with open("obstacles.csv", "a") as myfile:
-            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
-
-    with open("free_space.csv", "a") as myfile:
-            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
-
-    with open("robot_position.csv", "a") as myfile:
-            myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
-
-    with open("gan_times.csv", "a") as myfile:
-            myfile.write("predict_time\n")
-
-    with open("R_avg_lime.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("R_avg_gan.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("R_diff.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("G_avg_lime.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("G_avg_gan.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("G_diff.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("B_avg_lime.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("B_avg_gan.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    with open("B_diff.csv", "a") as myfile:
-        myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
-
-    num_iter = 1
-    
-    lime_time_avg = 0
-    gan_time_avg = 0
-
-    #R_PERC = [0.0] * 10
-    #G_PERC = [0.0] * 10
-    #B_PERC = [0.0] * 10
-
-    exp_IDs_list_test_ds1 = [5, 23, 44, 52, 75, 88, 94, 104, 118, 128, 136, 150, 151, 189, 190, 209, 223, 225, 229, 242, 252]
-    exp_IDs_list_test_ds2 = [6, 9, 12, 13, 22, 45, 63, 75, 103, 105, 109, 123, 126, 128, 150, 153, 154, 161, 166, 167, 182, 203, 214, 215, 220, 234, 237, 247, 249, 252, 257, 258, 262, 271, 275, 277, 278, 294, 337, 348, 366, 373, 387, 390, 391, 413, 420, 426, 430, 436, 441, 445, 446, 451, 455, 466, 468, 482, 492, 495, 505, 507, 514, 525, 580, 585, 599, 602, 612, 620, 625, 639, 640, 641, 667, 676, 688, 690, 698]
+        # Data loading
+        from lime_explainer import DataLoader
         
-    for num in range(10, 11):
-    #for num in range(0, len(exp_IDs_list_test_ds2)):
-    #for num in range(0, num_iter):
-        print('iteration: ', num)
+        # load input data
+        odom, plan, teb_global_plan, teb_local_plan, current_goal, local_costmap_data, local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, footprints = DataLoader.load_input_data(ds)
+        '''
+        print("---input loaded---")
+        print('\n')
+        '''
 
+        # load output data
+        cmd_vel = DataLoader.load_output_data(ds)
+        '''
+        print("---output loaded---")
+        print('\n')
+        '''
+
+        num_of_first_rows_to_delete, local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom = preprocess_data(local_costmap_info, odom, amcl_pose, cmd_vel, tf_odom_map, tf_map_odom, plan, teb_global_plan, teb_local_plan, footprints)
+
+        costmap_size = local_costmap_info.iloc[0, 2]
+        #print('costmap_size: ', costmap_size)
+        
+        # Dataset creation
+        X_train = []
+        X_test = []
+        y_train = []
+        y_test = []
+        num_samples = 0
+
+        # output_class_name - not important for LIME image
+        output_class_name = cmd_vel.columns.values[0]  # [0] - 'cmd_vel_lin_x'  or [1] - 'cmd_vel_ang_z'
+
+        # Explanation
+        from lime_explainer import ExplainNavigation
+
+        exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
+                                                            current_goal, local_costmap_data, local_costmap_info,
+                                                            amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
+                                                            tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                            X_train, X_test, y_train, y_test, num_samples, plot=False)
+
+        from test_color import create_dict_my, convert_rgb_to_names_my
+        create_dict_my()
+
+        import pandas as pd
+        import time
+        import numpy as np
+        import copy
+        import matplotlib.pyplot as plt
+
+        if ID == 1:
+            with open("times.csv", "a") as myfile:
+                    myfile.write("lime,gan\n")
+
+            with open("weights.csv", "a") as myfile:
+                    myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")        
+
+            with open("segments.csv", "a") as myfile:
+                    myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
+
+            with open("local_plan.csv", "a") as myfile:
+                    myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
+
+            with open("global_plan.csv", "a") as myfile:
+                    myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
+
+            with open("obstacles.csv", "a") as myfile:
+                    myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
+
+            with open("free_space.csv", "a") as myfile:
+                    myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
+
+            with open("robot_position.csv", "a") as myfile:
+                    myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
+
+            with open("gan_times.csv", "a") as myfile:
+                    myfile.write("predict_time\n")
+
+            with open("R_avg_lime.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("R_avg_gan.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("R_diff.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("G_avg_lime.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("G_avg_gan.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("G_diff.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("B_avg_lime.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("B_avg_gan.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+            with open("B_diff.csv", "a") as myfile:
+                myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
+
+        num_iter = 1
+        
         lime_time_avg = 0
         gan_time_avg = 0
-        
-        # optional instance selection - deterministic
-        expID = exp_IDs_list_test_ds1[num]
-        #expID = exp_IDs_list_test_ds2[num]
-        #expID = 203
+            
+        for num in range(0, len(dss_test[ID-1])):
+            print('iteration: ', num)
+            print('ds: ', ds_id)
 
-        # call LIME    
-        time_before_lime = time.time()
-        exp_nav.explain_instance(expID)
-        time_after_lime = time.time()
-        lime_time_avg += time_after_lime - time_before_lime
-        #print('LIME exp time: ', time_after - time_before)           
+            lime_time_avg = 0
+            gan_time_avg = 0
+            
+            # optional instance selection - deterministic
+            expID = dss_test[ID-1][num]
+
+            print('expID: ', expID)
 
 
-        # call GAN
-        # Prepare data for GAN
-        time_before_gan = time.time()
-        index = expID
-        offset = num_of_first_rows_to_delete
+            # call LIME    
+            time_before_lime = time.time()
+            exp_nav.explain_instance(expID)
+            time_after_lime = time.time()
+            lime_time_avg += time_after_lime - time_before_lime
+            #print('LIME exp time: ', time_after - time_before)           
 
-        # Get local costmap
-        local_costmap_original = local_costmap_data.iloc[(index) * costmap_size:(index + 1) * costmap_size, :]
-        
-        # Make image a np.array deepcopy of local_costmap_original
-        image = np.array(copy.deepcopy(local_costmap_original))
 
-        # '''
-        # Turn inflated area to free space and 100s to 99s
-        image[image == 100] = 99
-        image[image != 99] = 0
-        # '''
+            # call GAN
+            # Prepare data for GAN
+            time_before_gan = time.time()
+            index = expID
+            offset = num_of_first_rows_to_delete
 
-        # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
-        image = image * 1.0
-        
-        #'''
-        # get costmap info
-        costmap_info_tmp = local_costmap_info.iloc[index, :]
-        costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
-        costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
+            # Get local costmap
+            local_costmap_original = local_costmap_data.iloc[(index) * costmap_size:(index + 1) * costmap_size, :]
+            
+            # Make image a np.array deepcopy of local_costmap_original
+            image = np.array(copy.deepcopy(local_costmap_original))
 
-        # save costmap info to class variables
-        localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
-        localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
-        localCostmapResolution = costmap_info_tmp.iloc[0, 0]
-        #localCostmapHeight = costmap_info_tmp.iloc[0, 2]
-        #localCostmapWidth = costmap_info_tmp.iloc[0, 1]
+            # '''
+            # Turn inflated area to free space and 100s to 99s
+            image[image == 100] = 99
+            image[image != 99] = 0
+            # '''
 
-        # get odometry info
-        odom_tmp = odom.iloc[index, :]
-        odom_tmp = pd.DataFrame(odom_tmp).transpose()
-        odom_tmp = odom_tmp.iloc[:, 2:]
-        # save robot odometry location to class variables
-        odom_x = odom_tmp.iloc[0, 0]
-        odom_y = odom_tmp.iloc[0, 1]
+            # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
+            image = image * 1.0
+            
+            #'''
+            # get costmap info
+            costmap_info_tmp = local_costmap_info.iloc[index, :]
+            costmap_info_tmp = pd.DataFrame(costmap_info_tmp).transpose()
+            costmap_info_tmp = costmap_info_tmp.iloc[:, 1:]
 
-        # save indices of robot's odometry location in local costmap to class variables
-        localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
-        localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
+            # save costmap info to class variables
+            localCostmapOriginX = costmap_info_tmp.iloc[0, 3]
+            localCostmapOriginY = costmap_info_tmp.iloc[0, 4]
+            localCostmapResolution = costmap_info_tmp.iloc[0, 0]
+            #localCostmapHeight = costmap_info_tmp.iloc[0, 2]
+            #localCostmapWidth = costmap_info_tmp.iloc[0, 1]
 
-        # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-        x_odom_index = [localCostmapIndex_x_odom]
-        y_odom_index = [localCostmapIndex_y_odom]
+            # get odometry info
+            odom_tmp = odom.iloc[index, :]
+            odom_tmp = pd.DataFrame(odom_tmp).transpose()
+            odom_tmp = odom_tmp.iloc[:, 2:]
+            # save robot odometry location to class variables
+            odom_x = odom_tmp.iloc[0, 0]
+            odom_y = odom_tmp.iloc[0, 1]
 
-        # save robot odometry orientation to class variables
-        #odom_z = odom_tmp.iloc[0, 2] 
-        #odom_w = odom_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
-        
-        #if flipped == True:
-        #    yaw_sign = math.copysign(1, self.yaw_odom)
-        #    self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
-        # find yaw angles projections on x and y axes and save them to class variables
-        #yaw_odom_x = math.cos(yaw_odom)
-        #yaw_odom_y = math.sin(yaw_odom)
+            # save indices of robot's odometry location in local costmap to class variables
+            localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
+            localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
 
-        # get local plan
-        local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
-        local_plan_tmp = local_plan_tmp.iloc[:, 1:]
-        # indices of local plan's poses in local costmap
-        local_plan_x_list = []
-        local_plan_y_list = []
-        for i in range(1, local_plan_tmp.shape[0]):
-            x_temp = int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
-            y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
-            if 0 <= x_temp < costmap_size and 0 <= y_temp < costmap_size:
-                local_plan_x_list.append(x_temp)
-                local_plan_y_list.append(y_temp)
+            # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
+            x_odom_index = [localCostmapIndex_x_odom]
+            y_odom_index = [localCostmapIndex_y_odom]
 
-        # get tranformation info
-        tf_map_odom_tmp = tf_map_odom.iloc[index, :]
-        tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
+            # save robot odometry orientation to class variables
+            #odom_z = odom_tmp.iloc[0, 2] 
+            #odom_w = odom_tmp.iloc[0, 3]
+            # calculate Euler angles based on orientation quaternion
+            #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
+            
+            #if flipped == True:
+            #    yaw_sign = math.copysign(1, self.yaw_odom)
+            #    self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
+            # find yaw angles projections on x and y axes and save them to class variables
+            #yaw_odom_x = math.cos(yaw_odom)
+            #yaw_odom_y = math.sin(yaw_odom)
 
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
+            # get local plan
+            local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
+            local_plan_tmp = local_plan_tmp.iloc[:, 1:]
+            # indices of local plan's poses in local costmap
+            local_plan_x_list = []
+            local_plan_y_list = []
+            for i in range(1, local_plan_tmp.shape[0]):
+                x_temp = int((local_plan_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)
+                y_temp = int((local_plan_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)
+                if 0 <= x_temp < costmap_size and 0 <= y_temp < costmap_size:
+                    local_plan_x_list.append(x_temp)
+                    local_plan_y_list.append(y_temp)
 
-        r = R.from_quat(
-            [tf_map_odom_tmp.iloc[0, 3], tf_map_odom_tmp.iloc[0, 4], tf_map_odom_tmp.iloc[0, 5],
-            tf_map_odom_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        # translation vector
-        t = np.array(
-            [tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
-        # print('t: ', t)
-        global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
-        global_plan_tmp = global_plan_tmp.iloc[:, 1:]
-        plan_tmp_tmp = copy.deepcopy(global_plan_tmp)
-        for i in range(0, global_plan_tmp.shape[0]):
-            p = np.array(
-                [global_plan_tmp.iloc[i, 0], global_plan_tmp.iloc[i, 1], global_plan_tmp.iloc[i, 2]])
-            # print('p: ', p)
-            pnew = p.dot(r_array) + t
-            # print('pnew: ', pnew)
-            plan_tmp_tmp.iloc[i, 0] = pnew[0]
-            plan_tmp_tmp.iloc[i, 1] = pnew[1]
-            plan_tmp_tmp.iloc[i, 2] = pnew[2]
+            # get tranformation info
+            tf_map_odom_tmp = tf_map_odom.iloc[index, :]
+            tf_map_odom_tmp = pd.DataFrame(tf_map_odom_tmp).transpose()
 
-        # Get coordinates of the global plan in the local costmap
-        plan_x_list = []
-        plan_y_list = []
-        for i in range(0, plan_tmp_tmp.shape[0], 3):
-            x_temp = int((plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)    
-            y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
-            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
-                #print('x_temp: ', x_temp)
-                #print('y_temp: ', y_temp)
-                #print('\n')
-                plan_x_list.append(x_temp)
-                plan_y_list.append(y_temp)
+            # transform global plan from /map to /odom frame
+            # rotation matrix
+            from scipy.spatial.transform import Rotation as R
 
-        #'''
+            r = R.from_quat(
+                [tf_map_odom_tmp.iloc[0, 3], tf_map_odom_tmp.iloc[0, 4], tf_map_odom_tmp.iloc[0, 5],
+                tf_map_odom_tmp.iloc[0, 6]])
+            # print('r: ', r.as_matrix())
+            r_array = np.asarray(r.as_matrix())
+            # print('r_array: ', r_array)
+            # print('r_array.shape: ', r_array.shape)
+            # translation vector
+            t = np.array(
+                [tf_map_odom_tmp.iloc[0, 0], tf_map_odom_tmp.iloc[0, 1], tf_map_odom_tmp.iloc[0, 2]])
+            # print('t: ', t)
+            global_plan_tmp = teb_global_plan.loc[teb_global_plan['ID'] == index + offset]
+            global_plan_tmp = global_plan_tmp.iloc[:, 1:]
+            plan_tmp_tmp = copy.deepcopy(global_plan_tmp)
+            for i in range(0, global_plan_tmp.shape[0]):
+                p = np.array(
+                    [global_plan_tmp.iloc[i, 0], global_plan_tmp.iloc[i, 1], global_plan_tmp.iloc[i, 2]])
+                # print('p: ', p)
+                pnew = p.dot(r_array) + t
+                # print('pnew: ', pnew)
+                plan_tmp_tmp.iloc[i, 0] = pnew[0]
+                plan_tmp_tmp.iloc[i, 1] = pnew[1]
+                plan_tmp_tmp.iloc[i, 2] = pnew[2]
 
-        from GAN import gan            
-        gan.predict()
+            # Get coordinates of the global plan in the local costmap
+            plan_x_list = []
+            plan_y_list = []
+            for i in range(0, plan_tmp_tmp.shape[0], 3):
+                x_temp = int((plan_tmp_tmp.iloc[i, 0] - localCostmapOriginX) / localCostmapResolution)    
+                y_temp = int((plan_tmp_tmp.iloc[i, 1] - localCostmapOriginY) / localCostmapResolution)    
+                if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                    #print('x_temp: ', x_temp)
+                    #print('y_temp: ', y_temp)
+                    #print('\n')
+                    plan_x_list.append(x_temp)
+                    plan_y_list.append(y_temp)
 
-        time_after_gan = time.time()
-        gan_time_avg += time_after_gan - time_before_gan
+            #'''
 
-        print('LIME time: ', lime_time_avg / num_iter)
-        print('\n')
-        print('GAN time: ', gan_time_avg / num_iter)
-        print('\n')
+            from GAN import gan            
+            gan.predict()
 
-        with open("times.csv", "a") as myfile:
-            myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
+            time_after_gan = time.time()
+            gan_time_avg += time_after_gan - time_before_gan
 
-        segments = exp_nav.segments
-        #print('\nexp_nav.exp: ', exp_nav.exp)
-        #plt.imshow(segments)
-        #plt.savefig('SEGMENTS.png')
+            print('LIME time: ', lime_time_avg / num_iter)
+            print('\n')
+            print('GAN time: ', gan_time_avg / num_iter)
+            print('\n')
 
-        # RGB evaluation
-        import PIL.Image
-        import os
-        path1 = os.getcwd() + '/explanation.png'
-        exp_lime_orig = PIL.Image.open(path1).convert('RGB')
-        path1 = os.getcwd() + '/GAN.png'
-        exp_gan_orig = PIL.Image.open(path1).convert('RGB')
+            with open("times.csv", "a") as myfile:
+                myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
 
-        exp_lime = np.array(exp_lime_orig)
-        #print('exp_lime.shape: ', exp_lime.shape)
-        exp_gan = np.array(exp_gan_orig)
-        #print('exp_gan.shape: ', exp_gan.shape)
+            segments = exp_nav.segments
+            #print('\nexp_nav.exp: ', exp_nav.exp)
+            #plt.imshow(segments)
+            #plt.savefig('SEGMENTS.png')
 
-        #exp_lime = exp_nav.temp_img.astype(np.uint8)
+            # RGB evaluation
+            import PIL.Image
+            import os
+            path1 = os.getcwd() + '/explanation.png'
+            exp_lime_orig = PIL.Image.open(path1).convert('RGB')
+            path1 = os.getcwd() + '/GAN.png'
+            exp_gan_orig = PIL.Image.open(path1).convert('RGB')
 
-        #seg_unique = np.unique(segments)
-        #print('seg_unique = ', seg_unique)
+            exp_lime = np.array(exp_lime_orig)
+            #print('exp_lime.shape: ', exp_lime.shape)
+            exp_gan = np.array(exp_gan_orig)
+            #print('exp_gan.shape: ', exp_gan.shape)
 
-        # SEGMENTS eval STARTS
-        weights = []
-        weights_raw = []
+            #exp_lime = exp_nav.temp_img.astype(np.uint8)
 
-        color_coverage_percent = []
+            #seg_unique = np.unique(segments)
+            #print('seg_unique = ', seg_unique)
 
-        R_abs_list_lime = []
-        G_abs_list_lime = []
-        B_abs_list_lime = []
+            # SEGMENTS eval STARTS
+            weights = []
+            weights_raw = []
 
-        R_abs_list_gan = []
-        G_abs_list_gan = []
-        B_abs_list_gan = []
+            color_coverage_percent = []
 
-        diff_R_abs_list = []
-        diff_G_abs_list = []
-        diff_B_abs_list = []
+            R_abs_list_lime = []
+            G_abs_list_lime = []
+            B_abs_list_lime = []
 
-        diff_abs_from_RGB_list = []
-        
-        channel_avg_diff_list = []
-        
-        for e in exp_nav.exp[0:-1]:
-            print('\ne = ', e)
-            # if weight is greater than 0
-            if abs(e[1]) >= 0.0:
-                
-                count_R = 0
-                count_G = 0
-                count_B = 0
-                count_avg = 0
+            R_abs_list_gan = []
+            G_abs_list_gan = []
+            B_abs_list_gan = []
 
-                same_color_count = 0
-                color_count = 0
+            diff_R_abs_list = []
+            diff_G_abs_list = []
+            diff_B_abs_list = []
 
-                R_abs_lime = 0
-                G_abs_lime = 0
-                B_abs_lime = 0
+            diff_abs_from_RGB_list = []
+            
+            channel_avg_diff_list = []
+            
+            for e in exp_nav.exp[0:-1]:
+                print('\ne = ', e)
+                # if weight is greater than 0
+                if abs(e[1]) >= 0.0:
+                    
+                    count_R = 0
+                    count_G = 0
+                    count_B = 0
+                    count_avg = 0
 
-                R_abs_gan = 0
-                G_abs_gan = 0
-                B_abs_gan = 0
+                    same_color_count = 0
+                    color_count = 0
 
-                diff_R_abs = 0
-                diff_G_abs = 0
-                diff_B_abs = 0
-
-                channel_avg_diff = 0
-
-                # add segment weight
-                weights.append(abs(e[1]))
-                weights_raw.append(e[1])
-
-                for row in range(0, segments.shape[0]):
-                    for columns in range(0, segments.shape[1]):
-                        # if a segment pixel
-                        if segments[row, columns] == e[0]:
-                            if row not in local_plan_y_list and row not in plan_y_list and row != y_odom_index[0] and columns not in local_plan_x_list and columns not in plan_x_list and columns != x_odom_index[0]:
-    
-                                # increase counts
-                                count_R += 1
-                                count_G += 1
-                                count_B += 1
-                                count_avg += 1
-                                color_count += 1
-
-                                # compare colors
-                                lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                                gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                                if lime_color_name == gan_color_name:
-                                    same_color_count += 1
-
-                                # R channel
-                                R_abs_lime += float(exp_lime[row, columns, 0])
-                                R_abs_gan += float(exp_gan[row, columns, 0])
-                                diff_R_abs += abs(float(exp_gan[row, columns, 0]) - float(exp_lime[row, columns, 0]))
-                                
-                                # G channel
-                                G_abs_lime += float(exp_lime[row, columns, 1])
-                                G_abs_gan += float(exp_gan[row, columns, 1])
-                                diff_G_abs = abs(float(exp_gan[row, columns, 1]) - float(exp_lime[row, columns, 1]))
-                                    
-                                # B channel
-                                print('\nexp_lime[row, columns, 2] = ', exp_lime[row, columns, 2])
-                                B_abs_lime += float(exp_lime[row, columns, 2])
-                                B_abs_gan += float(exp_gan[row, columns, 2])
-                                diff_B_abs = abs(float(exp_gan[row, columns, 2]) - float(exp_lime[row, columns, 2]))
-                                
-                                # average channel intensity
-                                channel_avg_lime = float(float(exp_lime[row, columns, 0]) + float(exp_lime[row, columns, 1]) + float(exp_lime[row, columns, 2])) / 3
-                                channel_avg_gan = float(float(exp_gan[row, columns, 0]) + float(exp_gan[row, columns, 1]) + float(exp_gan[row, columns, 2])) / 3
-                                
-                                channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)  
-
-                if count_R == 0:
-                    count_R = 1
-
-                if count_G == 0:
-                    count_G = 1
-
-                if count_B == 0:
-                    count_B = 1
-
-                if count_avg == 0:
-                    count_avg = 1
-
-                if color_count == 0:
-                    color_count = 1    
-
-                color_coverage_percent.append(100 * same_color_count / color_count)
-
-                R_abs_lime /= count_R
-                G_abs_lime /= count_G
-                B_abs_lime /= count_B
-
-                R_abs_gan /= count_R
-                G_abs_gan /= count_G
-                B_abs_gan /= count_B
-
-                if B_abs_lime > 0:
-                    B_abs_gan = abs(B_abs_gan - B_abs_lime)
+                    R_abs_lime = 0
+                    G_abs_lime = 0
                     B_abs_lime = 0
 
-                diff_R_abs /= count_R
-                diff_G_abs /= count_G
-                diff_B_abs /= count_B
+                    R_abs_gan = 0
+                    G_abs_gan = 0
+                    B_abs_gan = 0
 
-                R_abs_list_lime.append(R_abs_lime)
-                G_abs_list_lime.append(G_abs_lime)
-                B_abs_list_lime.append(B_abs_lime)
+                    diff_R_abs = 0
+                    diff_G_abs = 0
+                    diff_B_abs = 0
 
-                R_abs_list_gan.append(R_abs_gan)
-                G_abs_list_gan.append(G_abs_gan)
-                B_abs_list_gan.append(B_abs_gan)
+                    channel_avg_diff = 0
 
-                diff_R_abs_list.append(diff_R_abs)
-                diff_G_abs_list.append(diff_G_abs)
-                diff_B_abs_list.append(diff_B_abs)
+                    # add segment weight
+                    weights.append(abs(e[1]))
+                    weights_raw.append(e[1])
 
-                diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
-                diff_abs_from_RGB_list.append(diff_abs_from_RGB)
+                    for row in range(0, segments.shape[0]):
+                        for columns in range(0, segments.shape[1]):
+                            # if a segment pixel
+                            if segments[row, columns] == e[0]:
+                                if row not in local_plan_y_list and row not in plan_y_list and row != y_odom_index[0] and columns not in local_plan_x_list and columns not in plan_x_list and columns != x_odom_index[0]:
+        
+                                    # increase counts
+                                    count_R += 1
+                                    count_G += 1
+                                    count_B += 1
+                                    count_avg += 1
+                                    color_count += 1
 
-                channel_avg_diff /= count_avg
-                channel_avg_diff_list.append(channel_avg_diff)
+                                    # compare colors
+                                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                                    if lime_color_name == gan_color_name:
+                                        same_color_count += 1
 
-        weights_sum = sum(weights)
+                                    # R channel
+                                    R_abs_lime += float(exp_lime[row, columns, 0])
+                                    R_abs_gan += float(exp_gan[row, columns, 0])
+                                    diff_R_abs += abs(float(exp_gan[row, columns, 0]) - float(exp_lime[row, columns, 0]))
+                                    
+                                    # G channel
+                                    G_abs_lime += float(exp_lime[row, columns, 1])
+                                    G_abs_gan += float(exp_gan[row, columns, 1])
+                                    diff_G_abs = abs(float(exp_gan[row, columns, 1]) - float(exp_lime[row, columns, 1]))
+                                        
+                                    # B channel
+                                    print('\nexp_lime[row, columns, 2] = ', exp_lime[row, columns, 2])
+                                    B_abs_lime += float(exp_lime[row, columns, 2])
+                                    B_abs_gan += float(exp_gan[row, columns, 2])
+                                    diff_B_abs = abs(float(exp_gan[row, columns, 2]) - float(exp_lime[row, columns, 2]))
+                                    
+                                    # average channel intensity
+                                    channel_avg_lime = float(float(exp_lime[row, columns, 0]) + float(exp_lime[row, columns, 1]) + float(exp_lime[row, columns, 2])) / 3
+                                    channel_avg_gan = float(float(exp_gan[row, columns, 0]) + float(exp_gan[row, columns, 1]) + float(exp_gan[row, columns, 2])) / 3
+                                    
+                                    channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)  
 
-        if weights_sum == 0.0:
-            weights = [1.0] * len(weights)
+                    if count_R == 0:
+                        count_R = 1
+
+                    if count_G == 0:
+                        count_G = 1
+
+                    if count_B == 0:
+                        count_B = 1
+
+                    if count_avg == 0:
+                        count_avg = 1
+
+                    if color_count == 0:
+                        color_count = 1    
+
+                    color_coverage_percent.append(100 * same_color_count / color_count)
+
+                    R_abs_lime /= count_R
+                    G_abs_lime /= count_G
+                    B_abs_lime /= count_B
+
+                    R_abs_gan /= count_R
+                    G_abs_gan /= count_G
+                    B_abs_gan /= count_B
+
+                    if B_abs_lime > 0:
+                        B_abs_gan = abs(B_abs_gan - B_abs_lime)
+                        B_abs_lime = 0
+
+                    diff_R_abs /= count_R
+                    diff_G_abs /= count_G
+                    diff_B_abs /= count_B
+
+                    R_abs_list_lime.append(R_abs_lime)
+                    G_abs_list_lime.append(G_abs_lime)
+                    B_abs_list_lime.append(B_abs_lime)
+
+                    R_abs_list_gan.append(R_abs_gan)
+                    G_abs_list_gan.append(G_abs_gan)
+                    B_abs_list_gan.append(B_abs_gan)
+
+                    diff_R_abs_list.append(diff_R_abs)
+                    diff_G_abs_list.append(diff_G_abs)
+                    diff_B_abs_list.append(diff_B_abs)
+
+                    diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+                    diff_abs_from_RGB_list.append(diff_abs_from_RGB)
+
+                    channel_avg_diff /= count_avg
+                    channel_avg_diff_list.append(channel_avg_diff)
+
             weights_sum = sum(weights)
 
-        print('\nweights = ', weights)
-        print('\nweights_sum = ', weights_sum)    
-        
-        explanation_saved_percentage = 0.0
-        explanation_saved_percentage_list = []
-        weights_percentage = []
-        for i in range(0, len(weights)):
-            explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
-            explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
-            weights_percentage.append(100 * weights[i] / weights_sum)
+            if weights_sum == 0.0:
+                weights = [1.0] * len(weights)
+                weights_sum = sum(weights)
 
-        print('\ndiff_R_abs_list = ', diff_R_abs_list)
-        print('\ndiff_G_abs_list = ', diff_G_abs_list)
-        print('\ndiff_B_abs_list = ', diff_B_abs_list)
-
-        with open("weights.csv", "a") as myfile:
-            for id in range(0, len(weights_raw) - 1):
-                myfile.write(str(weights_raw[id]) + ",")
-            myfile.write(str(weights_raw[-1]) + "\n")
-
-        with open("R_avg_lime.csv", "a") as myfile:
-            for id in range(0, len(R_abs_list_lime) - 1):
-                myfile.write(str(R_abs_list_lime[id]) + ",")
-            myfile.write(str(R_abs_list_lime[-1]) + "\n")
-
-        with open("G_avg_lime.csv", "a") as myfile:
-            for id in range(0, len(G_abs_list_lime) - 1):
-                myfile.write(str(G_abs_list_lime[id]) + ",")
-            myfile.write(str(G_abs_list_lime[-1]) + "\n")
-
-        with open("B_avg_lime.csv", "a") as myfile:
-            for id in range(0, len(B_abs_list_lime) - 1):
-                myfile.write(str(B_abs_list_lime[id]) + ",")
-            myfile.write(str(B_abs_list_lime[-1]) + "\n")
-
-        with open("R_avg_gan.csv", "a") as myfile:
-            for id in range(0, len(R_abs_list_gan) - 1):
-                myfile.write(str(R_abs_list_gan[id]) + ",")
-            myfile.write(str(R_abs_list_gan[-1]) + "\n")
-
-        with open("G_avg_gan.csv", "a") as myfile:
-            for id in range(0, len(G_abs_list_gan) - 1):
-                myfile.write(str(G_abs_list_gan[id]) + ",")
-            myfile.write(str(G_abs_list_gan[-1]) + "\n")
-
-        with open("B_avg_gan.csv", "a") as myfile:
-            for id in range(0, len(B_abs_list_gan) - 1):
-                myfile.write(str(B_abs_list_gan[id]) + ",")
-            myfile.write(str(B_abs_list_gan[-1]) + "\n")
-
-        with open("R_diff.csv", "a") as myfile:
-            for id in range(0, len( diff_R_abs_list) - 1):
-                myfile.write(str( diff_R_abs_list[id]) + ",")
-            myfile.write(str( diff_R_abs_list[-1]) + "\n")
-
-        with open("G_diff.csv", "a") as myfile:
-            for id in range(0, len( diff_G_abs_list) - 1):
-                myfile.write(str( diff_G_abs_list[id]) + ",")
-            myfile.write(str( diff_G_abs_list[-1]) + "\n")
-
-        with open("B_diff.csv", "a") as myfile:
-            for id in range(0, len( diff_B_abs_list) - 1):
-                myfile.write(str( diff_B_abs_list[id]) + ",")
-            myfile.write(str( diff_B_abs_list[-1]) + "\n")
-
-        with open("segments.csv", "a") as myfile:
-            myfile.write(str(explanation_saved_percentage) + ",")
-            myfile.write(str(sum(diff_R_abs_list) / len(diff_R_abs_list)) + ",")
-            myfile.write(str(sum(diff_G_abs_list) / len(diff_G_abs_list)) + ",")
-            myfile.write(str(sum(diff_B_abs_list) / len(diff_B_abs_list)) + ",")
-            myfile.write(str(sum(diff_abs_from_RGB_list) / len(diff_abs_from_RGB_list)) + ",") 
-            myfile.write(str(sum(channel_avg_diff_list) / len(channel_avg_diff_list)) + "\n")
-        # SEGMENTS eval ENDS
-
-    
-        # LOCAL PLAN eval STARTS 
-        count_R = 0
-        count_G = 0
-        count_B = 0
-        count_avg = 0
-
-        same_color_count = 0
-        color_count = 0
-
-        diff_R_abs = 0
-        diff_G_abs = 0
-        diff_B_abs = 0
-
-        channel_avg_diff = 0
-
-        for i in range(0, len(local_plan_x_list)):
-            row = local_plan_y_list[i]
-            columns = local_plan_x_list[i]
-
-            # increase counts
-            count_R += 1
-            count_G += 1
-            count_B += 1
-            count_avg += 1
-            color_count += 1
-
-            # compare colors
-            lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-            gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-            if lime_color_name == gan_color_name:
-                same_color_count += 1
-
-            # absolute R channel difference
-            diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
-                
-            # absolute G channel difference
-            diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
-                
-            # absolute B channel difference
-            diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+            print('\nweights = ', weights)
+            print('\nweights_sum = ', weights_sum)    
             
-            # average channel intensity
-            channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-            channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
-            
-            channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
+            explanation_saved_percentage = 0.0
+            explanation_saved_percentage_list = []
+            weights_percentage = []
+            for i in range(0, len(weights)):
+                explanation_saved_percentage += color_coverage_percent[i] * weights[i] / weights_sum
+                explanation_saved_percentage_list.append(color_coverage_percent[i] * weights[i] / weights_sum)
+                weights_percentage.append(100 * weights[i] / weights_sum)
 
-        if count_R == 0:
-            count_R = 1
+            print('\ndiff_R_abs_list = ', diff_R_abs_list)
+            print('\ndiff_G_abs_list = ', diff_G_abs_list)
+            print('\ndiff_B_abs_list = ', diff_B_abs_list)
 
-        if count_G == 0:
-            count_G = 1
+            with open("weights.csv", "a") as myfile:
+                for id in range(0, len(weights_raw) - 1):
+                    myfile.write(str(weights_raw[id]) + ",")
+                myfile.write(str(weights_raw[-1]) + "\n")
 
-        if count_B == 0:
-            count_B = 1
+            with open("R_avg_lime.csv", "a") as myfile:
+                for id in range(0, len(R_abs_list_lime) - 1):
+                    myfile.write(str(R_abs_list_lime[id]) + ",")
+                myfile.write(str(R_abs_list_lime[-1]) + "\n")
 
-        if count_avg == 0:
-            count_avg = 1
+            with open("G_avg_lime.csv", "a") as myfile:
+                for id in range(0, len(G_abs_list_lime) - 1):
+                    myfile.write(str(G_abs_list_lime[id]) + ",")
+                myfile.write(str(G_abs_list_lime[-1]) + "\n")
 
-        if color_count == 0:
-            color_count = 1    
+            with open("B_avg_lime.csv", "a") as myfile:
+                for id in range(0, len(B_abs_list_lime) - 1):
+                    myfile.write(str(B_abs_list_lime[id]) + ",")
+                myfile.write(str(B_abs_list_lime[-1]) + "\n")
 
-        color_coverage_percent = 100 * same_color_count / color_count
-        
-        diff_R_abs /= count_R
-        diff_G_abs /= count_G
-        diff_B_abs /= count_B
+            with open("R_avg_gan.csv", "a") as myfile:
+                for id in range(0, len(R_abs_list_gan) - 1):
+                    myfile.write(str(R_abs_list_gan[id]) + ",")
+                myfile.write(str(R_abs_list_gan[-1]) + "\n")
 
-        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+            with open("G_avg_gan.csv", "a") as myfile:
+                for id in range(0, len(G_abs_list_gan) - 1):
+                    myfile.write(str(G_abs_list_gan[id]) + ",")
+                myfile.write(str(G_abs_list_gan[-1]) + "\n")
 
-        channel_avg_diff /= count_avg
+            with open("B_avg_gan.csv", "a") as myfile:
+                for id in range(0, len(B_abs_list_gan) - 1):
+                    myfile.write(str(B_abs_list_gan[id]) + ",")
+                myfile.write(str(B_abs_list_gan[-1]) + "\n")
 
-        with open("local_plan.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + ",")
-            myfile.write(str(diff_R_abs) + ",")
-            myfile.write(str(diff_G_abs) + ",")
-            myfile.write(str(diff_B_abs) + ",")
-            myfile.write(str(diff_abs_from_RGB) + ",") 
-            myfile.write(str(channel_avg_diff) + "\n")
-        # LOCAL PLAN eval ENDS
+            with open("R_diff.csv", "a") as myfile:
+                for id in range(0, len( diff_R_abs_list) - 1):
+                    myfile.write(str( diff_R_abs_list[id]) + ",")
+                myfile.write(str( diff_R_abs_list[-1]) + "\n")
 
+            with open("G_diff.csv", "a") as myfile:
+                for id in range(0, len( diff_G_abs_list) - 1):
+                    myfile.write(str( diff_G_abs_list[id]) + ",")
+                myfile.write(str( diff_G_abs_list[-1]) + "\n")
 
-        # GLOBAL PLAN eval STARTS 
-        count_R = 0
-        count_G = 0
-        count_B = 0
-        count_avg = 0
+            with open("B_diff.csv", "a") as myfile:
+                for id in range(0, len( diff_B_abs_list) - 1):
+                    myfile.write(str( diff_B_abs_list[id]) + ",")
+                myfile.write(str( diff_B_abs_list[-1]) + "\n")
 
-        same_color_count = 0
-        color_count = 0
-
-        diff_R_abs = 0
-        diff_G_abs = 0
-        diff_B_abs = 0
-
-        channel_avg_diff = 0
-
-        for i in range(0, len(plan_x_list)):
-            row = plan_y_list[i]
-            columns = plan_x_list[i]
-
-            # increase counts
-            count_R += 1
-            count_G += 1
-            count_B += 1
-            count_avg += 1
-            color_count += 1
-
-            # compare colors
-            lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-            gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-            if lime_color_name == gan_color_name:
-                same_color_count += 1
-
-            # absolute R channel difference
-            diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
-                
-            # absolute G channel difference
-            diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
-                
-            # absolute B channel difference
-            diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
-            
-            # average channel intensity
-            channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-            channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
-            
-            channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
-
-        if count_R == 0:
-            count_R = 1
-
-        if count_G == 0:
-            count_G = 1
-
-        if count_B == 0:
-            count_B = 1
-
-        if count_avg == 0:
-            count_avg = 1
-
-        if color_count == 0:
-            color_count = 1    
-
-        color_coverage_percent = 100 * same_color_count / color_count
-        
-        diff_R_abs /= count_R
-        diff_G_abs /= count_G
-        diff_B_abs /= count_B
-
-        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
-
-        channel_avg_diff /= count_avg
-
-        with open("global_plan.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + ",")
-            myfile.write(str(diff_R_abs) + ",")
-            myfile.write(str(diff_G_abs) + ",")
-            myfile.write(str(diff_B_abs) + ",")
-            myfile.write(str(diff_abs_from_RGB) + ",") 
-            myfile.write(str(channel_avg_diff) + "\n")
-        # GLOBAL PLAN eval ENDS
-
-
-        # ROBOT POSITION eval STARTS 
-        count_R = 0
-        count_G = 0
-        count_B = 0
-        count_avg = 0
-
-        same_color_count = 0
-        color_count = 0
-
-        diff_R_abs = 0
-        diff_G_abs = 0
-        diff_B_abs = 0
-
-        channel_avg_diff = 0
-
-        for i in range(0, 1):
-            row = y_odom_index[0]
-            print('\ny_odom_index = ', y_odom_index)
-            columns = x_odom_index[0]
-            print('\nx_odom_index = ', x_odom_index)
-
-            # increase counts
-            count_R += 1
-            count_G += 1
-            count_B += 1
-            count_avg += 1
-            color_count += 1
-
-            # compare colors
-            lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-            gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-            if lime_color_name == gan_color_name:
-                same_color_count += 1
-
-            # absolute R channel difference
-            diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
-                
-            # absolute G channel difference
-            diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
-                
-            # absolute B channel difference
-            diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
-            
-            # average channel intensity
-            channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-            channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
-            
-            channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
-
-        if count_R == 0:
-            count_R = 1
-
-        if count_G == 0:
-            count_G = 1
-
-        if count_B == 0:
-            count_B = 1
-
-        if count_avg == 0:
-            count_avg = 1
-
-        if color_count == 0:
-            color_count = 1    
-
-        color_coverage_percent = 100 * same_color_count / color_count
-        
-        diff_R_abs /= count_R
-        diff_G_abs /= count_G
-        diff_B_abs /= count_B
-
-        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
-
-        channel_avg_diff /= count_avg
-
-        with open("robot_position.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + ",")
-            myfile.write(str(diff_R_abs) + ",")
-            myfile.write(str(diff_G_abs) + ",")
-            myfile.write(str(diff_B_abs) + ",")
-            myfile.write(str(diff_abs_from_RGB) + ",") 
-            myfile.write(str(channel_avg_diff) + "\n")
-        # ROBOT POSITION eval ENDS
-
+            with open("segments.csv", "a") as myfile:
+                myfile.write(str(explanation_saved_percentage) + ",")
+                myfile.write(str(sum(diff_R_abs_list) / len(diff_R_abs_list)) + ",")
+                myfile.write(str(sum(diff_G_abs_list) / len(diff_G_abs_list)) + ",")
+                myfile.write(str(sum(diff_B_abs_list) / len(diff_B_abs_list)) + ",")
+                myfile.write(str(sum(diff_abs_from_RGB_list) / len(diff_abs_from_RGB_list)) + ",") 
+                myfile.write(str(sum(channel_avg_diff_list) / len(channel_avg_diff_list)) + "\n")
+            # SEGMENTS eval ENDS
 
         
-        # OBSTACLES eval STARTS
-        count_R = 0
-        count_G = 0
-        count_B = 0
-        count_avg = 0
+            # LOCAL PLAN eval STARTS 
+            count_R = 0
+            count_G = 0
+            count_B = 0
+            count_avg = 0
 
-        same_color_count = 0
-        color_count = 0
+            same_color_count = 0
+            color_count = 0
 
-        diff_R_abs = 0
-        diff_G_abs = 0
-        diff_B_abs = 0
+            diff_R_abs = 0
+            diff_G_abs = 0
+            diff_B_abs = 0
 
-        channel_avg_diff = 0
+            channel_avg_diff = 0
 
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if image[i, j] == 99:
-                    row = i
-                    columns = j
+            for i in range(0, len(local_plan_x_list)):
+                row = local_plan_y_list[i]
+                columns = local_plan_x_list[i]
+
+                # increase counts
+                count_R += 1
+                count_G += 1
+                count_B += 1
+                count_avg += 1
+                color_count += 1
+
+                # compare colors
+                lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                if lime_color_name == gan_color_name:
+                    same_color_count += 1
+
+                # absolute R channel difference
+                diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
                     
-                    # increase counts
-                    count_R += 1
-                    count_G += 1
-                    count_B += 1
-                    count_avg += 1
-                    color_count += 1
+                # absolute G channel difference
+                diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                    
+                # absolute B channel difference
+                diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+                
+                # average channel intensity
+                channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                
+                channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
 
-                    # compare colors
-                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                    if lime_color_name == gan_color_name:
-                        same_color_count += 1
+            if count_R == 0:
+                count_R = 1
 
-                    # absolute R channel difference
-                    diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+            if count_G == 0:
+                count_G = 1
+
+            if count_B == 0:
+                count_B = 1
+
+            if count_avg == 0:
+                count_avg = 1
+
+            if color_count == 0:
+                color_count = 1    
+
+            color_coverage_percent = 100 * same_color_count / color_count
+            
+            diff_R_abs /= count_R
+            diff_G_abs /= count_G
+            diff_B_abs /= count_B
+
+            diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+
+            channel_avg_diff /= count_avg
+
+            with open("local_plan.csv", "a") as myfile:
+                myfile.write(str(color_coverage_percent) + ",")
+                myfile.write(str(diff_R_abs) + ",")
+                myfile.write(str(diff_G_abs) + ",")
+                myfile.write(str(diff_B_abs) + ",")
+                myfile.write(str(diff_abs_from_RGB) + ",") 
+                myfile.write(str(channel_avg_diff) + "\n")
+            # LOCAL PLAN eval ENDS
+
+
+            # GLOBAL PLAN eval STARTS 
+            count_R = 0
+            count_G = 0
+            count_B = 0
+            count_avg = 0
+
+            same_color_count = 0
+            color_count = 0
+
+            diff_R_abs = 0
+            diff_G_abs = 0
+            diff_B_abs = 0
+
+            channel_avg_diff = 0
+
+            for i in range(0, len(plan_x_list)):
+                row = plan_y_list[i]
+                columns = plan_x_list[i]
+
+                # increase counts
+                count_R += 1
+                count_G += 1
+                count_B += 1
+                count_avg += 1
+                color_count += 1
+
+                # compare colors
+                lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                if lime_color_name == gan_color_name:
+                    same_color_count += 1
+
+                # absolute R channel difference
+                diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                    
+                # absolute G channel difference
+                diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                    
+                # absolute B channel difference
+                diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+                
+                # average channel intensity
+                channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                
+                channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
+
+            if count_R == 0:
+                count_R = 1
+
+            if count_G == 0:
+                count_G = 1
+
+            if count_B == 0:
+                count_B = 1
+
+            if count_avg == 0:
+                count_avg = 1
+
+            if color_count == 0:
+                color_count = 1    
+
+            color_coverage_percent = 100 * same_color_count / color_count
+            
+            diff_R_abs /= count_R
+            diff_G_abs /= count_G
+            diff_B_abs /= count_B
+
+            diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+
+            channel_avg_diff /= count_avg
+
+            with open("global_plan.csv", "a") as myfile:
+                myfile.write(str(color_coverage_percent) + ",")
+                myfile.write(str(diff_R_abs) + ",")
+                myfile.write(str(diff_G_abs) + ",")
+                myfile.write(str(diff_B_abs) + ",")
+                myfile.write(str(diff_abs_from_RGB) + ",") 
+                myfile.write(str(channel_avg_diff) + "\n")
+            # GLOBAL PLAN eval ENDS
+
+
+            # ROBOT POSITION eval STARTS 
+            count_R = 0
+            count_G = 0
+            count_B = 0
+            count_avg = 0
+
+            same_color_count = 0
+            color_count = 0
+
+            diff_R_abs = 0
+            diff_G_abs = 0
+            diff_B_abs = 0
+
+            channel_avg_diff = 0
+
+            for i in range(0, 1):
+                row = y_odom_index[0]
+                print('\ny_odom_index = ', y_odom_index)
+                columns = x_odom_index[0]
+                print('\nx_odom_index = ', x_odom_index)
+
+                # increase counts
+                count_R += 1
+                count_G += 1
+                count_B += 1
+                count_avg += 1
+                color_count += 1
+
+                # compare colors
+                lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                if lime_color_name == gan_color_name:
+                    same_color_count += 1
+
+                # absolute R channel difference
+                diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                    
+                # absolute G channel difference
+                diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                    
+                # absolute B channel difference
+                diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+                
+                # average channel intensity
+                channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                
+                channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)
+
+            if count_R == 0:
+                count_R = 1
+
+            if count_G == 0:
+                count_G = 1
+
+            if count_B == 0:
+                count_B = 1
+
+            if count_avg == 0:
+                count_avg = 1
+
+            if color_count == 0:
+                color_count = 1    
+
+            color_coverage_percent = 100 * same_color_count / color_count
+            
+            diff_R_abs /= count_R
+            diff_G_abs /= count_G
+            diff_B_abs /= count_B
+
+            diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+
+            channel_avg_diff /= count_avg
+
+            with open("robot_position.csv", "a") as myfile:
+                myfile.write(str(color_coverage_percent) + ",")
+                myfile.write(str(diff_R_abs) + ",")
+                myfile.write(str(diff_G_abs) + ",")
+                myfile.write(str(diff_B_abs) + ",")
+                myfile.write(str(diff_abs_from_RGB) + ",") 
+                myfile.write(str(channel_avg_diff) + "\n")
+            # ROBOT POSITION eval ENDS
+
+
+            
+            # OBSTACLES eval STARTS
+            count_R = 0
+            count_G = 0
+            count_B = 0
+            count_avg = 0
+
+            same_color_count = 0
+            color_count = 0
+
+            diff_R_abs = 0
+            diff_G_abs = 0
+            diff_B_abs = 0
+
+            channel_avg_diff = 0
+
+            for i in range(0, image.shape[0]):
+                for j in range(0, image.shape[1]):
+                    if image[i, j] == 99:
+                        row = i
+                        columns = j
                         
-                    # absolute G channel difference
-                    diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                        # increase counts
+                        count_R += 1
+                        count_G += 1
+                        count_B += 1
+                        count_avg += 1
+                        color_count += 1
+
+                        # compare colors
+                        lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                        gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                        if lime_color_name == gan_color_name:
+                            same_color_count += 1
+
+                        # absolute R channel difference
+                        diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                            
+                        # absolute G channel difference
+                        diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                            
+                        # absolute B channel difference
+                        diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
                         
-                    # absolute B channel difference
-                    diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
-                    
-                    # average channel intensity
-                    channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                    channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
-                    
-                    channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)                                        
-
-        if count_R == 0:
-            count_R = 1
-
-        if count_G == 0:
-            count_G = 1
-
-        if count_B == 0:
-            count_B = 1
-
-        if count_avg == 0:
-            count_avg = 1
-
-        if color_count == 0:
-            color_count = 1    
-
-        color_coverage_percent = 100 * same_color_count / color_count
-        
-        diff_R_abs /= count_R
-        diff_G_abs /= count_G
-        diff_B_abs /= count_B
-
-        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
-
-        channel_avg_diff /= count_avg
-
-        with open("obstacles.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + ",")
-            myfile.write(str(diff_R_abs) + ",")
-            myfile.write(str(diff_G_abs) + ",")
-            myfile.write(str(diff_B_abs) + ",")
-            myfile.write(str(diff_abs_from_RGB) + ",") 
-            myfile.write(str(channel_avg_diff) + "\n")
-        # OBSTACLES eval ENDS
-
-
-        # FREE SPACE eval STARTS
-        count_R = 0
-        count_G = 0
-        count_B = 0
-        count_avg = 0
-
-        same_color_count = 0
-        color_count = 0
-
-        diff_R_abs = 0
-        diff_G_abs = 0
-        diff_B_abs = 0
-
-        channel_avg_diff = 0
-
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if image[i, j] == 0:
-                    row = i
-                    columns = j
-                    
-                    # increase counts
-                    count_R += 1
-                    count_G += 1
-                    count_B += 1
-                    count_avg += 1
-                    color_count += 1
-
-                    # compare colors
-                    lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
-                    gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
-                    if lime_color_name == gan_color_name:
-                        same_color_count += 1
-
-                    # absolute R channel difference
-                    diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                        # average channel intensity
+                        channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                        channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
                         
-                    # absolute G channel difference
-                    diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                        channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)                                        
+
+            if count_R == 0:
+                count_R = 1
+
+            if count_G == 0:
+                count_G = 1
+
+            if count_B == 0:
+                count_B = 1
+
+            if count_avg == 0:
+                count_avg = 1
+
+            if color_count == 0:
+                color_count = 1    
+
+            color_coverage_percent = 100 * same_color_count / color_count
+            
+            diff_R_abs /= count_R
+            diff_G_abs /= count_G
+            diff_B_abs /= count_B
+
+            diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+
+            channel_avg_diff /= count_avg
+
+            with open("obstacles.csv", "a") as myfile:
+                myfile.write(str(color_coverage_percent) + ",")
+                myfile.write(str(diff_R_abs) + ",")
+                myfile.write(str(diff_G_abs) + ",")
+                myfile.write(str(diff_B_abs) + ",")
+                myfile.write(str(diff_abs_from_RGB) + ",") 
+                myfile.write(str(channel_avg_diff) + "\n")
+            # OBSTACLES eval ENDS
+
+
+            # FREE SPACE eval STARTS
+            count_R = 0
+            count_G = 0
+            count_B = 0
+            count_avg = 0
+
+            same_color_count = 0
+            color_count = 0
+
+            diff_R_abs = 0
+            diff_G_abs = 0
+            diff_B_abs = 0
+
+            channel_avg_diff = 0
+
+            for i in range(0, image.shape[0]):
+                for j in range(0, image.shape[1]):
+                    if image[i, j] == 0:
+                        row = i
+                        columns = j
                         
-                    # absolute B channel difference
-                    diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
-                    
-                    # average channel intensity
-                    channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
-                    channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
-                    
-                    channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)    
+                        # increase counts
+                        count_R += 1
+                        count_G += 1
+                        count_B += 1
+                        count_avg += 1
+                        color_count += 1
 
-        if count_R == 0:
-            count_R = 1
+                        # compare colors
+                        lime_color_name =  convert_rgb_to_names_my((exp_lime[row, columns, 0],exp_lime[row, columns, 1],exp_lime[row, columns, 2]))
+                        gan_color_name =  convert_rgb_to_names_my((exp_gan[row, columns, 0],exp_gan[row, columns, 1],exp_gan[row, columns, 2]))
+                        if lime_color_name == gan_color_name:
+                            same_color_count += 1
 
-        if count_G == 0:
-            count_G = 1
+                        # absolute R channel difference
+                        diff_R_abs += abs(int(exp_gan[row, columns, 0]) - int(exp_lime[row, columns, 0]))
+                            
+                        # absolute G channel difference
+                        diff_G_abs = abs(int(exp_gan[row, columns, 1]) - int(exp_lime[row, columns, 1]))
+                            
+                        # absolute B channel difference
+                        diff_B_abs = abs(int(exp_gan[row, columns, 2]) - int(exp_lime[row, columns, 2]))
+                        
+                        # average channel intensity
+                        channel_avg_lime = float(int(exp_lime[row, columns, 0]) + int(exp_lime[row, columns, 1]) + int(exp_lime[row, columns, 2])) / 3
+                        channel_avg_gan = float(int(exp_gan[row, columns, 0]) + int(exp_gan[row, columns, 1]) + int(exp_gan[row, columns, 2])) / 3
+                        
+                        channel_avg_diff += abs(channel_avg_gan - channel_avg_lime)    
 
-        if count_B == 0:
-            count_B = 1
+            if count_R == 0:
+                count_R = 1
 
-        if count_avg == 0:
-            count_avg = 1
+            if count_G == 0:
+                count_G = 1
 
-        if color_count == 0:
-            color_count = 1    
+            if count_B == 0:
+                count_B = 1
 
-        color_coverage_percent = 100 * same_color_count / color_count
-        
-        diff_R_abs /= count_R
-        diff_G_abs /= count_G
-        diff_B_abs /= count_B
+            if count_avg == 0:
+                count_avg = 1
 
-        diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+            if color_count == 0:
+                color_count = 1    
 
-        channel_avg_diff /= count_avg
+            color_coverage_percent = 100 * same_color_count / color_count
+            
+            diff_R_abs /= count_R
+            diff_G_abs /= count_G
+            diff_B_abs /= count_B
 
-        with open("free_space.csv", "a") as myfile:
-            myfile.write(str(color_coverage_percent) + ",")
-            myfile.write(str(diff_R_abs) + ",")
-            myfile.write(str(diff_G_abs) + ",")
-            myfile.write(str(diff_B_abs) + ",")
-            myfile.write(str(diff_abs_from_RGB) + ",") 
-            myfile.write(str(channel_avg_diff) + "\n")
-        # FREE SPACE eval ENDS
+            diff_abs_from_RGB = (diff_R_abs + diff_G_abs + diff_B_abs) / 3
+
+            channel_avg_diff /= count_avg
+
+            with open("free_space.csv", "a") as myfile:
+                myfile.write(str(color_coverage_percent) + ",")
+                myfile.write(str(diff_R_abs) + ",")
+                myfile.write(str(diff_G_abs) + ",")
+                myfile.write(str(diff_B_abs) + ",")
+                myfile.write(str(diff_abs_from_RGB) + ",") 
+                myfile.write(str(channel_avg_diff) + "\n")
+            # FREE SPACE eval ENDS
 
 
 ###### TKINTER START ######
