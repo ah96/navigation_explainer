@@ -1,6 +1,6 @@
 def predict():
     import os
-    path = os.getcwd() + '/src/lime_explainer/include/GAN'
+    path = os.getcwd() + '/src/navigation_explainer/include/GAN'
     import sys
     sys.path.insert(1, path)
 
