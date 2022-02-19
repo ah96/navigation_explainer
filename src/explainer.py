@@ -905,6 +905,7 @@ def EvaluateLIMEvsGAN():
     for ID in range(1, len(dss_test)+1): 
         ds_id = ID
         ds = 'ds' + str(ds_id + 7)
+        print('\nds = ', ds)
 
         # Data loading
         from navigation_explainer import DataLoader
@@ -954,8 +955,23 @@ def EvaluateLIMEvsGAN():
                 with open("times.csv", "a") as myfile:
                         myfile.write("lime,gan\n")
 
-                with open("deltaE.csv", "a") as myfile:
-                        myfile.write("deltaE_1976\n")
+                with open("measures_whole_explanation.csv", "a") as myfile:
+                        myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
+
+                with open("measures_robot_position.csv", "a") as myfile:
+                        myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
+
+                with open("measures_local_plan.csv", "a") as myfile:
+                        myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
+
+                with open("measures_global_plan.csv", "a") as myfile:
+                        myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
+
+                with open("measures_obstacles.csv", "a") as myfile:
+                        myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
+
+                with open("measures_free_space.csv", "a") as myfile:
+                        myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
             
             num_iter = 1
             
@@ -1037,19 +1053,6 @@ def EvaluateLIMEvsGAN():
                 x_odom_index = [localCostmapIndex_x_odom]
                 y_odom_index = [localCostmapIndex_y_odom]
 
-                # save robot odometry orientation to class variables
-                #odom_z = odom_tmp.iloc[0, 2] 
-                #odom_w = odom_tmp.iloc[0, 3]
-                # calculate Euler angles based on orientation quaternion
-                #[yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, odom_z, odom_w)
-                
-                #if flipped == True:
-                #    yaw_sign = math.copysign(1, self.yaw_odom)
-                #    self.yaw_odom = -1 * yaw_sign * (math.pi - abs(self.yaw_odom))
-                # find yaw angles projections on x and y axes and save them to class variables
-                #yaw_odom_x = math.cos(yaw_odom)
-                #yaw_odom_y = math.sin(yaw_odom)
-
                 # get local plan
                 local_plan_tmp = teb_local_plan.loc[teb_local_plan['ID'] == index + offset]
                 local_plan_tmp = local_plan_tmp.iloc[:, 1:]
@@ -1124,7 +1127,7 @@ def EvaluateLIMEvsGAN():
                 with open("times.csv", "a") as myfile:
                     myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
 
-                # RGB evaluation
+                # evaluation
                 import PIL.Image
                 import os
                 path1 = os.getcwd() + '/explanation.png'
@@ -1139,7 +1142,54 @@ def EvaluateLIMEvsGAN():
                 
                 from skimage import color
 
-                deltaE_1976_avg = 0.0
+                #cie76,cie94,ciede2000,cmc,euc
+                whole_explanation_cie76 = 0.0
+                whole_explanation_cie94 = 0.0
+                whole_explanation_ciede2000 = 0.0
+                whole_explanation_cmc = 0.0
+                whole_explanation_euc = 0.0
+                whole_explanation_euc_norm = 0.0
+                whole_explanation_counter = 0
+
+                robot_position_cie76 = 0.0
+                robot_position_cie94 = 0.0
+                robot_position_ciede2000 = 0.0
+                robot_position_cmc = 0.0
+                robot_position_euc = 0.0
+                robot_position_euc_norm = 0.0
+                robot_position_counter = 0
+
+                local_plan_cie76 = 0.0
+                local_plan_cie94 = 0.0
+                local_plan_ciede2000 = 0.0
+                local_plan_cmc = 0.0
+                local_plan_euc = 0.0
+                local_plan_euc_norm = 0.0
+                local_plan_counter = 0
+
+                global_plan_cie76 = 0.0
+                global_plan_cie94 = 0.0
+                global_plan_ciede2000 = 0.0
+                global_plan_cmc = 0.0
+                global_plan_euc = 0.0
+                global_plan_euc_norm = 0.0
+                global_plan_counter = 0
+
+                obstacles_cie76 = 0.0
+                obstacles_cie94 = 0.0
+                obstacles_ciede2000 = 0.0
+                obstacles_cmc = 0.0
+                obstacles_euc = 0.0
+                obstacles_euc_norm = 0.0
+                obstacles_counter = 0
+
+                free_space_cie76 = 0.0
+                free_space_cie94 = 0.0
+                free_space_ciede2000 = 0.0
+                free_space_cmc = 0.0
+                free_space_euc = 0.0
+                free_space_euc_norm = 0.0
+                free_space_counter = 0
                 
                 for i in range(0, 160):
                     for j in range(0, 160):
@@ -1154,17 +1204,133 @@ def EvaluateLIMEvsGAN():
                         gan_color = LabColor(lab_l= gan_color[0], lab_a = gan_color[1], lab_b = gan_color[2])
                         #print('gan_color = ', gan_color)
             
-                        from colormath.color_diff import delta_e_cie1976                
-                        deltaE_1976 = delta_e_cie1976(gan_color, lime_color)
-                        #print('deltaE_1976 = ', deltaE_1976)
-                        
-                        deltaE_1976_avg += deltaE_1976
+                        from colormath.color_diff import delta_e_cie1976, delta_e_cie1994, delta_e_cie2000, delta_e_cmc
+                        cie76 = delta_e_cie1976(gan_color, lime_color)
+                        cie94 = delta_e_cie1994(gan_color, lime_color)
+                        ciede2000 = delta_e_cie2000(gan_color, lime_color)
+                        cmc = delta_e_cmc(gan_color, lime_color)
+                        euc = math.sqrt((exp_gan[i, j, 0] - exp_lime[i, j, 0])**2 + (exp_gan[i, j, 1] - exp_lime[i, j, 1])**2 + (exp_gan[i, j, 2] - exp_lime[i, j, 2])**2)               
+                        euc_norm = euc / math.sqrt(3*(255**2))
+ 
+                        whole_explanation_cie76 += cie76
+                        whole_explanation_cie94 += cie94
+                        whole_explanation_ciede2000 += ciede2000
+                        whole_explanation_cmc += cmc
+                        whole_explanation_euc += euc
+                        whole_explanation_euc_norm += euc_norm
+                        whole_explanation_counter += 1
 
-                deltaE_1976_avg /= 160*160
+                        if i == y_odom_index[0] and j == x_odom_index[0]:
+                            robot_position_cie76 += cie76
+                            robot_position_cie94 += cie94
+                            robot_position_ciede2000 += ciede2000
+                            robot_position_cmc += cmc
+                            robot_position_euc += euc
+                            robot_position_euc_norm += euc_norm
+                            robot_position_counter += 1
 
-                with open("deltaE.csv", "a") as myfile:
-                    myfile.write(str(deltaE_1976_avg) + "\n")
-        
+                        elif i in local_plan_y_list and j in local_plan_x_list:
+                            local_plan_cie76 += cie76
+                            local_plan_cie94 += cie94
+                            local_plan_ciede2000 += ciede2000
+                            local_plan_cmc += cmc
+                            local_plan_euc += euc
+                            local_plan_euc_norm += euc_norm
+                            local_plan_counter += 1
+
+                        elif i in plan_y_list and j in plan_x_list:
+                            global_plan_cie76 += cie76
+                            global_plan_cie94 += cie94
+                            global_plan_ciede2000 += ciede2000
+                            global_plan_cmc += cmc
+                            global_plan_euc += euc
+                            global_plan_euc_norm += euc_norm
+                            global_plan_counter += 1
+
+                        elif image[i, j] == 99:
+                            obstacles_cie76 += cie76
+                            obstacles_cie94 += cie94
+                            obstacles_ciede2000 += ciede2000
+                            obstacles_cmc += cmc
+                            obstacles_euc += euc
+                            obstacles_euc_norm += euc_norm
+                            obstacles_counter += 1
+
+                        elif image[i, j] == 0:
+                            free_space_cie76 += cie76
+                            free_space_cie94 += cie94
+                            free_space_ciede2000 += ciede2000
+                            free_space_cmc += cmc
+                            free_space_euc += euc
+                            free_space_euc_norm += euc_norm
+                            free_space_counter += 1    
+
+                whole_explanation_cie76 /= whole_explanation_counter
+                whole_explanation_cie94 /= whole_explanation_counter
+                whole_explanation_ciede2000 /= whole_explanation_counter
+                whole_explanation_cmc /= whole_explanation_counter
+                whole_explanation_euc /= whole_explanation_counter
+                whole_explanation_euc_norm /= whole_explanation_counter
+
+                robot_position_cie76 /= robot_position_counter
+                robot_position_cie94 /= robot_position_counter
+                robot_position_ciede2000 /= robot_position_counter
+                robot_position_cmc /= robot_position_counter
+                robot_position_euc /= robot_position_counter
+                robot_position_euc_norm /= robot_position_counter
+
+                local_plan_cie76 /= local_plan_counter
+                local_plan_cie94 /= local_plan_counter
+                local_plan_ciede2000 /= local_plan_counter
+                local_plan_cmc /= local_plan_counter
+                local_plan_euc /= local_plan_counter
+                local_plan_euc_norm /= local_plan_counter
+
+                global_plan_cie76 /= global_plan_counter
+                global_plan_cie94 /= global_plan_counter
+                global_plan_ciede2000 /= global_plan_counter
+                global_plan_cmc /= global_plan_counter
+                global_plan_euc /= global_plan_counter
+                global_plan_euc_norm /= global_plan_counter
+
+                obstacles_cie76 /= obstacles_counter
+                obstacles_cie94 /= obstacles_counter
+                obstacles_ciede2000 /= obstacles_counter
+                obstacles_cmc /= obstacles_counter
+                obstacles_euc /= obstacles_counter
+                obstacles_euc_norm /= obstacles_counter
+
+                free_space_cie76 /= free_space_counter
+                free_space_cie94 /= free_space_counter
+                free_space_ciede2000 /= free_space_counter
+                free_space_cmc /= free_space_counter
+                free_space_euc /= free_space_counter
+                free_space_euc_norm /= free_space_counter
+
+                with open("measures_whole_explanation.csv", "a") as myfile:
+                    myfile.write(str(whole_explanation_cie76) + ',' + str(whole_explanation_cie94) + ',' + str(whole_explanation_ciede2000) 
+                    + ',' + str(whole_explanation_cmc) + ',' + str(whole_explanation_euc) + ',' + str(whole_explanation_euc_norm) + ',' + "\n")
+
+                with open("measures_robot_position.csv", "a") as myfile:
+                    myfile.write(str(robot_position_cie76) + ',' + str(robot_position_cie94) + ',' + str(robot_position_ciede2000) 
+                    + ',' + str(robot_position_cmc) + ',' + str(robot_position_euc) + ',' + str(robot_position_euc_norm) + ',' + "\n")
+
+                with open("measures_local_plan.csv", "a") as myfile:
+                    myfile.write(str(local_plan_cie76) + ',' + str(local_plan_cie94) + ',' + str(local_plan_ciede2000) 
+                    + ',' + str(local_plan_cmc) + ',' + str(local_plan_euc) + ',' + str(local_plan_euc_norm) + ',' + "\n")                    
+
+                with open("measures_global_plan.csv", "a") as myfile:
+                    myfile.write(str(global_plan_cie76) + ',' + str(global_plan_cie94) + ',' + str(global_plan_ciede2000) 
+                    + ',' + str(global_plan_cmc) + ',' + str(global_plan_euc) + ',' + str(global_plan_euc_norm) + ',' + "\n")
+
+                with open("measures_obstacles.csv", "a") as myfile:
+                    myfile.write(str(obstacles_cie76) + ',' + str(obstacles_cie94) + ',' + str(obstacles_ciede2000) 
+                    + ',' + str(obstacles_cmc) + ',' + str(obstacles_euc) + ',' + str(obstacles_euc_norm) + ',' + "\n")
+
+                with open("measures_free_space.csv", "a") as myfile:
+                    myfile.write(str(free_space_cie76) + ',' + str(free_space_cie94) + ',' + str(free_space_ciede2000) 
+                    + ',' + str(free_space_cmc) + ',' + str(free_space_euc) + ',' + str(free_space_euc_norm) + ',' + "\n")
+
         else:
             from test_color import create_dict_my, convert_rgb_to_names_my
             create_dict_my()
