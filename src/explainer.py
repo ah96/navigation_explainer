@@ -830,59 +830,12 @@ def RunGAN():
 
     print('\nEND!!!')
 
-def rgb2lab ( inputColor ) :
-
-   num = 0
-   RGB = [0, 0, 0]
-
-   for value in inputColor :
-       value = float(value) / 255
-
-       if value > 0.04045 :
-           value = ( ( value + 0.055 ) / 1.055 ) ** 2.4
-       else :
-           value = value / 12.92
-
-       RGB[num] = value * 100
-       num = num + 1
-
-   XYZ = [0, 0, 0,]
-
-   X = RGB [0] * 0.4124 + RGB [1] * 0.3576 + RGB [2] * 0.1805
-   Y = RGB [0] * 0.2126 + RGB [1] * 0.7152 + RGB [2] * 0.0722
-   Z = RGB [0] * 0.0193 + RGB [1] * 0.1192 + RGB [2] * 0.9505
-   XYZ[ 0 ] = round( X, 4 )
-   XYZ[ 1 ] = round( Y, 4 )
-   XYZ[ 2 ] = round( Z, 4 )
-
-   XYZ[ 0 ] = float( XYZ[ 0 ] ) / 95.047         # ref_X =  95.047   Observer= 2°, Illuminant= D65
-   XYZ[ 1 ] = float( XYZ[ 1 ] ) / 100.0          # ref_Y = 100.000
-   XYZ[ 2 ] = float( XYZ[ 2 ] ) / 108.883        # ref_Z = 108.883
-
-   num = 0
-   for value in XYZ :
-
-       if value > 0.008856 :
-           value = value ** ( 0.3333333333333333 )
-       else :
-           value = ( 7.787 * value ) + ( 16 / 116 )
-
-       XYZ[num] = value
-       num = num + 1
-
-   Lab = [0, 0, 0]
-
-   L = ( 116 * XYZ[ 1 ] ) - 16
-   a = 500 * ( XYZ[ 0 ] - XYZ[ 1 ] )
-   b = 200 * ( XYZ[ 1 ] - XYZ[ 2 ] )
-
-   Lab [ 0 ] = round( L, 4 )
-   Lab [ 1 ] = round( a, 4 )
-   Lab [ 2 ] = round( b, 4 )
-
-   return Lab
-
 def EvaluateLIMEvsGAN():
+    ds8_test = [170,185,190,205,215,220,225,250,275,280,285]
+    ds9_test = [10,25,45,110,145]
+    ds10_test = [5,355,375,420,425,555,605,620]
+    dss_test = [ds8_test,ds9_test,ds10_test]
+
     ''' 
     # test indices for RAAD   
     ds1_test = [1, 6, 12, 17, 20, 35, 44, 52, 58, 64, 66, 71] * 3
@@ -895,12 +848,9 @@ def EvaluateLIMEvsGAN():
     dss_test = [ds1_test,ds2_test,ds3_test,ds4_test]
     '''
 
-    ds8_test = [170,185,190,205,215,220,225,250,275,280,285]
-    ds9_test = [10,25,45,110,145]
-    ds10_test = [5,355,375,420,425,555,605,620]
-    dss_test = [ds8_test,ds9_test,ds10_test]
-
     new_eval = True
+
+    redni_broj_slike = 0
         
     for ID in range(1, len(dss_test)+1): 
         ds_id = ID
@@ -1139,6 +1089,14 @@ def EvaluateLIMEvsGAN():
                 print('exp_lime.shape: ', exp_lime.shape)
                 exp_gan = np.array(exp_gan_orig)
                 print('exp_gan.shape: ', exp_gan.shape)
+
+                from PIL import Image
+
+                im = Image.fromarray(exp_lime)
+                im.save("lime_" + str(redni_broj_slike) + ".png")
+
+                im = Image.fromarray(exp_gan)
+                im.save("gan_" + str(redni_broj_slike) + ".png")
                 
                 from skimage import color
 
