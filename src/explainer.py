@@ -831,10 +831,20 @@ def RunGAN():
     print('\nEND!!!')
 
 def EvaluateLIMEvsGAN():
+    ds1_test = [3,18,36,49,60,105,132,156,174]
+    ds2_test = [0,12,111]
+    ds10_test = [375,420,425,555,605]
+    dss_test = [ds1_test,ds2_test,ds10_test]
+    dss_names = ['ds1','ds2','ds10']
+
+    '''
+    # test indices for IROS original
     ds8_test = [170,185,190,205,215,220,225,250,275,280,285]
     ds9_test = [10,25,45,110,145]
     ds10_test = [5,355,375,420,425,555,605,620]
     dss_test = [ds8_test,ds9_test,ds10_test]
+    #
+    '''
 
     ''' 
     # test indices for RAAD   
@@ -854,7 +864,7 @@ def EvaluateLIMEvsGAN():
         
     for ID in range(1, len(dss_test)+1): 
         ds_id = ID
-        ds = 'ds' + str(ds_id + 7)
+        ds = dss_names[ID-1] #'ds' + str(ds_id + 7)
         print('\nds = ', ds)
 
         # Data loading
@@ -1097,6 +1107,8 @@ def EvaluateLIMEvsGAN():
 
                 im = Image.fromarray(exp_gan)
                 im.save("gan_" + str(redni_broj_slike) + ".png")
+
+                redni_broj_slike += 1
                 
                 from skimage import color
 
