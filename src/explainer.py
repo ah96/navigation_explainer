@@ -1208,7 +1208,7 @@ def EvaluateLIMEvsGAN():
                             local_plan_euc_norm += euc_norm
                             local_plan_counter += 1
 
-                        elif i in plan_y_list and j in plan_x_list:
+                        elif i in exp_nav.transformed_plan_ys and j in exp_nav.transformed_plan_xs:
                             global_plan_cie76 += cie76
                             global_plan_cie94 += cie94
                             global_plan_ciede2000 += ciede2000
