@@ -1,21 +1,31 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 
 import rospy
 from nav_msgs.msg import Odometry, Path, OccupancyGrid
 from geometry_msgs.msg import PoseStamped, Pose
 import numpy as np
-#import tf2_ros
+
 import tf2_ros
 from skimage.color import gray2rgb
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 
-global odom_x, odom_y, local_plan_xs, local_plan_ys, global_plan_xs, global_plan_ys, listener 
-global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image 
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+import copy
 
+from data.base_dataset import get_params, get_transform
+import PIL.Image
+import os
 from options.test_options import TestOptions
 from models import create_model
 from util.util import tensor2im
+
+global odom_x, odom_y, local_plan_xs, local_plan_ys, global_plan_xs, global_plan_ys, listener 
+global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image 
+global pub_exp_image, br
+
 opt = TestOptions().parse()  # get test options
 # hard-code some parameters for test
 opt.num_threads = 0   # test code only supports num_threads = 0
@@ -25,13 +35,6 @@ opt.no_flip = True    # no flip; comment this line if results on flipped images 
 opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
 model = create_model(opt)      # create a model given opt.model and other options
 model.setup(opt)               # regular setup: load and print networks; create schedulers
-from data.base_dataset import get_params, get_transform
-transform_params = get_params(opt, input.size)
-input_nc = 3
-input_transform = get_transform(opt, transform_params, grayscale=(input_nc == 1))
-
-import PIL.Image
-import os
 
 # Define a callback for the local plan
 def local_plan_callback(msg):
@@ -55,19 +58,22 @@ def global_plan_callback(msg):
 
     for i in range(0,len(msg.poses)):
         global_plan_xs.append(msg.poses[i].pose.position.x) 
-        global_plan_ys.append(msg.poses[i].pose.position.x)
+        global_plan_ys.append(msg.poses[i].pose.position.y)
 
-    (t, r) = tfBuffer.lookup_transform('/odom', '/map', rospy.Time(0))
+    transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+    #print('\ntransf.transform.translation = ', transf.transform.translation)
+    #print('\ntransf.transform.rotation = ', transf.transform.rotation)
     #(t,r) = listener.lookupTransform('/odom', '/map', rospy.Time(0))
-    t=np.asarray(t)
+    t=np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
    
-    r = R.from_quat(r)
-    print(r)
-    r = np.asarray(r.as_dcm())
+    #print(transf.transform.rotation)
+    r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+    #print(r)
+    r_ = np.asarray(r.as_matrix())
 
     # save indices of robot's odometry location in local costmap to class variables
-    localCostmapIndex_x_odom = int((odom_x - localCostmapOriginX) / localCostmapResolution)
-    localCostmapIndex_y_odom = int((odom_y - localCostmapOriginY) / localCostmapResolution)
+    localCostmapIndex_x_odom = round((odom_x - localCostmapOriginX) / localCostmapResolution)
+    localCostmapIndex_y_odom = round((odom_y - localCostmapOriginY) / localCostmapResolution)
 
     # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
     x_odom_index = [localCostmapIndex_x_odom]
@@ -76,27 +82,37 @@ def global_plan_callback(msg):
     local_plan_x_list = []
     local_plan_y_list = []
     for i in range(1, len(local_plan_xs)):
-        x_temp = int((local_plan_xs[i] - localCostmapOriginX) / localCostmapResolution)
-        y_temp = int((local_plan_ys[i] - localCostmapOriginY) / localCostmapResolution)
+        x_temp = round((local_plan_xs[i] - localCostmapOriginX) / localCostmapResolution)
+        y_temp = round((local_plan_ys[i] - localCostmapOriginY) / localCostmapResolution)
         if 0 <= x_temp < 160 and 0 <= y_temp < 160:
             local_plan_x_list.append(x_temp)
             local_plan_y_list.append(y_temp)
 
+    #print('\nglobal_plan_xs = ', global_plan_xs)
+
+    transformed_plan_xs = []
+    transformed_plan_ys = []
+
     for i in range(0, len(global_plan_xs)):
-        z_dummy = 0
+        z_dummy = 0.0
         p = np.array([global_plan_xs[i], global_plan_ys[i], z_dummy])
-        pnew = p.dot(r) + t
-        global_plan_xs[i] = pnew[0]
-        global_plan_ys[i] = pnew[1]
+        pnew = p.dot(r_) + t
+        #global_plan_xs[i] = pnew[0]
+        #global_plan_ys[i] = pnew[1]
+        transformed_plan_xs.append(pnew[0])
+        transformed_plan_ys.append(pnew[1])
 
     global_plan_x_list = []
     global_plan_y_list = []
-    for i in range(1, len(global_plan_xs)):
-        x_temp = int((global_plan_xs[i] - localCostmapOriginX) / localCostmapResolution)
-        y_temp = int((global_plan_ys[i] - localCostmapOriginY) / localCostmapResolution)
+    for i in range(1, len(transformed_plan_xs)):
+        x_temp = round((transformed_plan_xs[i] - localCostmapOriginX) / localCostmapResolution)
+        y_temp = round((transformed_plan_ys[i] - localCostmapOriginY) / localCostmapResolution)
+        #print('\n(x_temp, y_temp) = ', (x_temp, y_temp))
         if 0 <= x_temp < 160 and 0 <= y_temp < 160:
             global_plan_x_list.append(x_temp)
             global_plan_y_list.append(y_temp)
+
+    #print('\nglobal_plan_x_list = ', global_plan_x_list)        
 
     # plot costmap with plans
     fig = plt.figure(frameon=False)
@@ -115,10 +131,21 @@ def global_plan_callback(msg):
 
     path = os.getcwd() + '/input.png'
     input = PIL.Image.open(path).convert('RGB')
+    #print(type(input))
+    #print(input.size)
+    transform_params = get_params(opt, input.size)
+    input_nc = 3
+    input_transform = get_transform(opt, transform_params, grayscale=(input_nc == 1))
     input = input_transform(input)
+    #print(type(input))
+    #print(input.size)
     model.set_input_one(input)  # unpack data from data loader
     model.forward()
     output = tensor2im(model.fake_B)
+    #print(type(output))
+    #print(output.shape)
+   
+    '''
     fig = plt.figure(frameon=False)
     w = 1.6 #* 3
     h = 1.6 #* 3
@@ -129,6 +156,25 @@ def global_plan_callback(msg):
     ax.imshow(output, aspect='auto')
     fig.savefig('GAN.png')
     fig.clf()
+    '''
+
+    output[:,:,0] = np.flip(output[:,:,0], axis=1)
+    output[:,:,1] = np.flip(output[:,:,1], axis=1)
+    output[:,:,2] = np.flip(output[:,:,2], axis=1)
+    
+    #import pandas as pd
+    #pd.DataFrame(output[:,:,0]).to_csv('R.csv')
+    #pd.DataFrame(output[:,:,1]).to_csv('G.csv')
+    #pd.DataFrame(output[:,:,2]).to_csv('B.csv')
+
+    # RGB to BGR
+    temp = copy.deepcopy(output[:,:,0])
+    output[:,:,0] = output[:,:,2]
+    output[:,:,2] = temp
+
+    #if output is not None:
+    output_cv = br.cv2_to_imgmsg(output)#,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
+    pub_exp_image.publish(output_cv)
         
 # Define a callback for the local plan
 def odom_callback(msg):
@@ -177,11 +223,15 @@ rospy.init_node('visualize_gan', anonymous=True)
 tfBuffer = tf2_ros.Buffer()
 listener = tf2_ros.TransformListener(tfBuffer)
 
+pub_exp_image = rospy.Publisher('explanation_image', Image, queue_size=10)
+br = CvBridge()
+
 # Initalize a subscriber to the TEB local plan
 sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, local_plan_callback)
 
 # Initalize a subscriber to the TEB global plan
-sub_global_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/global_plan", Path, global_plan_callback)
+#sub_global_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/global_plan", Path, global_plan_callback)
+sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, global_plan_callback)
 
 # Initalize a subscriber to the odometry
 sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, odom_callback)
