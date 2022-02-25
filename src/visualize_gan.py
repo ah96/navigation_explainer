@@ -24,7 +24,7 @@ from util.util import tensor2im
 
 global odom_x, odom_y, local_plan_xs, local_plan_ys, global_plan_xs, global_plan_ys, listener 
 global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image 
-global pub_exp_image, br
+global pub_exp_image, br, explanation_map, pub_explanation_map, costmap_original
 
 opt = TestOptions().parse()  # get test options
 # hard-code some parameters for test
@@ -158,23 +158,60 @@ def global_plan_callback(msg):
     fig.clf()
     '''
 
-    output[:,:,0] = np.flip(output[:,:,0], axis=1)
-    output[:,:,1] = np.flip(output[:,:,1], axis=1)
-    output[:,:,2] = np.flip(output[:,:,2], axis=1)
-    
     #import pandas as pd
     #pd.DataFrame(output[:,:,0]).to_csv('R.csv')
     #pd.DataFrame(output[:,:,1]).to_csv('G.csv')
     #pd.DataFrame(output[:,:,2]).to_csv('B.csv')
 
-    # RGB to BGR
-    temp = copy.deepcopy(output[:,:,0])
-    output[:,:,0] = output[:,:,2]
-    output[:,:,2] = temp
+    #output = output.astype(int)
 
+    R_ = copy.deepcopy(output[:,:,0])
+    G_ = copy.deepcopy(output[:,:,1])
+    B_ = copy.deepcopy(output[:,:,2])
+
+    #import pandas as pd
+    #pd.DataFrame(np.flip(output[:,:,0], axis=1)).to_csv('R.csv')
+    #temp = output[:,:,0]
+    #temp.resize(25600)
+    #temp = temp.astype(np.int8).tolist()
+
+    temp = [np.int8(40)]*25600 # gray
+    for i in range(0, 160):
+        for j in range(0, 160):
+            if R_[i, j] > 250 and G_[i, j] > 250:
+                temp[i*160+j] = np.int8(254) # yellow
+            elif R_[i, j] < 5 and G_[i, j] > 200 and B_[i, j] < 5 and costmap_original[i, j] >= 99:
+                temp[i*160+j] = np.int8(110) # green
+            elif R_[i, j] > 200 and G_[i, j] < 5 and B_[i, j] < 5:
+                temp[i*160+j] = np.int8(128) # red
+            elif R_[i, j] > 250 and G_[i, j] > 250 and G_[i, j] > 250:         
+                temp[i*160+j] = np.int8(0) # white
+
+    explanation_map.data = tuple(temp)
+    #print(type(explanation_map.data))
+    #print(type(explanation_map.data[0]))
+    #print(type(explanation_map.data[1]))
+    #print(type(explanation_map.data[2]))
+    #print(type(explanation_map.data[3]))
+
+    pub_explanation_map.publish(explanation_map)
+
+    # RGB to BGR and flip
+    output[:,:,0] = B_
+    output[:,:,1] = G_
+    output[:,:,2] = R_
+
+    #temp = copy.deepcopy(output[:,:,0])
+    #output[:,:,0] = output[:,:,2]
+    #output[:,:,2] = temp
+
+    output[:,:,0] = np.flip(output[:,:,0], axis=1)
+    output[:,:,1] = np.flip(output[:,:,1], axis=1)
+    output[:,:,2] = np.flip(output[:,:,2], axis=1)
     #if output is not None:
     output_cv = br.cv2_to_imgmsg(output)#,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
     pub_exp_image.publish(output_cv)
+    
         
 # Define a callback for the local plan
 def odom_callback(msg):
@@ -189,7 +226,13 @@ def odom_callback(msg):
 def local_costmap_callback(msg):
     print('\nlocal_costmap')
 
-    global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image
+    global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image, explanation_map, costmap_original
+
+    explanation_map = OccupancyGrid()
+    explanation_map.header = msg.header
+    explanation_map.data = msg.data
+    explanation_map.info = msg.info
+    print(type(msg.data))
 
     localCostmapOriginX = msg.info.origin.position.x
     localCostmapOriginY = msg.info.origin.position.y
@@ -197,6 +240,11 @@ def local_costmap_callback(msg):
 
     image = np.asarray(msg.data)
     image.resize((160,160))
+
+    costmap_original = copy.deepcopy(image)
+
+    #import pandas as pd
+    #pd.DataFrame(image).to_csv('costmap.csv')
 
     # Turn inflated area to free space and 100s to 99s
     image[image == 100] = 99
@@ -224,6 +272,8 @@ tfBuffer = tf2_ros.Buffer()
 listener = tf2_ros.TransformListener(tfBuffer)
 
 pub_exp_image = rospy.Publisher('explanation_image', Image, queue_size=10)
+pub_explanation_map = rospy.Publisher('explanation_map', OccupancyGrid, queue_size=10)
+explanation_map = OccupancyGrid()
 br = CvBridge()
 
 # Initalize a subscriber to the TEB local plan
