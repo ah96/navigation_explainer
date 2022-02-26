@@ -2,7 +2,6 @@
 
 import rospy
 from nav_msgs.msg import Odometry, Path, OccupancyGrid
-from geometry_msgs.msg import PoseStamped, Pose
 import numpy as np
 
 import tf2_ros
