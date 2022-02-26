@@ -1097,6 +1097,8 @@ def EvaluateLIMEvsGAN():
 
                 im = Image.fromarray(exp_gan)
                 im.save("gan_" + str(redni_broj_slike) + ".png")
+
+                redni_broj_slike += 1
                 
                 from skimage import color
 
