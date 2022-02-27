@@ -21,9 +21,15 @@ from options.test_options import TestOptions
 from models import create_model
 from util.util import tensor2im
 
+from sensor_msgs import point_cloud2
+from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
+import struct
+
+
 global odom_x, odom_y, local_plan_xs, local_plan_ys, global_plan_xs, global_plan_ys, listener 
 global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image 
-global pub_exp_image, br, explanation_map, pub_explanation_map, costmap_original
+global pub_exp_image, br, explanation_map, pub_explanation_map, costmap_original, my_awesome_pointcloud
 
 opt = TestOptions().parse()  # get test options
 # hard-code some parameters for test
@@ -58,6 +64,17 @@ def global_plan_callback(msg):
     for i in range(0,len(msg.poses)):
         global_plan_xs.append(msg.poses[i].pose.position.x) 
         global_plan_ys.append(msg.poses[i].pose.position.y)
+
+    transf_to_map = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+    #print('\ntransf.transform.translation = ', transf.transform.translation)
+    #print('\ntransf.transform.rotation = ', transf.transform.rotation)
+    #(t,r) = listener.lookupTransform('/odom', '/map', rospy.Time(0))
+    t_to_map=np.asarray([transf_to_map.transform.translation.x,transf_to_map.transform.translation.y,transf_to_map.transform.translation.z])
+   
+    #print(transf.transform.rotation)
+    r_to_map = R.from_quat([transf_to_map.transform.rotation.x,transf_to_map.transform.rotation.y,transf_to_map.transform.rotation.z,transf_to_map.transform.rotation.w])
+    #print(r)
+    r__to_map = np.asarray(r_to_map.as_matrix())    
 
     transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
     #print('\ntransf.transform.translation = ', transf.transform.translation)
@@ -200,21 +217,59 @@ def global_plan_callback(msg):
     output[:,:,1] = G_
     output[:,:,2] = R_
 
+    #/image_publisher/topic
+
     #temp = copy.deepcopy(output[:,:,0])
     #output[:,:,0] = output[:,:,2]
     #output[:,:,2] = temp
 
-    output[:,:,0] = np.flip(output[:,:,0], axis=1)
-    output[:,:,1] = np.flip(output[:,:,1], axis=1)
-    output[:,:,2] = np.flip(output[:,:,2], axis=1)
+    #output[:,:,0] = np.flip(output[:,:,0], axis=1)
+    #output[:,:,1] = np.flip(output[:,:,1], axis=1)
+    #output[:,:,2] = np.flip(output[:,:,2], axis=1)
+
+    points = []
+    for i in range(0, 160):
+        for j in range(0, 160):
+            p = np.array([localCostmapOriginY + j * localCostmapResolution, localCostmapOriginX + i * localCostmapResolution, 0.0])
+            pnew = p.dot(r__to_map) + t_to_map
+            y = pnew[0]
+            x = pnew[1]
+            z = 0.0
+            r = output[j, i, 2]
+            g = output[j, i, 1]
+            b = output[j, i, 0]
+            a = 255
+            rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+            #print hex(rgb)
+            pt = [x, y, z, rgb]
+            points.append(pt)
+
+    fields = [PointField('x', 0, PointField.FLOAT32, 1),
+          PointField('y', 4, PointField.FLOAT32, 1),
+          PointField('z', 8, PointField.FLOAT32, 1),
+          # PointField('rgb', 12, PointField.UINT32, 1),
+          PointField('rgba', 12, PointField.UINT32, 1),
+          ]
+
+    header = Header()
+    #header = explanation_map.header
+    header.frame_id = 'map'
+    pc2 = point_cloud2.create_cloud(header, fields, points)
+
+    pc2.header.stamp = rospy.Time.now()
+    pointcloud_publisher.publish(pc2)
+    #rospy.sleep(1.0)
+
     #if output is not None:
     output_cv = br.cv2_to_imgmsg(output)#,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
     pub_exp_image.publish(output_cv)
-    
+
+    pub_exp_image_new.publish(output_cv)
+
         
 # Define a callback for the local plan
 def odom_callback(msg):
-    print('\nodom')
+    #print('\nodom')
 
     global odom_x, odom_y
 
@@ -231,7 +286,8 @@ def local_costmap_callback(msg):
     explanation_map.header = msg.header
     explanation_map.data = msg.data
     explanation_map.info = msg.info
-    print(type(msg.data))
+    print(msg.info)
+    print(msg.header)
 
     localCostmapOriginX = msg.info.origin.position.x
     localCostmapOriginY = msg.info.origin.position.y
@@ -271,6 +327,8 @@ tfBuffer = tf2_ros.Buffer()
 listener = tf2_ros.TransformListener(tfBuffer)
 
 pub_exp_image = rospy.Publisher('explanation_image', Image, queue_size=10)
+pub_exp_image_new = rospy.Publisher('image_publisher/image', Image, queue_size=10)
+pointcloud_publisher = rospy.Publisher("/my_pointcloud_topic", PointCloud2)
 pub_explanation_map = rospy.Publisher('explanation_map', OccupancyGrid, queue_size=10)
 explanation_map = OccupancyGrid()
 br = CvBridge()
