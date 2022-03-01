@@ -4,6 +4,7 @@ import sklearn
 import time
 import matplotlib.pyplot as plt
 import os
+import pandas as pd
 
 
 class AnchorImage(object):
@@ -59,7 +60,8 @@ class AnchorImage(object):
         image_orig = image[:,:,0]
         segments = self.segmentation(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
         #fudged_image = image.copy()
-        fudged_image = image_orig.copy()
+        #fudged_image = image_orig.copy()
+        fudged_image = copy.deepcopy(image_orig)
         '''
         for x in np.unique(segments):
             fudged_image[segments == x] = (
@@ -70,7 +72,7 @@ class AnchorImage(object):
         if self.white is not None:
             fudged_image[:] = self.white
         features = list(np.unique(segments))
-        n_features = len(features)
+        n_features = len(features) #=9
 
 
         #### MY PART START
@@ -95,27 +97,40 @@ class AnchorImage(object):
             data[-1, 1:] = 0 # only if I use my perturbation
             imgs = []
 
-        print('DATA = ', data)    
+        print('\nDATA = ', data)    
+        print('\nDATA.shape = ', data.shape)
+
+        print('\nSEGMENTS.shape = ', segments.shape)
     
         rows = data
         i = 0
         for row in rows:
-            temp = copy.deepcopy(image)
+            temp = copy.deepcopy(image_orig)
             zeros = np.where(row == 0)[0]
+            print('\nZEROS = ', zeros)
             mask = np.zeros(segments.shape).astype(bool)
             for z in zeros:
                 mask[segments == z] = True
+                temp[segments == z] = 0.0
             #temp[mask] = fudged_image[mask]
-            temp = mask            
+            #temp = mask
+            #temp[mask] = fudged_image[mask]
+            #pd.DataFrame(mask).to_csv("mask_" + str(i) + ".csv")
+            #pd.DataFrame(temp).to_csv("temp_" + str(i) + ".csv")
+            #i += 1            
             imgs.append(temp)
         #if len(imgs) > 0:
         #    preds = classifier_fn(np.array(imgs))
         #    labels.extend(preds)
         #### MY PART END
 
+        print('\nLEN(IMGS) = ', len(imgs))
+        print('\nnp.array(imgs).shape = ', np.array(imgs).shape)
+
         true_label = np.argmax(classifier_fn(np.array(imgs)[0,:,:])[0])
+        #true_label = 1.0
         #true_label = np.argmax(classifier_fn(np.expand_dims(image, 0))[0])
-        print ('True pred', true_label)
+        print('\nTrue pred = ', true_label)
 
         def lime_sample_fn(num_samples, batch_size=50):
             # data = np.random.randint(0, 2, num_samples * n_features).reshape(
@@ -203,8 +218,12 @@ class AnchorImage(object):
             # TODO: I'm sampling in this different way because the way we were
             # sampling confounds size of the document with feature presence
             # (larger documents are more likely to have features present)
+            print('\nnum_samples = ', num_samples)
+            print('\nn_features = ', n_features)
             data = np.random.randint(0, 2, num_samples * n_features).reshape(
                 (num_samples, n_features))
+            print('\npresent = ', present)    
+            print("\nDATA.shape============================ ", data.shape)
             data[:, present] = 1
             if not compute_labels:
                 return [], data, []
@@ -215,7 +234,8 @@ class AnchorImage(object):
                 mask = np.zeros(segments.shape).astype(bool)
                 for z in zeros:
                     mask[segments == z] = True
-                temp[mask] = fudged_image[mask]
+                    temp[segments == z] = 0.0
+                #temp[mask] = fudged_image[mask]
                 imgs.append(temp)
             preds = classifier_fn(np.array(imgs))
             preds_max = np.argmax(preds, axis=1)
@@ -229,13 +249,15 @@ class AnchorImage(object):
 
     def explain_instance(self, image, classifier_fn, 
                         costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list,
-                        threshold=0.95, delta=0.1, tau=0.15, batch_size=100,
+                        threshold=0.95, delta=0.1, tau=0.15, batch_size=10,
                            **kwargs):
         # classifier_fn is a predict_proba
         segments, sample = self.get_sample_fn(image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-        exp = anchor_base.AnchorBaseBeam.anchor_beam(
-            sample, delta=delta, epsilon=tau, batch_size=batch_size,
-            desired_confidence=threshold, **kwargs)
+        #print('\nsample = ', sample)
+        #print('\ntype(sample) = ', type(sample))
+        exp = anchor_base.AnchorBaseBeam.anchor_beam(sample, delta=delta, epsilon=tau, batch_size=batch_size, desired_confidence=threshold, **kwargs)
+        print('\nexp = ', exp)
+        print('\ntype(exp) = ', type(exp))
         return segments, self.get_exp_from_hoeffding(image, exp)
 
     def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):

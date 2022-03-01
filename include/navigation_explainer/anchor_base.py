@@ -90,8 +90,12 @@ class AnchorBaseBeam(object):
         ut, lt = update_bounds(t)
         B = ub[ut] - lb[lt]
         verbose_count = 0
+        epsilon = 0.8
+        print('\nBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB = ', B)
         while B > epsilon:
             verbose_count += 1
+            print('\nBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB = ', B)
+            print('\nepsilon = ', epsilon)
             if verbose and verbose_count % verbose_every == 0:
                 print('Best: %d (mean:%.10f, n: %d, lb:%.4f)' %
                       (lt, means[lt], n_samples[lt], lb[lt]), end=' ')
@@ -254,15 +258,16 @@ class AnchorBaseBeam(object):
     @staticmethod
     def anchor_beam(sample_fn, delta=0.05, epsilon=0.1, batch_size=10,
                     min_shared_samples=0, desired_confidence=1, beam_size=1,
-                    verbose=False, epsilon_stop=0.05, min_samples_start=0,
+                    verbose=True, epsilon_stop=0.05, min_samples_start=0,
                     max_anchor_size=None, verbose_every=1,
-                    stop_on_first=False, coverage_samples=10000):
+                    stop_on_first=False, coverage_samples=256):
         anchor = {'feature': [], 'mean': [], 'precision': [],
                   'coverage': [], 'examples': [], 'all_precision': 0}
         _, coverage_data, _ = sample_fn([], coverage_samples, compute_labels=False)
         raw_data, data, labels = sample_fn([], max(1, min_samples_start))
         mean = labels.mean()
         beta = np.log(1. / delta)
+        print('\n1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111')
         lb = AnchorBaseBeam.dlow_bernoulli(mean, beta / data.shape[0])
         while mean > desired_confidence and lb < desired_confidence - epsilon:
             nraw_data, ndata, nlabels = sample_fn([], batch_size)
@@ -271,6 +276,7 @@ class AnchorBaseBeam(object):
             labels = np.hstack((labels, nlabels))
             mean = labels.mean()
             lb = AnchorBaseBeam.dlow_bernoulli(mean, beta / data.shape[0])
+        print('\n2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222')    
         if lb > desired_confidence:
             anchor['num_preds'] = data.shape[0]
             anchor['all_precision'] = mean
@@ -298,33 +304,43 @@ class AnchorBaseBeam(object):
                  'coverage_data': coverage_data,
                  't_order': collections.defaultdict(lambda: list())
                  }
-        current_size = 1
+        current_size = 1 #1
         best_of_size = {0: []}
         best_coverage = -1
         best_tuple = ()
         t = 1
         if max_anchor_size is None:
             max_anchor_size = n_features
+        print('\n33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333')    
         while current_size <= max_anchor_size:
-            tuples = AnchorBaseBeam.make_tuples(
-                best_of_size[current_size - 1], state)
+            print('\nCURRENT_SIZEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE = ', current_size)
+            print('\nMAX_CURRENT_SIZEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE = ', max_anchor_size)
+            print('\nbest_of_size = ', best_of_size)
+            print('\nstate = ', state)
+            tuples = AnchorBaseBeam.make_tuples(best_of_size[current_size - 1], state)
+            print('\ntuples = ', tuples)
             tuples = [x for x in tuples
                       if state['t_coverage'][x] > best_coverage]
+            print('\ntuples = ', tuples)
             if len(tuples) == 0:
                 break
             sample_fns = AnchorBaseBeam.get_sample_fns(sample_fn, tuples,
                                                        state)
+            print('sample_fns = ', sample_fns)
+            print('len(sample_fns) = ', len(sample_fns))
             initial_stats = AnchorBaseBeam.get_initial_statistics(tuples,
                                                                   state)
+            print('initial_stats = ', initial_stats)
             # print tuples, beam_size
-            chosen_tuples = AnchorBaseBeam.lucb(
-                sample_fns, initial_stats, epsilon, delta, batch_size,
-                min(beam_size, len(tuples)),
+            chosen_tuples = AnchorBaseBeam.lucb(sample_fns, initial_stats, epsilon, delta, batch_size, min(beam_size, len(tuples)),
                 verbose=verbose, verbose_every=verbose_every)
+            print('\nchosen_tuples = ', chosen_tuples)    
             best_of_size[current_size] = [tuples[x] for x in chosen_tuples]
+            print('\nbest_of_size = ', best_of_size)
             if verbose:
                 print('Best of size ', current_size, ':')
             # print state['data'].shape[0]
+            print('\nbest_of_size[current_size] = ', best_of_size[current_size])
             stop_this = False
             for i, t in zip(chosen_tuples, best_of_size[current_size]):
                 # I can choose at most (beam_size - 1) tuples at each step,
