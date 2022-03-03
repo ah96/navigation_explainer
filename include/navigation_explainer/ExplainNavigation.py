@@ -93,7 +93,7 @@ class ExplainRobotNavigation:
             # manually modified Anchors Image
             if self.explanation_mode == 'image':
                 self.explainer = anchor_image.AnchorImage( distribution_path=None, transform_img_fn=None, 
-                                                           n=1000, dummys=None, white=None, segmentation_fn=slic)
+                                                           n=1000, dummys=None, white=None, segmentation_fn=None)
 
             elif self.explanation_mode == 'tabular':
                 pass
@@ -409,7 +409,7 @@ class ExplainRobotNavigation:
                 self.segments, self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image_anchors, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
                                                                                     self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, 
                                                                                     devDistance_y, sum_y, devDistance, self.plan_x_list, self.plan_y_list,
-                                                                                    threshold=0.50, delta=0.1, tau=0.15, batch_size=2)
+                                                                                    threshold=0.95, delta=0.1, tau=0.15, batch_size=256)
 
                 print('self.segments = ', self.segments)
                 print('self.explanation = ', self.explanation)
@@ -1978,7 +1978,7 @@ class ExplainRobotNavigation:
 
         costmap_save_end = time.time()
         costmap_save_time = costmap_save_end - costmap_save_start
-        print('\nsave perturbed costmap_data runtime: ', costmap_save_time)
+        #print('\nsave perturbed costmap_data runtime: ', costmap_save_time)
 
         # calling ROS C++ node
         #print('\nstarting C++ node')
@@ -1997,7 +1997,7 @@ class ExplainRobotNavigation:
 
         planner_calculation_end = time.time()
         planner_calculation_time = planner_calculation_end - planner_calculation_start
-        print('\nplanner calculation runtime = ', planner_calculation_time)
+        #print('\nplanner calculation runtime = ', planner_calculation_time)
 
         rospy.sleep(1)
 
@@ -2023,7 +2023,7 @@ class ExplainRobotNavigation:
         #self.transformed_plan.to_csv('transformed_plan.csv')
         output_end = time.time()
         output_time = output_end - output_start
-        print('\noutput time: ', output_time)
+        #print('\noutput time: ', output_time)
 
         # fill the list of transformed plan coordinates
         start_transformed = time.time()
@@ -2047,7 +2047,7 @@ class ExplainRobotNavigation:
         sample_size = sampled_instance.shape[0] if len(sampled_instance.shape) == 3 else 1
         print('\nSAMPLE_SIZE========== ', sample_size)
 
-        plot_perturbations = True
+        plot_perturbations = False
         if plot_perturbations == True:
             # only needed for classifier_fn_image_plot() function
             self.sampled_instance = sampled_instance
@@ -2057,8 +2057,8 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression' # 'regression' or 'classification'
-        print('\nmode = ', mode)
+        mode = 'classification' # 'regression' or 'classification'
+        #print('\nmode = ', mode)
   
         import math
 
@@ -2145,7 +2145,7 @@ class ExplainRobotNavigation:
         
         end_determine_dev = time.time()
         determine_dev_time = end_determine_dev - start_determine_dev
-        print('\ndetermine deviation type runtime = ', determine_dev_time)
+        #print('\ndetermine deviation type runtime = ', determine_dev_time)
         
         # deviation of local plan from global plan
         self.sample_size = sampled_instance.shape[0] if len(sampled_instance.shape) == 3 else 1
@@ -2216,24 +2216,31 @@ class ExplainRobotNavigation:
                     local_plan_xs = []
                     local_plan_ys = []
                     local_plan_found = False
-                    for j in range(0, self.local_plans.shape[0]):
-                        if self.local_plans.iloc[j, -1] == i:
-                            x_temp = int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                            y_temp = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                    
+                    # find if there is local plan
+                    self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                    for j in range(0, self.local_plans_local.shape[0]):
+                            x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                            y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-                            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                                 local_plan_xs.append(x_temp)
                                 local_plan_ys.append(y_temp)
                                 local_plan_found = True
                         
                     local_plan_point_in_obstacle = False
-                    local_plan_found = True    
+                    #local_plan_found = True    
                     if local_plan_found == True:
                         # test if any part of the local plan is in the obstacle region
                         for j in range(0, len(local_plan_xs)):
-                            if sampled_instance[i][local_plan_ys[j], local_plan_xs[j], 0] == 99:
-                                local_plan_point_in_obstacle = True
-                                break
+                            if len(sampled_instance.shape) == 3:
+                                if sampled_instance[i, local_plan_ys[j], local_plan_xs[j]] == 99:
+                                    local_plan_point_in_obstacle = True
+                                    break
+                            else:
+                                if sampled_instance[local_plan_ys[j], local_plan_xs[j]] == 99:
+                                    local_plan_point_in_obstacle = True
+                                    break
 
                         if local_plan_point_in_obstacle == True:
                             self.local_plan_deviation.iloc[i, 0] = 1.0
@@ -2289,9 +2296,14 @@ class ExplainRobotNavigation:
                                 for j in range(0, len(x_indices)):
                                     for m in range(x_indices[j] - 0, x_indices[j] + 1):
                                         for q in range(y_indices[j] - 0, y_indices[j] + 1):
-                                            if sampled_instance[i][q, m, 0] == 99:
-                                                local_plan_gap = True
-                                                break                 
+                                            if len(sampled_instance.shape) == 3:
+                                                if sampled_instance[i, q, m] == 99:
+                                                    local_plan_gap = True
+                                                    break
+                                            else:
+                                                if sampled_instance[q, m] == 99:
+                                                    local_plan_gap = True
+                                                    break
                             
                             if local_plan_gap == True:
                                 self.local_plan_deviation.iloc[i, 0] = 1.0
@@ -2344,9 +2356,14 @@ class ExplainRobotNavigation:
                                 print('local_plan_ys[j] = ', local_plan_ys[j])
                                 print('local_plan_ys[j] = ', local_plan_xs[j])
                                 print(sampled_instance.shape)
-                                if sampled_instance[0, local_plan_ys[j], local_plan_xs[j]] == 99:
-                                    local_plan_point_in_obstacle = True
-                                    break    
+                                if len(sampled_instance.shape) == 3:
+                                    if sampled_instance[0, local_plan_ys[j], local_plan_xs[j]] == 99:
+                                        local_plan_point_in_obstacle = True
+                                        break
+                                else:
+                                    if sampled_instance[local_plan_ys[j], local_plan_xs[j]] == 99:
+                                        local_plan_point_in_obstacle = True
+                                        break        
 
                         # if there is local plan in obstacle, it is stop - no deviation
                         if local_plan_point_in_obstacle == True:
@@ -2520,16 +2537,17 @@ class ExplainRobotNavigation:
                 # fill in deviation dataframe
                 for i in range(0, sample_size):
                     #print('i = ', i)
-                    # test if there is local plan
                     local_plan_xs = []
                     local_plan_ys = []
                     local_plan_found = False
-                    for j in range(0, self.local_plans.shape[0]):
-                        if self.local_plans.iloc[j, -1] == i:
-                            x_temp = int((self.local_plans.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                            y_temp = int((self.local_plans.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                    
+                    # find if there is local plan
+                    self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                    for j in range(0, self.local_plans_local.shape[0]):
+                            x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                            y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-                            if 0 <= x_temp <= 159 and 0 <= y_temp <= 159:
+                            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                                 local_plan_xs.append(x_temp)
                                 local_plan_ys.append(y_temp)
                                 local_plan_found = True
@@ -2539,9 +2557,14 @@ class ExplainRobotNavigation:
                     if local_plan_found == True:
                         # test if any part of the local plan is in the obstacle region
                         for j in range(0, len(local_plan_xs)):
-                            if sampled_instance[i][local_plan_ys[j], local_plan_xs[j], 0] == 99:
-                                local_plan_point_in_obstacle = True
-                                break
+                            if len(sampled_instance.shape) == 3:
+                                if sampled_instance[i, local_plan_ys[j], local_plan_xs[j]] == 99:
+                                    local_plan_point_in_obstacle = True
+                                    break
+                            else:
+                                if sampled_instance[local_plan_ys[j], local_plan_xs[j]] == 99:
+                                    local_plan_point_in_obstacle = True
+                                    break    
 
                         # if there is a local plan point in the obstacle, it is not 'no deviation'
                         if local_plan_point_in_obstacle == True:
@@ -2615,7 +2638,7 @@ class ExplainRobotNavigation:
 
         end_main = time.time()
         main_time = end_main - start_main
-        print('\ntarget calculation runtime = ', main_time)
+        #print('\ntarget calculation runtime = ', main_time)
         
         # if more outputs wanted
         more_outputs = False
@@ -3593,7 +3616,7 @@ class ExplainRobotNavigation:
         for x in exp:
             print('x = ', x)
             print('x[0] = ', x[0])
-            temp[segments == x[0]] = temp_img[segments==x[0]]
+            temp[segments == x[0]+1] = temp_img[segments==x[0]+1]
 
         # plot temp
         fig = plt.figure(frameon=False)
