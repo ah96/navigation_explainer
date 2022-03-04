@@ -406,30 +406,20 @@ class ExplainRobotNavigation:
                 # get data needed for sm7 segmentation method
                 devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
                 
-                self.segments, self.explanation = self.explainer.explain_instance(img, self.classifier_fn_image_anchors, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                self.segments, self.exp = self.explainer.explain_instance(img, self.classifier_fn_image_anchors, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
                                                                                     self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, 
                                                                                     devDistance_y, sum_y, devDistance, self.plan_x_list, self.plan_y_list,
                                                                                     threshold=0.95, delta=0.1, tau=0.15, batch_size=256)
 
                 print('self.segments = ', self.segments)
-                print('self.explanation = ', self.explanation)
+                print('self.explanation = ', self.exp)
 
-                # plot segs
-                fig = plt.figure(frameon=False)
-                w = 1.6*3
-                h = 1.6*3
-                fig.set_size_inches(w, h)
-                ax = plt.Axes(fig, [0., 0., 1., 1.])
-                ax.set_axis_off()
-                fig.add_axes(ax)
-                path_core = os.getcwd()
-                ax.imshow(self.segments.astype(np.uint8), aspect='auto')
-                fig.savefig(path_core + '/segments_anchors.png')
-                fig.clf()
+                self.plotExplanationAnchors()
 
                 # show exp
-                self.show_exp(self.segments, self.explanation, img, self.explainer)
+                #self.show_exp(self.segments, self.exp, img, self.explainer)
 
+                
             elif self.explanation_mode == 'tabular':
                 pass
               
@@ -1929,6 +1919,87 @@ class ExplainRobotNavigation:
                     if len(weights_unique) > 0:    
                         weights_string += weights_unique[-1] + " "    
                         print(semantic_tags.iloc[i, 1] + " has weights " + weights_string)
+
+    # plot explanation picture and segments for anchors
+    def plotExplanationAnchors(self):
+        path_core = os.getcwd()
+
+        # import needed libraries
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+
+        # plot costmap
+        fig = plt.figure(frameon=False)
+        w = 1.6#*3
+        h = 1.6#*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        #print('self.image.shape: ', self.image.shape)
+        gray_shade = 180
+        white_shade = 0
+        image = gray2rgb(self.image)
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade    
+        #pd.DataFrame(image[:,:,0]).to_csv('R.csv')
+        #pd.DataFrame(image[:,:,1]).to_csv('G.csv')
+        #pd.DataFrame(image[:,:,2]).to_csv('B.csv')            
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/costmap.png')
+        fig.clf()
+
+        
+        # plot costmap with plans
+        fig = plt.figure(frameon=False)
+        w = 1.6#*3
+        h = 1.6#*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
+        #ax.imshow(self.image, aspect='auto')
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(path_core + '/input.png')
+        if self.eps == True:
+            fig.savefig(path_core + '/input.eps')
+        fig.clf()
+
+
+        # plot explanation
+        fig = plt.figure(frameon=True)
+        w = 1.6#*3
+        h = 1.6#*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        
+        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        #print('len(self.transformed_plan_x_list): ', len(self.transformed_plan_xs))
+        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+        exp_img = copy.deepcopy(image)
+        for e in self.exp:
+            exp_img[:,:,0][self.segments == e[0]+1] = 255
+            exp_img[:,:,1][self.segments == e[0]+1] = 255
+            exp_img[:,:,2][self.segments == e[0]+1] = 255
+        ax.imshow(exp_img.astype(np.uint8), aspect='auto') 
+        fig.savefig(path_core + '/explanation.png', transparent=False)
+        if self.eps == True:
+            fig.savefig(path_core + '/explanation.eps', transparent=False)
+        fig.clf()
 
    
     # classifier function for anchors image
