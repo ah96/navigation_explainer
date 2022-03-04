@@ -846,7 +846,7 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression' # 'regression' or 'classification'
+        mode = 'regression_normalized' # 'regression' or 'classification' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()
@@ -1288,6 +1288,60 @@ class ExplainRobotNavigation:
                                 print('max(devs): ', max(devs))
                         print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                         print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
+
+        elif mode == 'regression_normalized':
+            # fill in deviation dataframe
+            dev_original = 0
+            #for i in range(0, sampled_instance.shape[0]):
+            for i in range(0, self.sample_size):
+                #print('\ni = ', i)
+                local_plan_xs = []
+                local_plan_ys = []
+                local_plan_found = False
+                
+                # find if there is local plan
+                self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                for j in range(0, self.local_plans_local.shape[0]):
+                        x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                        y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                        if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                            local_plan_xs.append(x_temp)
+                            local_plan_ys.append(y_temp)
+                            local_plan_found = True
+                
+                # this happens almost never when only obstacles are segments, but let it stay for now
+                if local_plan_found == False:
+                    if deviation_type == 'stop':
+                        self.local_plan_deviation.iloc[i, 0] = dev_original
+                    elif deviation_type == 'no_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 745.5051688094327 #1000
+                    elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                    continue             
+
+                # find deviation as a sum of minimal point-to-point differences
+                diff_x = 0
+                diff_y = 0
+                devs = []
+                for j in range(0, len(local_plan_xs)):
+                    local_diffs = []
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
+                        diff = math.sqrt(diff_x + diff_y)
+                        local_diffs.append(diff)                        
+                    devs.append(min(local_diffs))   
+
+                if i == 0:
+                    dev_original = sum(devs)    
+
+                deviation = sum(devs)
+                deviation = deviation / original_deviation if deviation <= original_deviation else (2*original_deviation - deviation) / original_deviation
+                if deviation < 0:
+                    deviation = 0.0
+                self.local_plan_deviation.iloc[i, 0] = deviation
+
 
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
@@ -2149,7 +2203,7 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'classification' # 'regression' or 'classification'
+        mode = 'regression' # 'regression' or 'classification' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()
@@ -2201,7 +2255,7 @@ class ExplainRobotNavigation:
                 if i == 0:
                     dev_original = sum(devs)    
 
-                self.local_plan_deviation.iloc[i, 0] = sum(devs)
+                self.local_plan_deviation.iloc[i, 0] = sum(devs) / original_deviation
 
         elif mode == 'classification':
             if deviation_type == 'stop':
@@ -2592,8 +2646,61 @@ class ExplainRobotNavigation:
                         print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                         print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
 
+        elif mode == 'regression_normalized':
+            # fill in deviation dataframe
+            dev_original = 0
+            #for i in range(0, sampled_instance.shape[0]):
+            for i in range(0, self.sample_size):
+                #print('\ni = ', i)
+                local_plan_xs = []
+                local_plan_ys = []
+                local_plan_found = False
+                
+                # find if there is local plan
+                self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                for j in range(0, self.local_plans_local.shape[0]):
+                        x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                        y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                        if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                            local_plan_xs.append(x_temp)
+                            local_plan_ys.append(y_temp)
+                            local_plan_found = True
+                
+                # this happens almost never when only obstacles are segments, but let it stay for now
+                if local_plan_found == False:
+                    if deviation_type == 'stop':
+                        self.local_plan_deviation.iloc[i, 0] = dev_original
+                    elif deviation_type == 'no_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 745.5051688094327 #1000
+                    elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                    continue             
+
+                # find deviation as a sum of minimal point-to-point differences
+                diff_x = 0
+                diff_y = 0
+                devs = []
+                for j in range(0, len(local_plan_xs)):
+                    local_diffs = []
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
+                        diff = math.sqrt(diff_x + diff_y)
+                        local_diffs.append(diff)                        
+                    devs.append(min(local_diffs))   
+
+                if i == 0:
+                    dev_original = sum(devs)    
+
+                deviation = sum(devs)
+                deviation = deviation / original_deviation if deviation <= original_deviation else (2*original_deviation - deviation) / original_deviation
+                if deviation < 0:
+                    deviation = 0.0
+                self.local_plan_deviation.iloc[i, 0] = deviation
+
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
-        #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
+        self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
 
         #end_main = time.time()
         #main_time = end_main - start_main
