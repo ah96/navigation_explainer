@@ -199,6 +199,9 @@ class AnchorBaseBeam(object):
             state['t_positives'][t] += labels.sum()
             state['data'][idxs] = data
             state['raw_data'][idxs] = raw_data
+            #print('\nlabels.shape = ', labels.shape)
+            labels = labels.reshape((labels.shape[0],)) # added by Amar
+            #print('\nlabels.shape = ', labels.shape)
             state['labels'][idxs] = labels
             state['current_idx'] += n
             if state['current_idx'] >= state['data'].shape[0] - max(1000, n):

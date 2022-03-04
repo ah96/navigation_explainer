@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import copy
-
+import itertools
+        
 
 class AnchorImage(object):
     """bla"""
@@ -17,12 +18,11 @@ class AnchorImage(object):
         self.hide = True
         self.white = white
         self.segmentation = self.sm_only_obstacles                                           
+        
         if dummys is not None:
-            #print('DUMMYS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             self.hide = False
             self.dummys = dummys
         elif distribution_path:
-            #print('DISTRIBUTION_PATH!!!!!!!!!!!!!!!!!!!!!!!')
             self.hide = False
             import os
             import skimage
@@ -52,41 +52,21 @@ class AnchorImage(object):
 
     def get_sample_fn(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, 
                     plan_x_list, plan_y_list, lime=False):
+
+        # save original 2D costmap
         image_orig = copy.deepcopy(image[:,:,0])
         
         # find segments
         segments = self.segmentation(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
         
-        #fudged_image = image_orig.copy()
-        #fudged_image = copy.deepcopy(image_orig)
-        '''
-        for x in np.unique(segments):
-            fudged_image[segments == x] = (
-                np.mean(image[segments == x][:, 0]),
-                np.mean(image[segments == x][:, 1]),
-                np.mean(image[segments == x][:, 2]))
-        '''
-
-        #if self.white is not None:
-        #    fudged_image[:] = self.white
+        # create perturbations
         features = list(np.unique(segments))
         n_features = len(features) - 1 #=9-1
-        print('\nn_features = ', n_features)
-
-        #### MY PART START
-        #'''
-        # My perturbation - test all possible combinations
-        num_samples = 2 ** (n_features)
-        print('\nn_features = ', n_features)
-        import itertools
+        #print('\nn_features = ', n_features)
+        num_samples = 2 ** (n_features) #=256
         lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
         data = np.array(lst).reshape((num_samples, n_features))
-        #'''
-
-        labels = []
-
         show_free_space = False
-
         if show_free_space == True:
             data[0, :] = 1
             data[-1, :] = 0 # only if I use my perturbation
@@ -94,29 +74,18 @@ class AnchorImage(object):
             #data = data[int(data.shape[0]/2):, :]
             data[0, :] = 1
             data[-1, :] = 0 # only if I use my perturbation
-            imgs = []
 
-        #print('\nDATA = ', data)    
-        print('\ndata.shape = ', data.shape)
-
-        #print('\nSEGMENTS.shape = ', segments.shape)
-    
+        # create costmap perturbations
+        imgs = []    
         rows = data
         i = 0
         for row in rows:
             temp = copy.deepcopy(image_orig)
             zeros = np.where(row == 0)[0]
-            #mask = np.zeros(segments.shape).astype(bool)
             for z in zeros:
-                #mask[segments == z] = True
                 temp[segments == z + 1] = 0.0
-            #temp[mask] = fudged_image[mask]
-            #temp = mask
-            #temp[mask] = fudged_image[mask]
-            #pd.DataFrame(mask).to_csv("mask_" + str(i) + ".csv")
-            #pd.DataFrame(temp).to_csv("temp_" + str(i) + ".csv")
             imgs.append(temp)
-
+            # plot perturbations
             '''
             i += 1
             # plot segs
@@ -131,20 +100,80 @@ class AnchorImage(object):
             ax.imshow(imgs[-1].astype(np.uint8), aspect='auto')
             fig.savefig(path_core + '/IMG_' + str(i) + '.png')
             fig.clf()
-            '''            
-        #### MY PART END
-
-        print('\nLEN(IMGS) = ', len(imgs))
-        print('\nnp.array(imgs).shape = ', np.array(imgs).shape)
-
+            '''  
         output = classifier_fn(np.array(imgs)[0,:,:])
-        print('\noutput = ', output)
+        print('\nclassifier_fn output = ', output)
         true_label = output[0][0]
+        print('\ntrue_label = ', true_label)
         #true_label = np.argmax(output[0])
-        #true_label = 1.0
         #true_label = np.argmax(classifier_fn(np.expand_dims(image, 0))[0])
-        print('\nTrue pred = ', true_label)
 
+        def sample_fn(present, num_samples, compute_labels=True):
+            print('\nsample_fn started!')
+            
+            #print('\nnum_samples = ', num_samples)
+            #print('\nn_features = ', n_features)
+            
+            # create num_samples random perturbations
+            data = np.random.randint(0, 2, num_samples * n_features).reshape(
+                (num_samples, n_features))
+            data[:, present] = 1
+
+            imgs = []
+                
+            # this if is validated to True only at the beginning when coverage is calculated            
+            if not compute_labels:
+                # computing coverage, so we need all 256 samples?
+                import itertools
+                lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
+                data = np.array(lst).reshape((num_samples, n_features))
+                data[0, :] = 1
+                data[-1, :] = 0 # only if I use my perturbation
+                for row in rows:
+                    temp = copy.deepcopy(image_orig)
+                    zeros = np.where(row == 0)[0]
+                    for z in zeros:
+                        temp[segments == z + 1] = 0.0
+                    imgs.append(temp)
+                preds = classifier_fn(np.array(imgs))
+                return data, data, preds
+            
+            i = 0
+            for row in data:
+                temp = copy.deepcopy(image_orig)
+                zeros = np.where(row == 0)[0]
+                for z in zeros:
+                    temp[segments == z + 1] = 0.0
+                imgs.append(temp)
+
+                # plot perturbations
+                '''
+                i += 1
+                # plot segs
+                fig = plt.figure(frameon=False)
+                w = 1.6*3
+                h = 1.6*3
+                fig.set_size_inches(w, h)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+                path_core = os.getcwd()
+                ax.imshow(imgs[-1].astype(np.uint8), aspect='auto')
+                fig.savefig(path_core + '/IMG_' + str(i) + '.png')
+                fig.clf()
+                '''         
+            
+            preds = classifier_fn(np.array(imgs))
+            #preds_max = np.argmax(preds, axis=0) #axis=1 - original
+            #preds_max = preds[preds_max[0]][0]
+            #labels = (preds_max >= true_label).astype(int)
+            #raw_data = imgs
+            raw_data = data
+            labels = preds
+            
+            print('\nsample_fn ended!')
+            return raw_data, data, labels
+        
         def lime_sample_fn(num_samples, batch_size=50):
             # data = np.random.randint(0, 2, num_samples * n_features).reshape(
             #     (num_samples, n_features))
@@ -224,77 +253,6 @@ class AnchorImage(object):
             labels = (preds_max == true_label).astype(int)
             raw_data = np.hstack((data, chosen.reshape(-1, 1)))
             return raw_data, data, np.array(labels)
-
-        def sample_fn(present, num_samples, compute_labels=True):
-            # TODO: I'm sampling in this different way because the way we were
-            # sampling confounds size of the document with feature presence
-            # (larger documents are more likely to have features present)
-            print('\nsample_fn started!')
-            #print('\nnum_samples = ', num_samples)
-            #print('\nn_features = ', n_features)
-            data = np.random.randint(0, 2, num_samples * n_features).reshape(
-                (num_samples, n_features))
-            data[:, present] = 1
-            #data[:, 0] = 1 # free space
-            #print('\nDATA = ', data)    
-            #print('\npresent = ', present)    
-            #print("\nDATA.shape============================ ", data.shape)
-            
-            if not compute_labels:
-                # computing coverage, so we need all 256 samples
-                import itertools
-                lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-                data = np.array(lst).reshape((num_samples, n_features))
-                data[0, :] = 1
-                data[-1, :] = 0 # only if I use my perturbation
-                imgs = []
-                for row in rows:
-                    temp = copy.deepcopy(image_orig)
-                    zeros = np.where(row == 0)[0]
-                    for z in zeros:
-                        temp[segments == z + 1] = 0.0
-                    imgs.append(temp)
-                preds = classifier_fn(np.array(imgs))
-                return data, data, preds
-            imgs = []
-            i = 0
-            for row in data:
-                temp = copy.deepcopy(image_orig)
-                zeros = np.where(row == 0)[0]
-                #mask = np.zeros(segments.shape).astype(bool)
-                for z in zeros:
-                    #mask[segments == z] = True
-                    temp[segments == z + 1] = 0.0
-                #temp[mask] = fudged_image[mask]
-                imgs.append(temp)
-
-                '''
-                i += 1
-                # plot segs
-                fig = plt.figure(frameon=False)
-                w = 1.6*3
-                h = 1.6*3
-                fig.set_size_inches(w, h)
-                ax = plt.Axes(fig, [0., 0., 1., 1.])
-                ax.set_axis_off()
-                fig.add_axes(ax)
-                path_core = os.getcwd()
-                ax.imshow(imgs[-1].astype(np.uint8), aspect='auto')
-                fig.savefig(path_core + '/IMG_' + str(i) + '.png')
-                fig.clf()
-                '''         
-            preds = classifier_fn(np.array(imgs))
-            #print('\npreds = ', preds)
-            #preds_max = np.argmax(preds, axis=0) #axis=1 - original
-            #preds_max = preds[preds_max[0]][0]
-            #print('\npreds_max = ', preds_max)
-            #labels = (preds_max >= true_label).astype(int)
-            #print('\nlabels = ', labels)
-            #raw_data = imgs
-            raw_data = data
-            labels = preds
-            #print('\nsample_fn ended!')
-            return raw_data, data, labels
 
         sample = sample_fn if self.hide else sample_fn_dummy
         return segments, sample
