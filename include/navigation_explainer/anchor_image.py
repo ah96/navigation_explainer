@@ -126,9 +126,10 @@ class AnchorImage(object):
                 # computing coverage, so we need all 256 samples?
                 import itertools
                 lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-                data = np.array(lst).reshape((num_samples, n_features))
+                data = np.array(lst).reshape((2**n_features, n_features))
                 data[0, :] = 1
                 data[-1, :] = 0 # only if I use my perturbation
+                rows = data[:num_samples, :]
                 for row in rows:
                     temp = copy.deepcopy(image_orig)
                     zeros = np.where(row == 0)[0]
@@ -265,7 +266,7 @@ class AnchorImage(object):
         segments, sample = self.get_sample_fn(image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
                 
         exp = anchor_base.AnchorBaseBeam.anchor_beam(sample, delta=delta, epsilon=tau, batch_size=batch_size, desired_confidence=threshold, **kwargs)
-        #print('\nexp = ', exp)
+        print('\nBEFORE_HOEFFDING_EXP = ', exp)
         #print('\ntype(exp) = ', type(exp))
         
         return segments, self.get_exp_from_hoeffding(image, exp)

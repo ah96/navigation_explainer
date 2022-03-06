@@ -65,19 +65,32 @@ class AnchorBaseBeam(object):
         positives = np.array(initial_stats['positives'])
         ub = np.zeros(n_samples.shape)
         lb = np.zeros(n_samples.shape)
+        print('\nlucb')
+        print('n_features = ', n_features)
+        print('n_samples = ', n_samples)
+        print('positives = ', positives)
+        print('top_n = ', top_n)
         for f in np.where(n_samples == 0)[0]:
             n_samples[f] += 1
             positives[f] += sample_fns[f](1)
+        print('n_samples = ', n_samples)
+        print('positives = ', positives)    
         if n_features == top_n:
             return range(n_features)
         means = positives / n_samples
+        print('means = ', means)
         t = 1
 
         def update_bounds(t):
             sorted_means = np.argsort(means)
+            print('update_bounds')
+            print('sorted_means = ', sorted_means)
             beta = AnchorBaseBeam.compute_beta(n_features, t, delta)
+            print('beta = ', beta)
             J = sorted_means[-top_n:]
+            print('J = ', J)
             not_J = sorted_means[:-top_n]
+            print('not_J = ', not_J)
             for f in not_J:
                 ub[f] = AnchorBaseBeam.dup_bernoulli(means[f], beta /
                                                      n_samples[f])
@@ -88,10 +101,13 @@ class AnchorBaseBeam(object):
             lt = J[np.argmin(lb[J])]
             return ut, lt
         ut, lt = update_bounds(t)
+        print('(ut, lt) = ', (ut, lt))
+        print('ub = ', ub)
+        print('lb = ', lb)
         B = ub[ut] - lb[lt]
         verbose_count = 0
         epsilon = 0.8
-        print('\nBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB = ', B)
+        print('B = ', B)
         while B > epsilon:
             verbose_count += 1
             print('\nBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB = ', B)
@@ -123,21 +139,21 @@ class AnchorBaseBeam(object):
         current_idx = state['current_idx']
         data = state['data'][:current_idx]
         labels = state['labels'][:current_idx]
-        print('\nmake_tuples')
-        print('\nall_features = ', all_features)
-        print('\ncoverage_data.shape = ', coverage_data.shape)
-        print('\ncurrent_idx = ', current_idx)
-        print('\ndata.shape = ', data.shape)
-        print('\nlabels.shape = ', labels.shape)
+        #print('\nmake_tuples')
+        #print('\nall_features = ', all_features)
+        #print('\ncoverage_data.shape = ', coverage_data.shape)
+        #print('\ncurrent_idx = ', current_idx)
+        #print('\ndata.shape = ', data.shape)
+        #print('\nlabels.shape = ', labels.shape)
         if len(previous_best) == 0:
-            print('\nUSAO!!!')
+            #print('\nUSAO!!!')
             tuples = [(x, ) for x in all_features]
-            print('\ntuples = ', tuples)
+            #print('\ntuples = ', tuples)
             for x in tuples:
-                print('\nx = ', x)
+                #print('\nx = ', x)
                 pres = data[:, x[0]].nonzero()[0]
-                print('data[:, x[0]].nonzero() = ', data[:, x[0]].nonzero())
-                print('pres = ', pres)
+                #print('data[:, x[0]].nonzero() = ', data[:, x[0]].nonzero())
+                #print('pres = ', pres)
                 # NEW
                 state['t_idx'][x] = set(pres)
                 state['t_nsamples'][x] = float(len(pres))
@@ -149,7 +165,7 @@ class AnchorBaseBeam(object):
                 state['t_coverage'][x] = (
                     float(len(state['t_coverage_idx'][x])) /
                     coverage_data.shape[0])
-            print('\nmake_tuples')        
+            #print('\nmake_tuples')        
             return tuples
         new_tuples = set()
         for f in all_features:
@@ -182,7 +198,11 @@ class AnchorBaseBeam(object):
         # each sample fn returns number of positives
         sample_fns = []
         def complete_sample_fn(t, n):
+            print('\n(t, n) = ', (t, n))
             raw_data, data, labels = sample_fn(list(t), n)
+            print('raw_data.shape = ', raw_data.shape)
+            print('data.shape = ', data.shape)
+            print('labels.shape = ', labels.shape)
             current_idx = state['current_idx']
             # idxs = range(state['data'].shape[0], state['data'].shape[0] + n)
             idxs = range(current_idx, current_idx + n)
@@ -342,16 +362,16 @@ class AnchorBaseBeam(object):
         if max_anchor_size is None:
             max_anchor_size = n_features
         while current_size <= max_anchor_size:
+            print('\n(current_size, max_anchor_size) = ', (current_size, max_anchor_size))
             tuples = AnchorBaseBeam.make_tuples(best_of_size[current_size - 1], state)
-            print('\ntuples = ', tuples)
+            print('\ntuples_before = ', tuples)
             tuples = [x for x in tuples
                       if state['t_coverage'][x] > best_coverage]
-            print('\ntuples = ', tuples)
+            print('\ntuples_after = ', tuples)
             print('\nlen(tuples) = ', len(tuples))
             if len(tuples) == 0:
                 break
             sample_fns = AnchorBaseBeam.get_sample_fns(sample_fn, tuples, state)
-            print('\nsample_fns[0] = ', sample_fns[0])
             print('\nlen(sample_fns) = ', len(sample_fns))
             initial_stats = AnchorBaseBeam.get_initial_statistics(tuples, state)
             print('\ninitial_stats = ', initial_stats)
@@ -360,12 +380,12 @@ class AnchorBaseBeam(object):
                 verbose=verbose, verbose_every=verbose_every)
             print('\nchosen_tuples = ', chosen_tuples)    
             best_of_size[current_size] = [tuples[x] for x in chosen_tuples]
-            print('\nbest_of_size = ', best_of_size)
+            #print('\nbest_of_size = ', best_of_size)
             #return 0         
             if verbose:
                 print('Best of size ', current_size, ':')
             # print state['data'].shape[0]
-            print('\nbest_of_size[current_size] = ', best_of_size[current_size])
+            #print('\nbest_of_size[current_size] = ', best_of_size[current_size])
             stop_this = False
             for i, t in zip(chosen_tuples, best_of_size[current_size]):
                 # I can choose at most (beam_size - 1) tuples at each step,
