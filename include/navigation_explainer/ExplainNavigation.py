@@ -846,7 +846,7 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression_normalized' # 'regression' or 'classification' or 'regression_normalized'
+        mode = 'regression_normalized' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()
@@ -1289,7 +1289,7 @@ class ExplainRobotNavigation:
                         print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                         print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
 
-        elif mode == 'regression_normalized':
+        elif mode == 'regression_normalized_around_deviation':
             # fill in deviation dataframe
             dev_original = 0
             #for i in range(0, sampled_instance.shape[0]):
@@ -1342,6 +1342,54 @@ class ExplainRobotNavigation:
                     deviation = 0.0
                 self.local_plan_deviation.iloc[i, 0] = deviation
 
+        elif mode == 'regression_normalized':
+            # fill in deviation dataframe
+            dev_original = 0
+            #for i in range(0, sampled_instance.shape[0]):
+            for i in range(0, self.sample_size):
+                #print('\ni = ', i)
+                local_plan_xs = []
+                local_plan_ys = []
+                local_plan_found = False
+                
+                # find if there is local plan
+                self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                for j in range(0, self.local_plans_local.shape[0]):
+                        x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                        y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                        if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                            local_plan_xs.append(x_temp)
+                            local_plan_ys.append(y_temp)
+                            local_plan_found = True
+                
+                # this happens almost never when only obstacles are segments, but let it stay for now
+                if local_plan_found == False:
+                    if deviation_type == 'stop':
+                        self.local_plan_deviation.iloc[i, 0] = dev_original
+                    elif deviation_type == 'no_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 745.5051688094327 #1000
+                    elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                    continue             
+
+                # find deviation as a sum of minimal point-to-point differences
+                diff_x = 0
+                diff_y = 0
+                devs = []
+                for j in range(0, len(local_plan_xs)):
+                    local_diffs = []
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
+                        diff = math.sqrt(diff_x + diff_y)
+                        local_diffs.append(diff)                        
+                    devs.append(min(local_diffs))   
+
+                if i == 0:
+                    dev_original = sum(devs)    
+
+                self.local_plan_deviation.iloc[i, 0] = sum(devs) / original_deviation
 
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
@@ -1351,75 +1399,106 @@ class ExplainRobotNavigation:
         #print('\ntarget calculation runtime = ', main_time)
 
         # if more outputs wanted
-        more_outputs = False
+        more_outputs = True
         if more_outputs == True:
             # classification
-            stop_list = []
-            linear_positive_list = []
-            rotate_left_list = []
-            rotate_right_list = []
-            ahead_straight_list = []
-            ahead_left_list = []
-            ahead_right_list = []
-            for i in range(0, self.cmd_vel_perturb.shape[0]):
-                if abs(self.cmd_vel_perturb.iloc[i, 0]) < 0.01:
-                    stop_list.append(1.0)
-                else:
-                    stop_list.append(0.0)
+            print('\n(lin_x, ang_z) = ', (self.cmd_vel_perturb.iloc[0, 0], self.cmd_vel_perturb.iloc[0, 2]))
+            
+            # stop
+            if abs(self.cmd_vel_perturb.iloc[0, 0]) <= 0.01 and abs(self.cmd_vel_perturb.iloc[0, 2]) <= 0.01:
+                stop_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if abs(self.cmd_vel_perturb.iloc[i, 0]) <= 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) <= 0.01:
+                        stop_list.append(1.0)
+                    else:
+                        stop_list.append(0.0)
+                self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
+            
+            # ahead_straight
+            elif self.cmd_vel_perturb.iloc[0, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[0, 2]) <= 0.01:
+                ahead_straight_list = [] = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) <= 0.01:
+                        ahead_straight_list = [].append(1.0)
+                    else:
+                        ahead_straight_list = [].append(0.0)
+                self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01:
-                    linear_positive_list.append(1.0)
-                else:
-                    linear_positive_list.append(0.0)
+            # back_straight
+            elif self.cmd_vel_perturb.iloc[0, 0] < -0.01 and abs(self.cmd_vel_perturb.iloc[0, 2]) <= 0.01:
+                back_straight_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] < -0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) <= 0.01:
+                        back_straight_list = [].append(1.0)
+                    else:
+                        back_straight_list = [].append(0.0)
+                self.cmd_vel_perturb['back_straight'] = pd.DataFrame(np.array(back_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['back_straight'])
+            
+            # rotate_right_in_place
+            elif abs(self.cmd_vel_perturb.iloc[0, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[0, 2] > 0.01:
+                rotate_right_in_place_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if abs(self.cmd_vel_perturb.iloc[i, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.01:
+                        rotate_right_in_place_list.append(1.0)
+                    else:
+                        rotate_right_in_place_list.append(0.0)
+                self.cmd_vel_perturb['rotate_right_in_place'] = pd.DataFrame(np.array(rotate_right_in_place_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right_in_place'])
 
-                if self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                    rotate_left_list.append(1.0)
-                else:
-                    rotate_left_list.append(0.0)
+            # rotate_left_in_place
+            elif abs(self.cmd_vel_perturb.iloc[0, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[0, 2] < -0.01:
+                rotate_left_in_place_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if abs(self.cmd_vel_perturb.iloc[i, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[i, 2] < -0.01:
+                        rotate_left_in_place_list.append(1.0)
+                    else:
+                        rotate_left_in_place_list.append(0.0)
+                self.cmd_vel_perturb['rotate_left_in_place'] = pd.DataFrame(np.array(rotate_left_in_place_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left_in_place'])
 
-                if self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                    rotate_right_list.append(1.0)
-                else:
-                    rotate_right_list.append(0.0)
+            # rotate_right_ahead
+            elif self.cmd_vel_perturb.iloc[0, 0] > 0.01 and self.cmd_vel_perturb.iloc[0, 2] > 0.01:
+                rotate_right_ahead_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.01:
+                        rotate_right_ahead_list.append(1.0)
+                    else:
+                        rotate_right_ahead_list.append(0.0)
+                self.cmd_vel_perturb['rotate_right_ahead'] = pd.DataFrame(np.array(rotate_right_ahead_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right_ahead'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) < 0.01:
-                    ahead_straight_list.append(1.0)
-                else:
-                    ahead_straight_list.append(0.0)
+            # rotate_left_ahead
+            elif self.cmd_vel_perturb.iloc[0, 0] > 0.01 and self.cmd_vel_perturb.iloc[0, 2] < -0.01:
+                rotate_left_ahead_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < -0.01:
+                        rotate_left_ahead_list.append(1.0)
+                    else:
+                        rotate_left_ahead_list.append(0.0)
+                self.cmd_vel_perturb['rotate_left_ahead'] = pd.DataFrame(np.array(rotate_left_ahead_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left_ahead'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                    ahead_left_list.append(1.0)
-                else:
-                    ahead_left_list.append(0.0)
+            # rotate_right_back
+            elif self.cmd_vel_perturb.iloc[0, 0] < -0.01 and self.cmd_vel_perturb.iloc[0, 2] > 0.01:
+                rotate_right_back_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] < -0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.01:
+                        rotate_right_back_list.append(1.0)
+                    else:
+                        rotate_right_back_list.append(0.0)
+                self.cmd_vel_perturb['rotate_right_back'] = pd.DataFrame(np.array(rotate_right_back_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right_back'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                    ahead_right_list.append(1.0)
-                else:
-                    ahead_right_list.append(0.0)
+            # rotate_left_back
+            elif self.cmd_vel_perturb.iloc[0, 0] < -0.01 and self.cmd_vel_perturb.iloc[0, 2] < -0.01:
+                rotate_left_back_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] < -0.01 and self.cmd_vel_perturb.iloc[i, 2] < -0.01:
+                        rotate_left_back_list.append(1.0)
+                    else:
+                        rotate_left_back_list.append(0.0)
+                self.cmd_vel_perturb['rotate_left_back'] = pd.DataFrame(np.array(rotate_left_back_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left_back'])
 
-            self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
-            self.cmd_vel_perturb['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['linear_positive'])
-            self.cmd_vel_perturb['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left'])
-            self.cmd_vel_perturb['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right'])
-            self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
-            self.cmd_vel_perturb['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_left'])
-            self.cmd_vel_perturb['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_right'])
+            print('\nrobot_decision = ', self.cmd_vel_perturb.columns.values[-1])
 
-            '''
-            print('self.cmd_vel_perturb: ', self.cmd_vel_perturb)
-            print('self.local_plan_deviation: ', self.local_plan_deviation)
-            print('stop_list: ', stop_list)
-            print('linear_positive_list: ', linear_positive_list)
-            print('rotate_left_list: ', rotate_left_list)
-            print('rotate_right_list: ', rotate_right_list)
-            print('ahead_straight_list: ', ahead_straight_list)
-            print('ahead_left_list: ', ahead_left_list)
-            print('ahead_right_list: ', ahead_right_list)
-            '''
+        print('\nclassifier_fn_image_lime ended\n')
 
-        print('\nclassifier_fn_image_anchors ended\n')
-
-        return np.array(self.cmd_vel_perturb.iloc[:, 3:])
+        return np.array(self.cmd_vel_perturb.iloc[:, 4:])
 
     # function for plotting lime image perturbations
     def classifier_fn_image_lime_plot(self):
@@ -2203,7 +2282,7 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression' # 'regression' or 'classification' or 'regression_normalized'
+        mode = 'regression_normalized' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()
@@ -2646,7 +2725,7 @@ class ExplainRobotNavigation:
                         print('command velocities perturbed - lin_x: ' + str(self.cmd_vel_perturb.iloc[i, 0]) + ', ang_z: ' + str(self.cmd_vel_perturb.iloc[i, 2]))
                         print('self.local_plan_deviation.iloc[i, 0]: ', self.local_plan_deviation.iloc[i, 0])
 
-        elif mode == 'regression_normalized':
+        elif mode == 'regression_normalized_around_deviation':
             # fill in deviation dataframe
             dev_original = 0
             #for i in range(0, sampled_instance.shape[0]):
@@ -2699,83 +2778,163 @@ class ExplainRobotNavigation:
                     deviation = 0.0
                 self.local_plan_deviation.iloc[i, 0] = deviation
 
+        elif mode == 'regression_normalized':
+            # fill in deviation dataframe
+            dev_original = 0
+            #for i in range(0, sampled_instance.shape[0]):
+            for i in range(0, self.sample_size):
+                #print('\ni = ', i)
+                local_plan_xs = []
+                local_plan_ys = []
+                local_plan_found = False
+                
+                # find if there is local plan
+                self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                for j in range(0, self.local_plans_local.shape[0]):
+                        x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                        y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                        if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                            local_plan_xs.append(x_temp)
+                            local_plan_ys.append(y_temp)
+                            local_plan_found = True
+                
+                # this happens almost never when only obstacles are segments, but let it stay for now
+                if local_plan_found == False:
+                    if deviation_type == 'stop':
+                        self.local_plan_deviation.iloc[i, 0] = dev_original
+                    elif deviation_type == 'no_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 745.5051688094327 #1000
+                    elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
+                        self.local_plan_deviation.iloc[i, 0] = 0.0
+                    continue             
+
+                # find deviation as a sum of minimal point-to-point differences
+                diff_x = 0
+                diff_y = 0
+                devs = []
+                for j in range(0, len(local_plan_xs)):
+                    local_diffs = []
+                    for k in range(0, len(self.transformed_plan_xs)):
+                        diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                        diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
+                        diff = math.sqrt(diff_x + diff_y)
+                        local_diffs.append(diff)                        
+                    devs.append(min(local_diffs))   
+
+                if i == 0:
+                    dev_original = sum(devs)    
+
+                self.local_plan_deviation.iloc[i, 0] = sum(devs) / original_deviation
+
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
-        self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
+        #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
 
         #end_main = time.time()
         #main_time = end_main - start_main
         #print('\ntarget calculation runtime = ', main_time)
 
         # if more outputs wanted
-        more_outputs = False
+        more_outputs = True
         if more_outputs == True:
             # classification
-            stop_list = []
-            linear_positive_list = []
-            rotate_left_list = []
-            rotate_right_list = []
-            ahead_straight_list = []
-            ahead_left_list = []
-            ahead_right_list = []
-            for i in range(0, self.cmd_vel_perturb.shape[0]):
-                if abs(self.cmd_vel_perturb.iloc[i, 0]) < 0.01:
-                    stop_list.append(1.0)
-                else:
-                    stop_list.append(0.0)
+            print('\n(lin_x, ang_z) = ', (self.cmd_vel_perturb.iloc[0, 0], self.cmd_vel_perturb.iloc[0, 2]))
+            
+            # stop
+            if abs(self.cmd_vel_perturb.iloc[0, 0]) <= 0.01 and abs(self.cmd_vel_perturb.iloc[0, 2]) <= 0.01:
+                stop_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if abs(self.cmd_vel_perturb.iloc[i, 0]) <= 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) <= 0.01:
+                        stop_list.append(1.0)
+                    else:
+                        stop_list.append(0.0)
+                self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
+            
+            # ahead_straight
+            elif self.cmd_vel_perturb.iloc[0, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[0, 2]) <= 0.01:
+                ahead_straight_list = [] = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) <= 0.01:
+                        ahead_straight_list = [].append(1.0)
+                    else:
+                        ahead_straight_list = [].append(0.0)
+                self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01:
-                    linear_positive_list.append(1.0)
-                else:
-                    linear_positive_list.append(0.0)
+            # back_straight
+            elif self.cmd_vel_perturb.iloc[0, 0] < -0.01 and abs(self.cmd_vel_perturb.iloc[0, 2]) <= 0.01:
+                back_straight_list = [] = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] < -0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) <= 0.01:
+                        back_straight_list = [].append(1.0)
+                    else:
+                        back_straight_list = [].append(0.0)
+                self.cmd_vel_perturb['back_straight'] = pd.DataFrame(np.array(back_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['back_straight'])
+            
+            # rotate_right_in_place
+            elif abs(self.cmd_vel_perturb.iloc[0, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[0, 2] > 0.01:
+                rotate_right_in_place_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if abs(self.cmd_vel_perturb.iloc[i, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.01:
+                        rotate_right_in_place_list.append(1.0)
+                    else:
+                        rotate_right_in_place_list.append(0.0)
+                self.cmd_vel_perturb['rotate_right_in_place'] = pd.DataFrame(np.array(rotate_right_in_place_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right_in_place'])
 
-                if self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                    rotate_left_list.append(1.0)
-                else:
-                    rotate_left_list.append(0.0)
+            # rotate_left_in_place
+            elif abs(self.cmd_vel_perturb.iloc[0, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[0, 2] < -0.01:
+                rotate_left_in_place_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if abs(self.cmd_vel_perturb.iloc[i, 0]) <= 0.01 and self.cmd_vel_perturb.iloc[i, 2] < -0.01:
+                        rotate_left_in_place_list.append(1.0)
+                    else:
+                        rotate_left_in_place_list.append(0.0)
+                self.cmd_vel_perturb['rotate_left_in_place'] = pd.DataFrame(np.array(rotate_left_in_place_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left_in_place'])
 
-                if self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                    rotate_right_list.append(1.0)
-                else:
-                    rotate_right_list.append(0.0)
+            # rotate_right_ahead
+            elif self.cmd_vel_perturb.iloc[0, 0] > 0.01 and self.cmd_vel_perturb.iloc[0, 2] > 0.01:
+                rotate_right_ahead_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.01:
+                        rotate_right_ahead_list.append(1.0)
+                    else:
+                        rotate_right_ahead_list.append(0.0)
+                self.cmd_vel_perturb['rotate_right_ahead'] = pd.DataFrame(np.array(rotate_right_ahead_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right_ahead'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and abs(self.cmd_vel_perturb.iloc[i, 2]) < 0.01:
-                    ahead_straight_list.append(1.0)
-                else:
-                    ahead_straight_list.append(0.0)
+            # rotate_left_ahead
+            elif self.cmd_vel_perturb.iloc[0, 0] > 0.01 and self.cmd_vel_perturb.iloc[0, 2] < -0.01:
+                rotate_left_ahead_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < -0.01:
+                        rotate_left_ahead_list.append(1.0)
+                    else:
+                        rotate_left_ahead_list.append(0.0)
+                self.cmd_vel_perturb['rotate_left_ahead'] = pd.DataFrame(np.array(rotate_left_ahead_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left_ahead'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.0:
-                    ahead_left_list.append(1.0)
-                else:
-                    ahead_left_list.append(0.0)
+            # rotate_right_back
+            elif self.cmd_vel_perturb.iloc[0, 0] < -0.01 and self.cmd_vel_perturb.iloc[0, 2] > 0.01:
+                rotate_right_back_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] < -0.01 and self.cmd_vel_perturb.iloc[i, 2] > 0.01:
+                        rotate_right_back_list.append(1.0)
+                    else:
+                        rotate_right_back_list.append(0.0)
+                self.cmd_vel_perturb['rotate_right_back'] = pd.DataFrame(np.array(rotate_right_back_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right_back'])
 
-                if self.cmd_vel_perturb.iloc[i, 0] > 0.01 and self.cmd_vel_perturb.iloc[i, 2] < 0.0:
-                    ahead_right_list.append(1.0)
-                else:
-                    ahead_right_list.append(0.0)
+            # rotate_left_back
+            elif self.cmd_vel_perturb.iloc[0, 0] < -0.01 and self.cmd_vel_perturb.iloc[0, 2] < -0.01:
+                rotate_left_back_list = []
+                for i in range(0, self.cmd_vel_perturb.shape[0]):
+                    if self.cmd_vel_perturb.iloc[i, 0] < -0.01 and self.cmd_vel_perturb.iloc[i, 2] < -0.01:
+                        rotate_left_back_list.append(1.0)
+                    else:
+                        rotate_left_back_list.append(0.0)
+                self.cmd_vel_perturb['rotate_left_back'] = pd.DataFrame(np.array(rotate_left_back_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left_back'])
 
-            self.cmd_vel_perturb['stop'] = pd.DataFrame(np.array(stop_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['stop'])
-            self.cmd_vel_perturb['linear_positive'] = pd.DataFrame(np.array(linear_positive_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['linear_positive'])
-            self.cmd_vel_perturb['rotate_left'] = pd.DataFrame(np.array(rotate_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_left'])
-            self.cmd_vel_perturb['rotate_right'] = pd.DataFrame(np.array(rotate_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['rotate_right'])
-            self.cmd_vel_perturb['ahead_straight'] = pd.DataFrame(np.array(ahead_straight_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_straight'])
-            self.cmd_vel_perturb['ahead_left'] = pd.DataFrame(np.array(ahead_left_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_left'])
-            self.cmd_vel_perturb['ahead_right'] = pd.DataFrame(np.array(ahead_right_list), index=np.arange(self.cmd_vel_perturb.shape[0]), columns=['ahead_right'])
-
-            '''
-            print('self.cmd_vel_perturb: ', self.cmd_vel_perturb)
-            print('self.local_plan_deviation: ', self.local_plan_deviation)
-            print('stop_list: ', stop_list)
-            print('linear_positive_list: ', linear_positive_list)
-            print('rotate_left_list: ', rotate_left_list)
-            print('rotate_right_list: ', rotate_right_list)
-            print('ahead_straight_list: ', ahead_straight_list)
-            print('ahead_left_list: ', ahead_left_list)
-            print('ahead_right_list: ', ahead_right_list)
-            '''
+            print('\nrobot_decision = ', self.cmd_vel_perturb.columns.values[-1])
 
         print('\nclassifier_fn_image_anchors ended\n')
 
-        return np.array(self.cmd_vel_perturb.iloc[:, 3:])
+        return np.array(self.cmd_vel_perturb.iloc[:, 4:])
 
     # function for plotting anchors image perturbations
     def classifier_fn_image_anchors_plot(self):
