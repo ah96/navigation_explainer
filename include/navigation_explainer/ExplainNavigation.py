@@ -406,13 +406,13 @@ class ExplainRobotNavigation:
                 # get data needed for sm7 segmentation method
                 devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
                 
-                self.segments, self.exp = self.explainer.explain_instance(img, self.classifier_fn_image_anchors, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                self.segments, self.exp, self.best_tuples = self.explainer.explain_instance(img, self.classifier_fn_image_anchors, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
                                                                                     self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, 
                                                                                     devDistance_y, sum_y, devDistance, self.plan_x_list, self.plan_y_list,
                                                                                     threshold=0.95, delta=0.1, tau=0.15, batch_size=256)
 
-                print('self.segments = ', self.segments)
-                print('self.explanation = ', self.exp)
+                print('\nself.explanation = ', self.exp)
+                print('\nbest_tuples = ', self.best_tuples)
 
                 self.plotExplanationAnchors()
 
@@ -846,7 +846,7 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression_normalized' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
+        mode = 'classification' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()
@@ -1399,7 +1399,7 @@ class ExplainRobotNavigation:
         #print('\ntarget calculation runtime = ', main_time)
 
         # if more outputs wanted
-        more_outputs = True
+        more_outputs = False
         if more_outputs == True:
             # classification
             print('\n(lin_x, ang_z) = ', (self.cmd_vel_perturb.iloc[0, 0], self.cmd_vel_perturb.iloc[0, 2]))
@@ -1498,7 +1498,7 @@ class ExplainRobotNavigation:
 
         print('\nclassifier_fn_image_lime ended\n')
 
-        return np.array(self.cmd_vel_perturb.iloc[:, 4:])
+        return np.array(self.cmd_vel_perturb.iloc[:, 3:])
 
     # function for plotting lime image perturbations
     def classifier_fn_image_lime_plot(self):
@@ -2103,10 +2103,19 @@ class ExplainRobotNavigation:
         ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
         exp_img = copy.deepcopy(image)
-        for e in self.exp:
-            exp_img[:,:,0][self.segments == e[0]+1] = 255
-            exp_img[:,:,1][self.segments == e[0]+1] = 255
-            exp_img[:,:,2][self.segments == e[0]+1] = 255
+        include_features_from_exp = False
+        if include_features_from_exp == True:
+            for e in self.exp:
+                exp_img[:,:,0][self.segments == e[0]+1] = 255
+                exp_img[:,:,1][self.segments == e[0]+1] = 255
+                exp_img[:,:,2][self.segments == e[0]+1] = 255
+        else:
+            print('\nlen(self.best_tuples) = ', len(self.best_tuples))
+            for t in self.best_tuples[2:3]:
+                for t_ in t:
+                    exp_img[:,:,0][self.segments == t_+1] = 255
+                    exp_img[:,:,1][self.segments == t_+1] = 255
+                    exp_img[:,:,2][self.segments == t_+1] = 255        
         ax.imshow(exp_img.astype(np.uint8), aspect='auto') 
         fig.savefig(path_core + '/explanation.png', transparent=False)
         if self.eps == True:
@@ -2282,7 +2291,7 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression_normalized' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
+        mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()

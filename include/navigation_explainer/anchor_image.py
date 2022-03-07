@@ -209,11 +209,11 @@ class AnchorImage(object):
         # classifier_fn is a predict_proba
         segments, sample = self.get_sample_fn(image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
                 
-        exp = anchor_base.AnchorBaseBeam.anchor_beam(sample, delta=delta, epsilon=tau, batch_size=batch_size, desired_confidence=threshold, **kwargs)
-        #print('\nBEFORE_HOEFFDING_EXP = ', exp)
+        exp, best_tuples = anchor_base.AnchorBaseBeam.anchor_beam(sample, delta=delta, epsilon=tau, batch_size=batch_size, desired_confidence=threshold, **kwargs)
+        print('\nBEFORE_HOEFFDING_EXP = ', exp)
         #print('\ntype(exp) = ', type(exp))
         
-        return segments, self.get_exp_from_hoeffding(image, exp)
+        return segments, self.get_exp_from_hoeffding(image, exp), best_tuples
 
     def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
         # import needed libraries
