@@ -33,8 +33,7 @@ class ImageExplanation(object):
         self.local_pred = {}
         self.score = {}
 
-    def get_image_and_mask(self, label, positive_only=True, negative_only=False, hide_rest=False,
-                           num_features=5, min_weight=0.):
+    def get_image_and_mask(self, label):
         """Init function.
 
         Args:
@@ -60,126 +59,78 @@ class ImageExplanation(object):
 
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
-        if positive_only & negative_only:
-            raise ValueError("Positive_only and negative_only cannot be true at the same time.")
         segments = self.segments
         image = self.image
         exp = self.local_exp[label]
+        #print('\nself.local_exp = ', self.local_exp)
+        #print('\nexp = ', exp)
 
-        mask = np.zeros(segments.shape, segments.dtype)
-        if hide_rest:
-            temp = np.zeros(self.image.shape)
-        else:
-            temp = np.zeros(self.image.shape)
-        if positive_only:
-            fs = [x[0] for x in exp if x[1] > 0 and x[1] > min_weight][:num_features]
-        if negative_only:
-            fs = [x[0] for x in exp if x[1] < 0 and abs(x[1]) > min_weight][:num_features]
-        if positive_only == True and negative_only == False:
-            for f in fs:
-                if image[segments == f].all() == 0.0:
-                    temp[segments == f, 1] = np.max(image) #image[segments == f].copy()
-                    if hide_rest == False:
+        temp = np.zeros(self.image.shape)
+
+        color_free_space = False
+        use_maximum_weight = True
+        all_weights_zero = False
+
+        w_sum = 0.0
+        w_s = []
+        for f, w in exp:
+            w_sum += abs(w)
+            w_s.append(abs(w))
+        max_w = max(w_s)
+        if max_w == 0:
+            all_weights_zero = True
+            max_w = 1
+
+        for f, w in exp:
+            #print('\n(f, w): ', (f, w))
+
+            if w < -0.01:
+                c = -1
+            elif w > 0.01:
+                c = 1
+            else:
+                c = 0
+            #print('c = ', c)
+
+            val_low = 0.0
+            val_high = 255.0
+            gray_shade = 180
+            
+            x1 = np.bincount(image[segments == f][:,0] > 0.0)
+            x2 = len(image[segments == f][:,0])
+            free_space_percentage = x1[0] / x2
+            #print('free_space_percentage: ', free_space_percentage)
+
+            # free space
+            if free_space_percentage > 0.9:
+                if color_free_space == False:
+                    temp[segments == f, 0] = gray_shade
+                    temp[segments == f, 1] = gray_shade
+                    temp[segments == f, 2] = gray_shade
+            # obstacle
+            else:
+                if color_free_space == False:
+                    if c == 1:
                         temp[segments == f, 0] = 0.0
+                        if use_maximum_weight == True:
+                            temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / max_w
+                        else:
+                            temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / w_sum 
                         temp[segments == f, 2] = 0.0
-                else:
-                    temp[segments == f, 1] = np.max(image)  # image[segments == f].copy()
-                    temp[segments == f, 2] = np.max(image)  # image[segments == f].copy()
-                    if hide_rest == False:
+                    elif c == 0:
                         temp[segments == f, 0] = 0.0
-                        #temp[segments == f, 2] = 0.0
-                mask[segments == f] = 1
-            #print('get_image_and_mask ending')
-            return temp, mask, exp
-        if positive_only == False and negative_only == True:
-            for f in fs:
-                if image[segments == f].all() == 0.0:
-                    temp[segments == f, 0] = np.max(image) #image[segments == f].copy()
-                    if hide_rest == False:
                         temp[segments == f, 1] = 0.0
                         temp[segments == f, 2] = 0.0
-                else:
-                    temp[segments == f, 0] = np.max(image)  # image[segments == f].copy()
-                    temp[segments == f, 2] = np.max(image)  # image[segments == f].copy()
-                    if hide_rest == False:
+                    elif c == -1:
+                        if use_maximum_weight == True:
+                            temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / max_w
+                        else:
+                            temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / w_sum 
                         temp[segments == f, 1] = 0.0
-                        #temp[segments == f, 2] = 0.0
-                mask[segments == f] = 1
-            #print('get_image_and_mask ending')
-            return temp, mask, exp
-        else:
-            counter_local = 0
-            import pandas as pd
-
-            color_free_space = False
-            use_maximum_weight = True
-            all_weights_zero = False
-
-            w_sum = 0.0
-            w_s = []
-            for f, w in exp[:num_features]:
-                w_sum += abs(w)
-                w_s.append(abs(w))
-            max_w = max(w_s)
-            if max_w == 0:
-                all_weights_zero = True
-                max_w = 1
-            #print('max_w: ', max_w)
-
-            for f, w in exp[:num_features]:
-                #print('\n(f, w): ', (f, w))
-
-                if np.abs(w) < min_weight:
-                    continue
-                if w < -0.01:
-                    c = -1
-                elif w > 0.01:
-                    c = 1
-                else:
-                    c = 0
-                #print('c = ', c)
-
-                mask[segments == f] = f + 1 #120 + 10*(f+1) #f+1 #-1 if w < 0 else 1
-
-                val_low = 0.0
-                val_high = 255.0
-                gray_shade = 180
-                
-                x1 = np.bincount(image[segments == f][:,0] > 0.0)
-                x2 = len(image[segments == f][:,0])
-                free_space_percentage = x1[0] / x2
-                #print('free_space_percentage: ', free_space_percentage)
-
-                # free space
-                if free_space_percentage > 0.9:
-                    if color_free_space == False:
-                        temp[segments == f, 0] = gray_shade
-                        temp[segments == f, 1] = gray_shade
-                        temp[segments == f, 2] = gray_shade
-                # obstacle
-                else:
-                    if color_free_space == False:
-                        if c == 1:
-                            temp[segments == f, 0] = 0.0
-                            if use_maximum_weight == True:
-                                temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / max_w
-                            else:
-                                temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / w_sum 
-                            temp[segments == f, 2] = 0.0
-                        elif c == 0:
-                            temp[segments == f, 0] = 0.0
-                            temp[segments == f, 1] = 0.0
-                            temp[segments == f, 2] = 0.0
-                        elif c == -1:
-                            if use_maximum_weight == True:
-                                temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / max_w
-                            else:
-                                temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / w_sum 
-                            temp[segments == f, 1] = 0.0
-                            temp[segments == f, 2] = 0.0
+                        temp[segments == f, 2] = 0.0
                                         
-            #print('get_image_and_mask ending')
-            return temp, mask, exp
+        #print('get_image_and_mask ending')
+        return temp, exp
 
 
 class LimeImageExplainer(object):

@@ -110,10 +110,11 @@ class ExplainRobotNavigation:
         self.expID = expID
         self.index = self.expID
 
+        self.manual_instance_loading = False
+        
         self.case = 3
         self.eps = False
         self.semantic_seg = False
-        self.manual_instance_loading = True
         self.manually_make_semantic_map = False
         self.test_segmentation = False
 
@@ -216,8 +217,7 @@ class ExplainRobotNavigation:
                         print('\nReal (pure) explanation time = ', real_explanation_time)
                         
                         # get explanation image
-                        self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
-                                                                                    hide_rest=False, min_weight=0.0)            
+                        self.temp_img, self.exp = self.explanation.get_image_and_mask(label=0)            
                         
                         if self.plot == True:
                             plotting_time_start = time.time()
@@ -653,9 +653,11 @@ class ExplainRobotNavigation:
                     
     # turn inflated costmap to static costmap
     def inflatedToStatic(self):
+        #self.image[self.image < 99] = 0
+        #self.image[self.image > 0] = 99
         self.image[self.image == 100] = 99
-        self.image[self.image != 99] = 0
-
+        self.image[self.image <= 98] = 0
+        
     # classifier function for lime image
     def classifier_fn_image_lime(self, sampled_instance):
 
@@ -689,7 +691,7 @@ class ExplainRobotNavigation:
         self.sample_size = 1 if self.sampled_instance_shape_len == 2 else sampled_instance.shape[0]
 
         # Save perturbed costmap_data to file for C++ node
-        #costmap_save_start = time.time()
+        costmap_save_start = time.time()
 
         if self.sampled_instance_shape_len > 3:
             temp = np.delete(sampled_instance,2,3)
@@ -704,14 +706,14 @@ class ExplainRobotNavigation:
         elif self.sampled_instance_shape_len == 2:
             np.savetxt('./src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
 
-        #costmap_save_end = time.time()
-        #costmap_save_time = costmap_save_end - costmap_save_start
-        #print('\nsave perturbed costmap_data runtime: ', costmap_save_time)
+        costmap_save_end = time.time()
+        costmap_save_time = costmap_save_end - costmap_save_start
+        print('\nsave perturbed costmap_data runtime: ', costmap_save_time)
 
         # calling ROS C++ node
         #print('\nstarting C++ node')
 
-        #planner_calculation_start = time.time()
+        planner_calculation_start = time.time()
 
         # start perturbed_node_image ROS C++ node
         Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
@@ -723,9 +725,9 @@ class ExplainRobotNavigation:
         # kill ROS node
         Popen(shlex.split('rosnode kill /perturb_node_image'))
 
-        #planner_calculation_end = time.time()
-        #planner_calculation_time = planner_calculation_end - planner_calculation_start
-        #print('\nplanner calculation runtime = ', planner_calculation_time)
+        planner_calculation_end = time.time()
+        planner_calculation_time = planner_calculation_end - planner_calculation_start
+        print('\nplanner calculation runtime = ', planner_calculation_time)
 
         rospy.sleep(1)
 
@@ -846,7 +848,7 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'classification' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
+        mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()
@@ -1614,8 +1616,8 @@ class ExplainRobotNavigation:
 
         # plot costmap with plans
         fig = plt.figure(frameon=False)
-        w = 1.6#*3
-        h = 1.6#*3
+        w = 1.6*3
+        h = 1.6*3
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
@@ -1634,8 +1636,8 @@ class ExplainRobotNavigation:
 
         # plot explanation
         fig = plt.figure(frameon=True)
-        w = 1.6#*3
-        h = 1.6#*3
+        w = 1.6*3
+        h = 1.6*3
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
