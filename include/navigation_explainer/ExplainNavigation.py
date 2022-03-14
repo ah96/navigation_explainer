@@ -42,7 +42,7 @@ perturb_hide_color_value = 0 #0 #50
 class ExplainRobotNavigation:
     # constructor
     def __init__(self, cmd_vel, odom, plan, global_plan, local_plan, current_goal, local_costmap_data,
-                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, tabular_mode, explanation_mode, explanation_alg,
+                 local_costmap_info, amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info, underlying_model_mode, explanation_mode, explanation_alg,
                  num_of_first_rows_to_delete, footprints, output_class_name, X_train, X_test, y_train, y_test, num_samples, plot=True):
         print('\nConstructor starting')
 
@@ -60,7 +60,8 @@ class ExplainRobotNavigation:
         self.tf_map_odom = tf_map_odom
         self.map_data = map_data
         self.map_info = map_info
-        self.tabular_mode = tabular_mode
+        self.tabular_mode = underlying_model_mode
+        self.underlying_model_mode = underlying_model_mode
         self.explanation_mode = explanation_mode
         self.explanation_algorithm = explanation_alg
         self.offset = num_of_first_rows_to_delete
@@ -848,7 +849,8 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
+        mode = self.underlying_model_mode
+        #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()
@@ -2105,7 +2107,7 @@ class ExplainRobotNavigation:
         ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
 
         exp_img = copy.deepcopy(image)
-        include_features_from_exp = False
+        include_features_from_exp = True
         if include_features_from_exp == True:
             for e in self.exp:
                 exp_img[:,:,0][self.segments == e[0]+1] = 255
@@ -2293,7 +2295,8 @@ class ExplainRobotNavigation:
 
         print_iterations = False
         
-        mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
+        mode = self.underlying_model_mode
+        #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
         #start_main = time.time()

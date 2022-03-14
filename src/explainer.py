@@ -13,7 +13,7 @@ explanation_alg = ''
 explanation_mode = ''
 
 # tabular explanation modes: 'regression', 'classification'
-tabular_mode = ''
+underlying_model_mode = ''
 
 import math
 
@@ -181,7 +181,7 @@ def Single():
 
         one_hot_encoding = True
 
-        if tabular_mode == 'regression':
+        if underlying_model_mode == 'regression':
             import numpy as np
 
             # regression
@@ -191,7 +191,7 @@ def Single():
             #print(y)        
             output_class_name = y.columns.values[0]
 
-        elif (tabular_mode == 'classification') & (one_hot_encoding == False):
+        elif (underlying_model_mode == 'classification') & (one_hot_encoding == False):
             import numpy as np
             
             # classification        
@@ -211,7 +211,7 @@ def Single():
             #print(y)
             output_class_name = y.columns.values[0]
 
-        elif (tabular_mode == 'classification') & (one_hot_encoding == True):
+        elif (underlying_model_mode == 'classification') & (one_hot_encoding == True):
             import numpy as np
             
             # random forest classification - one-hot encoding        
@@ -267,13 +267,13 @@ def Single():
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        underlying_model_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
     
     print('\nexpID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
     print('\nnum_of_first_rows_to_delete = ', num_of_first_rows_to_delete)    
 
-    choose_random_instance = True
+    choose_random_instance = False
 
     if choose_random_instance == True:
         # random instance selection
@@ -333,7 +333,7 @@ def Evaluate():
 
         one_hot_encoding = True
 
-        if tabular_mode == 'regression':
+        if underlying_model_mode == 'regression':
             import numpy as np
 
             # regression
@@ -343,7 +343,7 @@ def Evaluate():
             #print(y)        
             output_class_name = y.columns.values[0]
 
-        elif (tabular_mode == 'classification') & (one_hot_encoding == False):
+        elif (underlying_model_mode == 'classification') & (one_hot_encoding == False):
             import numpy as np
             
             # classification        
@@ -363,7 +363,7 @@ def Evaluate():
             #print(y)
             output_class_name = y.columns.values[0]
 
-        elif (tabular_mode == 'classification') & (one_hot_encoding == True):
+        elif (underlying_model_mode == 'classification') & (one_hot_encoding == True):
             import numpy as np
             
             # random forest classification - one-hot encoding        
@@ -419,7 +419,7 @@ def Evaluate():
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        underlying_model_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     import time
@@ -492,7 +492,7 @@ def CreateDataset():
 
         one_hot_encoding = True
 
-        if tabular_mode == 'regression':
+        if underlying_model_mode == 'regression':
             import numpy as np
 
             # regression
@@ -502,7 +502,7 @@ def CreateDataset():
             #print(y)        
             output_class_name = y.columns.values[0]
 
-        elif (tabular_mode == 'classification') & (one_hot_encoding == False):
+        elif (underlying_model_mode == 'classification') & (one_hot_encoding == False):
             import numpy as np
             
             # classification        
@@ -522,7 +522,7 @@ def CreateDataset():
             #print(y)
             output_class_name = y.columns.values[0]
 
-        elif (tabular_mode == 'classification') & (one_hot_encoding == True):
+        elif (underlying_model_mode == 'classification') & (one_hot_encoding == True):
             import numpy as np
             
             # random forest classification - one-hot encoding        
@@ -578,7 +578,7 @@ def CreateDataset():
     exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                         current_goal, local_costmap_data, local_costmap_info,
                                                         amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                        tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                        underlying_model_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
 
     #'''
@@ -905,7 +905,7 @@ def EvaluateLIMEvsGAN():
         exp_nav = ExplainNavigation.ExplainRobotNavigation(cmd_vel, odom, plan, teb_global_plan, teb_local_plan,
                                                             current_goal, local_costmap_data, local_costmap_info,
                                                             amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
-                                                            tabular_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
+                                                            underlying_model_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                             X_train, X_test, y_train, y_test, num_samples, plot=False)
 
 
@@ -1408,7 +1408,7 @@ def EvaluateLIMEvsGAN():
                 # Turn inflated area to free space and 100s to 99s
                 image[image == 100] = 99
                 image[image != 99] = 0
-                # '''
+                # '''tabular_mode
 
                 # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
                 image = image * 1.0
@@ -2228,27 +2228,29 @@ clicked_exp_mode.set( "Choose explanation method" )
 drop = OptionMenu( root , clicked_exp_mode , *options_exp_mode )
 drop.pack()
 
-options_tab_mode = [
+options_model_mode = [
     "regression",
-    "classification"
+    "classification",
+    "regression_normalized_around_deviation",
+    "regression_normalized"
 ]
 # datatype of menu text
-clicked_tab_mode = StringVar()  
+clicked_model_mode = StringVar()  
 # initial menu text
-clicked_tab_mode.set( "Choose tabular explanation method" )  
+clicked_model_mode.set( "Choose underlying model" )  
 # Create Dropdown menu
-drop = OptionMenu( root , clicked_tab_mode , *options_tab_mode )
+drop = OptionMenu( root , clicked_model_mode , *options_model_mode )
 drop.pack()
 
 def loadToGlobalVars():
-    global explanation_alg, explanation_mode, tabular_mode
+    global explanation_alg, explanation_mode, underlying_model_mode
     explanation_alg = clicked_exp_alg.get()
     explanation_mode = clicked_exp_mode.get()
-    tabular_mode = clicked_tab_mode.get()
+    underlying_model_mode = clicked_model_mode.get()
     
     print('\nexplanation algorithm: ', explanation_alg)
     print('explanation mode:', explanation_mode)
-    print('tabular_mode: ', tabular_mode)
+    print('underlying_model_mode: ', underlying_model_mode)
 
 button_load = Button( root , text = "Confirm choices" , command = loadToGlobalVars ).pack()
   

@@ -17,6 +17,10 @@ import time
 from . import lime_base
 from .wrappers.scikit_image import SegmentationAlgorithm
 
+# import needed libraries for segmentation
+from skimage.segmentation import slic
+import matplotlib.pyplot as plt
+
 
 class ImageExplanation(object):
     def __init__(self, image, segments):
@@ -383,17 +387,12 @@ class LimeImageExplainer(object):
 
         return data, np.array(labels)
 
-    def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
-        # import needed libraries
-        from skimage.segmentation import slic
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import copy
-        
+    def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):        
         print('\nsm_only_obstacles started')
         
         # show original image
-        img = copy.deepcopy(image)
+        #img = copy.deepcopy(image)
+        img = image
 
         sm_only_obstacles_start = time.time()
 
@@ -403,18 +402,18 @@ class LimeImageExplainer(object):
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        #'''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_slic.astype('float64'), aspect='auto')
-        fig.savefig('segments_slic.png', transparent=False)
-        fig.clf()
-        #'''
+        plot_segmentation = True
+        if plot_segmentation == True:
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments_slic.astype('float64'), aspect='auto')
+            fig.savefig('segments_slic.png', transparent=False)
+            fig.clf()
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -440,12 +439,13 @@ class LimeImageExplainer(object):
                 segments[segments_slic == i] = ctr
                 ctr = ctr + 1
                 num_of_existing_obstacle_segments += 1
-
         #print('\nnum_of_existing_obstacle_segments: ', num_of_existing_obstacle_segments)
-
+        
         num_of_wanted_obstacle_segments = max(num_of_wanted_obstacle_segments, num_of_existing_obstacle_segments)        
-
+        #print('\nnum_of_wanted_obstacle_segments: ', num_of_wanted_obstacle_segments)
+        
         if num_of_wanted_obstacle_segments > num_of_existing_obstacle_segments > 0:
+            print('USAOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO!!!!!!!!!!!')
             # divide segment obstacles    
             current_segs_labels = np.unique(segments)[1:]        
 
@@ -798,18 +798,18 @@ class LimeImageExplainer(object):
                                                 #break
                                 label_current += 1
 
-        #'''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments.astype('float64'), aspect='auto')
-        fig.savefig('segments_final.png', transparent=False)
-        fig.clf()
-        #'''
+        
+        if plot_segmentation == True:
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_final.png', transparent=False)
+            fig.clf()
 
         # fix labels of segments
         seg_labels = np.unique(segments)
@@ -829,6 +829,7 @@ class LimeImageExplainer(object):
 
         print('\nnp.unique(segments): ', np.unique(segments))
 
+        # if there are no any obstacles, then divide free space in num_of_wanted_obstacle_segments parts
         if len(np.unique(segments)) == 1:
             step = round(segments.shape[0] / (num_of_wanted_obstacle_segments + 1))
             for i in range(0, num_of_wanted_obstacle_segments + 1):
