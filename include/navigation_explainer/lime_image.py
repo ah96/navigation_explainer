@@ -443,30 +443,31 @@ class LimeImageExplainer(object):
         
         num_of_wanted_obstacle_segments = max(num_of_wanted_obstacle_segments, num_of_existing_obstacle_segments)        
         #print('\nnum_of_wanted_obstacle_segments: ', num_of_wanted_obstacle_segments)
+        num_of_wanted_obstacle_segments = 3 * num_of_existing_obstacle_segments
         
         if num_of_wanted_obstacle_segments > num_of_existing_obstacle_segments > 0:
-            print('USAOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO!!!!!!!!!!!')
+            print('IN!!!!!!!!!!!')
             # divide segment obstacles    
             current_segs_labels = np.unique(segments)[1:]        
 
-            #print('\nnumber of wanted segments: ', num_of_wanted_obstacle_segments)
-            #print('number of current segments: ', num_of_existing_obstacle_segments)
+            print('number of wanted segments: ', num_of_wanted_obstacle_segments)
+            print('number of current segments: ', num_of_existing_obstacle_segments)
+            print('current_segs_labels = ', current_segs_labels)
 
+            # get current segments sizes
             current_segs_sizes = []
-
-            if num_of_existing_obstacle_segments < num_of_wanted_obstacle_segments:
-                for i in range(0, num_of_existing_obstacle_segments):
-                    #print(len(segments[segments == seg_labels[i]]))
-                    current_segs_sizes.append(len(segments[segments == current_segs_labels[i]]))
-
-            #print('\nsizes of original segments: ', current_segs_sizes)
-            #print('labels of original segments: ', current_segs_labels)
+            for i in range(0, num_of_existing_obstacle_segments):
+                #print(len(segments[segments == seg_labels[i]]))
+                current_segs_sizes.append(len(segments[segments == current_segs_labels[i]]))
+            print('sizes of original segments: ', current_segs_sizes)
+            print('labels of original segments: ', current_segs_labels)
+            
             sorted_segs_labels = [x for _, x in sorted(zip(current_segs_sizes, current_segs_labels))]
             sorted_segs_labels.reverse()
-            #print('labels of sorted segments: ', sorted_segs_labels)
+            print('labels of sorted segments: ', sorted_segs_labels)
 
             num_segs_missing = num_of_wanted_obstacle_segments - num_of_existing_obstacle_segments
-            #print('\nnumber of segments missing: ', num_segs_missing)
+            print('number of segments missing: ', num_segs_missing)
 
             # if a number of missing segments is smaller or equal than the number of existing segments
             # only divide existing segments into 2
@@ -475,8 +476,9 @@ class LimeImageExplainer(object):
                 # for loop from zero until the number of missing segments   
                 for i in range(0, num_segs_missing):
                     temp = segments[segments == sorted_segs_labels[i]]
-                    #print('temp = ', temp)
+                    print('\ntemp = ', temp)
 
+                    '''
                     # check obstacle shape
                     w_min = 161
                     w_max = -1
@@ -493,19 +495,48 @@ class LimeImageExplainer(object):
                                     w_max = q
                                 if q < w_min:
                                     w_min = q           
-
-                    #print('\n(h_min, h_max): ', (h_min, h_max))
-                    #print('(w_min, w_max): ', (w_min, w_max))
-
+                    print('\n(h_min, h_max): ', (h_min, h_max))
+                    print('(w_min, w_max): ', (w_min, w_max))
                     height = h_max - h_min + 1
-                    #print('\nheight', height)
+                    print('\nheight = ', height)
                     width = w_max - w_min + 1
-                    #print('width', width)
-           
+                    print('width = ', width)
+                    '''
+
+                    #'''
+                    # check obstacle shape
+                    widths = []
+                    heights = []
+                    for j in range(0, segments.shape[0]):
+                        w_min = 161
+                        w_max = -1
+                        h_min = 161
+                        h_max = -1
+                        for q in range(0, segments.shape[1]):
+                            if segments[j, q] == sorted_segs_labels[i]:
+                                if q > w_max:
+                                    w_max = q
+                                if q < w_min:
+                                    w_min = q
+                            if segments[q, j] == sorted_segs_labels[i]:
+                                if q > h_max:
+                                    h_max = q
+                                if q < h_min:
+                                    h_min = q
+                        if w_max >= w_min:
+                            widths.append(w_max - w_min + 1)
+                        if h_max >= h_min:
+                            heights.append(h_max - h_min + 1)
+                    height = sum(heights) / len(heights)
+                    print('\nheight = ', height)
+                    width = sum(widths) / len(widths)
+                    print('width = ', width)
+                    #'''
+
                     # if upright
                     if abs(k) >= 1:
                         # divide by height
-                        if height > width:
+                        if height >= 2 * width:
                             for j in range(0, int(len(temp) / 2)):
                                 temp[j] = label_current
                             segments[segments == sorted_segs_labels[i]] = temp
@@ -544,7 +575,7 @@ class LimeImageExplainer(object):
                     # if to the side
                     elif abs(k) < 1:
                         # divide by height
-                        if width > height:
+                        if width >= 2 * height:
                             for j in range(0, int(len(temp) / 2)):
                                 temp[j] = label_current
                             segments[segments == sorted_segs_labels[i]] = temp
@@ -578,6 +609,7 @@ class LimeImageExplainer(object):
                     for i in range(0, num_of_existing_obstacle_segments):
                         temp = segments[segments == sorted_segs_labels[i]]
 
+                        '''
                         # check obstacle shape
                         w_min = 161
                         w_max = -1
@@ -594,19 +626,48 @@ class LimeImageExplainer(object):
                                         w_max = q
                                     if q < w_min:
                                         w_min = q
-
                         #print('\n(h_min, h_max): ', (h_min, h_max))
                         #print('(w_min, w_max): ', (w_min, w_max))
-
                         height = h_max - h_min + 1
                         #print('\nheight', height)
                         width = w_max - w_min + 1
                         #print('width', width)
+                        '''
+
+                        #'''
+                        # check obstacle shape
+                        widths = []
+                        heights = []
+                        for j in range(0, segments.shape[0]):
+                            w_min = 161
+                            w_max = -1
+                            h_min = 161
+                            h_max = -1
+                            for q in range(0, segments.shape[1]):
+                                if segments[j, q] == sorted_segs_labels[i]:
+                                    if q > w_max:
+                                        w_max = q
+                                    if q < w_min:
+                                        w_min = q
+                                if segments[q, j] == sorted_segs_labels[i]:
+                                    if q > h_max:
+                                        h_max = q
+                                    if q < h_min:
+                                        h_min = q
+                            if w_max >= w_min:
+                                widths.append(w_max - w_min + 1)
+                            if h_max >= h_min:
+                                heights.append(h_max - h_min + 1)
+                        height = sum(heights) / len(heights)
+                        print('\nheight = ', height)
+                        width = sum(widths) / len(widths)
+                        print('width = ', width)
+                        #'''
 
                         # if upright
                         if abs(k) >= 1:
                             # divide by height
-                            if height > width:
+                            if height >= 2 * width:
                                 step = round(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg + 1):
                                     temp[j*step:(j+1)*step] = label_current
@@ -637,7 +698,7 @@ class LimeImageExplainer(object):
                                                 break
                         # if to the side
                         else:
-                            if width > height:
+                            if width >= 2 * height:
                                 step = round(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg + 1):
                                     temp[j*step:(j+1)*step] = label_current
@@ -694,6 +755,7 @@ class LimeImageExplainer(object):
                     for i in range(0, num_of_existing_obstacle_segments):
                         temp = segments[segments == sorted_segs_labels[i]]
 
+                        '''
                         # check obstacle shape
                         w_min = 161
                         w_max = -1
@@ -710,19 +772,48 @@ class LimeImageExplainer(object):
                                         w_max = q
                                     if q < w_min:
                                         w_min = q
-
                         #print('\n(h_min, h_max): ', (h_min, h_max))
                         #print('(w_min, w_max): ', (w_min, w_max))
-
                         height = h_max - h_min + 1
                         #print('\nheight', height)
                         width = w_max - w_min + 1
                         #print('width', width)
+                        '''
+
+                        #'''
+                        # check obstacle shape
+                        widths = []
+                        heights = []
+                        for j in range(0, segments.shape[0]):
+                            w_min = 161
+                            w_max = -1
+                            h_min = 161
+                            h_max = -1
+                            for q in range(0, segments.shape[1]):
+                                if segments[j, q] == sorted_segs_labels[i]:
+                                    if q > w_max:
+                                        w_max = q
+                                    if q < w_min:
+                                        w_min = q
+                                if segments[q, j] == sorted_segs_labels[i]:
+                                    if q > h_max:
+                                        h_max = q
+                                    if q < h_min:
+                                        h_min = q
+                            if w_max >= w_min:
+                                widths.append(w_max - w_min + 1)
+                            if h_max >= h_min:
+                                heights.append(h_max - h_min + 1)
+                        height = sum(heights) / len(heights)
+                        print('\nheight = ', height)
+                        width = sum(widths) / len(widths)
+                        print('width = ', width)
+                        #'''
 
                         # if upright
                         if abs(k) >= 1:
                             #print('UPRIGHT')
-                            if height > width:
+                            if height >= 2 * width:
                                 #print('height > width')
                                 step = round(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
@@ -759,7 +850,7 @@ class LimeImageExplainer(object):
                         # if to the side
                         else:
                             #print('\nSIDE')
-                            if width > height:
+                            if width >= 2 * height:
                                 #print('\nwidth>height')
                                 step = round(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5) # or (... + 0.5) with fixing values from behind
                                 for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):

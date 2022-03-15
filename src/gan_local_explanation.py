@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import message_filters
+
 import rospy
 from nav_msgs.msg import Odometry, Path, OccupancyGrid
 import numpy as np
@@ -32,9 +34,13 @@ import time
 global odom_x, odom_y, local_plan_xs, local_plan_ys
 global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image 
 global br, pub_exp_image, pub_exp_pointcloud
-global global_plan_xs, global_plan_ys
+global global_plan_xs, global_plan_ys, transformed_plan_xs, transformed_plan_ys
 global_plan_xs = [] 
 global_plan_ys = []
+local_plan_xs = [] 
+local_plan_ys = []
+transformed_plan_xs = [] 
+transformed_plan_ys = []
 
 # GAN options
 opt = TestOptions().parse()  # get test options
@@ -52,14 +58,14 @@ input_transform = get_transform(opt, transform_params, grayscale=(input_nc == 1)
     
 # plot options
 w = 1.6 
-h = 1.6
-fig = plt.figure(frameon=False)    
+h = 1.6 
+ 
     
 # Define a callback for the local plan
 def local_plan_callback(msg):
-    #print('\nlocal_plan')
+    #print('\nlocal_plan started')
 
-    global global_plan_xs, global_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image, odom_x, odom_y, local_plan_xs, local_plan_ys
+    global global_plan_xs, global_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image, odom_x, odom_y, local_plan_xs, local_plan_ys, transformed_plan_xs, transformed_plan_ys
     local_plan_xs = [] 
     local_plan_ys = []
 
@@ -70,21 +76,13 @@ def local_plan_callback(msg):
         if 0 <= x_temp < 160 and 0 <= y_temp < 160:
             local_plan_xs.append(x_temp)
             local_plan_ys.append(y_temp)
-    end = time.time()
+    #end = time.time()
     #print()
-    #print('LOCAL PLAN RUNTIME = ', end-start)    
-
-# Define a callback for the global plan
-def global_plan_callback(msg):
-    #print('\nglobal_plan')
+    #print('LOCAL PLAN RUNTIME = ', end-start)
     
-    global global_plan_xs, global_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image, odom_x, odom_y, local_plan_xs, local_plan_ys
-    global_plan_xs = [] 
-    global_plan_ys = []
-
-    for i in range(0,len(msg.poses)):
-        global_plan_xs.append(msg.poses[i].pose.position.x) 
-        global_plan_ys.append(msg.poses[i].pose.position.y)
+    #print('\nlocal_plan finished')
+    #rospy.sleep(1.0)
+    return 0
 
     # catch transform from /map to /odom
     transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
@@ -113,6 +111,304 @@ def global_plan_callback(msg):
 
     # plot costmap with plans
     #plot_start = time.time()
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(w, h)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax) 
+    ax.imshow(image.astype(np.uint8), aspect='auto')
+    ax.scatter(transformed_plan_xs, transformed_plan_ys, c='blue', marker='o')
+    ax.scatter(local_plan_xs, local_plan_ys, c='yellow', marker='o')
+    ax.scatter([x_odom_index], [y_odom_index], c='white', marker='o')
+    fig.canvas.draw()
+    fig.canvas.tostring_argb()
+    #plot_end = time.time()
+    #print('plot_time = ', plot_end - plot_start)
+
+    # get GAN output
+    input = PIL.Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
+    fig.clf()
+    input = input_transform(input)
+    model.set_input_one(input)  # unpack data from data loader
+    #forward_start = time.time()
+    model.forward()
+    #forward_end = time.time()
+    output = tensor2im(model.fake_B)
+    #print('gan_output_time = ', forward_end - forward_start)
+
+    # RGB to BGR
+    #start_bgr = time.time()
+    output = output[:, :, [2, 1, 0]]
+    #end_bgr = time.time()
+    #print('\nBGR time = ', end_bgr - start_bgr)
+
+    # publish explanation layer
+    #points_start = time.time()
+    z = 0.0
+    a = 255                    
+    points = []
+    for i in range(0, 160):
+        for j in range(0, 160):
+            x = localCostmapOriginX + i * localCostmapResolution
+            y = localCostmapOriginY + j * localCostmapResolution
+            r = output[j, i, 2]
+            g = output[j, i, 1]
+            b = output[j, i, 0]
+            rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+            pt = [x, y, z, rgb]
+            points.append(pt)
+    #points_end = time.time()
+    #print('\npoints_time = ', points_end - points_start)
+
+    fields = [PointField('x', 0, PointField.FLOAT32, 1),
+          PointField('y', 4, PointField.FLOAT32, 1),
+          PointField('z', 8, PointField.FLOAT32, 1),
+          PointField('rgba', 12, PointField.UINT32, 1),
+          ]
+
+    header = Header()
+    header.frame_id = 'odom'
+    pc2 = point_cloud2.create_cloud(header, fields, points)
+    pc2.header.stamp = rospy.Time.now()
+    pub_exp_pointcloud.publish(pc2)
+    #rospy.sleep(1.0)
+
+    # publish explanation image
+    #flip_start = time.time()
+    output[:,:,0] = np.flip(output[:,:,0], axis=1)
+    output[:,:,1] = np.flip(output[:,:,1], axis=1)
+    output[:,:,2] = np.flip(output[:,:,2], axis=1)
+    #flip_end = time.time()
+    #print('\nflip_time = ', flip_end - flip_start)
+    output_cv = br.cv2_to_imgmsg(output) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
+    pub_exp_image.publish(output_cv)
+
+    print('\nlocal_plan finished')
+
+# Define a callback for the global plan
+def global_plan_callback(msg):
+    #print('\nglobal_plan started')
+    
+    global global_plan_xs, global_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image, odom_x, odom_y, local_plan_xs, local_plan_ys, transformed_plan_xs, transformed_plan_ys
+    global_plan_xs = [] 
+    global_plan_ys = []
+
+    for i in range(0,len(msg.poses)):
+        global_plan_xs.append(msg.poses[i].pose.position.x) 
+        global_plan_ys.append(msg.poses[i].pose.position.y)
+
+    #print('\nglobal_plan finished')    
+    #return 0
+
+    # catch transform from /map to /odom
+    transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+    t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+    r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+    r_ = np.asarray(r.as_matrix())
+
+    # transform global plan to from /map to /odom
+    transformed_plan_xs = []
+    transformed_plan_ys = []
+    #global_plan_start = time.time()
+    for i in range(0, len(global_plan_xs)):
+        p = np.array([global_plan_xs[i], global_plan_ys[i], 0.0])
+        pnew = p.dot(r_) + t
+        x_temp = round((pnew[0] - localCostmapOriginX) / localCostmapResolution)
+        y_temp = round((pnew[1] - localCostmapOriginY) / localCostmapResolution)
+        if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+            transformed_plan_xs.append(x_temp)
+            transformed_plan_ys.append(y_temp)
+    #global_plan_end = time.time()
+    #print('global_plan_transform_time = ', global_plan_end - global_plan_start)
+    
+    # save indices of robot's odometry location in local costmap to class variables
+    x_odom_index = round((odom_x - localCostmapOriginX) / localCostmapResolution)
+    y_odom_index = round((odom_y - localCostmapOriginY) / localCostmapResolution)
+
+    # plot costmap with plans
+    #plot_start = time.time()
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(w, h)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax) 
+    ax.imshow(image.astype(np.uint8), aspect='auto')
+    ax.scatter(transformed_plan_xs, transformed_plan_ys, c='blue', marker='o')
+    ax.scatter(local_plan_xs, local_plan_ys, c='yellow', marker='o')
+    ax.scatter([x_odom_index], [y_odom_index], c='white', marker='o')
+    fig.canvas.draw()
+    fig.canvas.tostring_argb()
+    #plot_end = time.time()
+    #print('plot_time = ', plot_end - plot_start)
+
+    # get GAN output
+    input = PIL.Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
+    fig.clf()
+    input = input_transform(input)
+    model.set_input_one(input)  # unpack data from data loader
+    #forward_start = time.time()
+    model.forward()
+    #forward_end = time.time()
+    output = tensor2im(model.fake_B)
+    #print('gan_output_time = ', forward_end - forward_start)
+
+    # RGB to BGR
+    #start_bgr = time.time()
+    output = output[:, :, [2, 1, 0]]
+    #end_bgr = time.time()
+    #print('\nBGR time = ', end_bgr - start_bgr)
+
+    # publish explanation layer
+    #points_start = time.time()
+    z = 0.0
+    a = 255                    
+    points = []
+    for i in range(0, 160):
+        for j in range(0, 160):
+            x = localCostmapOriginX + i * localCostmapResolution
+            y = localCostmapOriginY + j * localCostmapResolution
+            r = output[j, i, 2]
+            g = output[j, i, 1]
+            b = output[j, i, 0]
+            rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+            pt = [x, y, z, rgb]
+            points.append(pt)
+    #points_end = time.time()
+    #print('\npoints_time = ', points_end - points_start)
+
+    fields = [PointField('x', 0, PointField.FLOAT32, 1),
+          PointField('y', 4, PointField.FLOAT32, 1),
+          PointField('z', 8, PointField.FLOAT32, 1),
+          PointField('rgba', 12, PointField.UINT32, 1),
+          ]
+
+    header = Header()
+    header.frame_id = 'odom'
+    pc2 = point_cloud2.create_cloud(header, fields, points)
+    pc2.header.stamp = rospy.Time.now()
+    pub_exp_pointcloud.publish(pc2)
+    #rospy.sleep(1.0)
+
+    # publish explanation image
+    #flip_start = time.time()
+    output[:,:,0] = np.flip(output[:,:,0], axis=1)
+    output[:,:,1] = np.flip(output[:,:,1], axis=1)
+    output[:,:,2] = np.flip(output[:,:,2], axis=1)
+    #flip_end = time.time()
+    #print('\nflip_time = ', flip_end - flip_start)
+    output_cv = br.cv2_to_imgmsg(output) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
+    pub_exp_image.publish(output_cv)
+
+    #print('\nglobal_plan finished')    
+    
+        
+# Define a callback for the local plan
+def odom_callback(msg):
+    #print('\nodom')
+
+    global odom_x, odom_y
+
+    odom_x = msg.pose.pose.position.x
+    odom_y = msg.pose.pose.position.y
+
+# Define a callback for the local plan
+def local_costmap_callback(msg):
+    #print('\nlocal_costmap')
+
+    global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image
+
+    localCostmapOriginX = msg.info.origin.position.x
+    localCostmapOriginY = msg.info.origin.position.y
+    localCostmapResolution = msg.info.resolution
+
+    image = np.asarray(msg.data)
+    image.resize((msg.info.height,msg.info.width))
+
+    free_space_shade = 180
+    obstacle_shade = 255
+
+
+    # Turn inflated area to free space and 100s to 99s
+    image[image >= 99] = obstacle_shade
+    image[image <= 98] = free_space_shade
+    #image = gray2rgb(image)
+    image = np.stack(3 * (image,), axis=-1)
+
+
+def callback(local_plan_msg, global_plan_msg, costmap_msg, odom_msg):
+    #print('Solve all of perception here..')
+
+    global global_plan_xs, global_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image, odom_x, odom_y, local_plan_xs, local_plan_ys, transformed_plan_xs, transformed_plan_ys
+    
+    odom_x = odom_msg.pose.pose.position.x
+    odom_y = odom_msg.pose.pose.position.y
+
+    localCostmapOriginX = costmap_msg.info.origin.position.x
+    localCostmapOriginY = costmap_msg.info.origin.position.y
+    localCostmapResolution = costmap_msg.info.resolution
+
+    image = np.asarray(costmap_msg.data)
+    image.resize((costmap_msg.info.height,costmap_msg.info.width))
+
+    free_space_shade = 180
+    obstacle_shade = 255
+
+
+    # Turn inflated area to free space and 100s to 99s
+    image[image >= 99] = obstacle_shade
+    image[image <= 98] = free_space_shade
+    #image = gray2rgb(image)
+    image = np.stack(3 * (image,), axis=-1)
+
+    local_plan_xs = [] 
+    local_plan_ys = []
+
+    #start = time.time()
+    for i in range(0,len(local_plan_msg.poses)):
+        x_temp = round((local_plan_msg.poses[i].pose.position.x - localCostmapOriginX) / localCostmapResolution) 
+        y_temp = round((local_plan_msg.poses[i].pose.position.y - localCostmapOriginY) / localCostmapResolution)
+        if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+            local_plan_xs.append(x_temp)
+            local_plan_ys.append(y_temp)
+    
+    global_plan_xs = [] 
+    global_plan_ys = []
+
+    for i in range(0,len(global_plan_msg.poses)):
+        global_plan_xs.append(global_plan_msg.poses[i].pose.position.x) 
+        global_plan_ys.append(global_plan_msg.poses[i].pose.position.y)
+
+    #print('\nglobal_plan finished')    
+    #return 0
+
+    # catch transform from /map to /odom
+    transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+    t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+    r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+    r_ = np.asarray(r.as_matrix())
+
+    # transform global plan to from /map to /odom
+    transformed_plan_xs = []
+    transformed_plan_ys = []
+    #global_plan_start = time.time()
+    for i in range(0, len(global_plan_xs)):
+        p = np.array([global_plan_xs[i], global_plan_ys[i], 0.0])
+        pnew = p.dot(r_) + t
+        x_temp = round((pnew[0] - localCostmapOriginX) / localCostmapResolution)
+        y_temp = round((pnew[1] - localCostmapOriginY) / localCostmapResolution)
+        if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+            transformed_plan_xs.append(x_temp)
+            transformed_plan_ys.append(y_temp)
+    #global_plan_end = time.time()
+    #print('global_plan_transform_time = ', global_plan_end - global_plan_start)
+    
+    # save indices of robot's odometry location in local costmap to class variables
+    x_odom_index = round((odom_x - localCostmapOriginX) / localCostmapResolution)
+    y_odom_index = round((odom_y - localCostmapOriginY) / localCostmapResolution)
+
+    # plot costmap with plans
+    #plot_start = time.time()
+    fig = plt.figure(frameon=False)
     fig.set_size_inches(w, h)
     ax = plt.Axes(fig, [0., 0., 1., 1.])
     ax.set_axis_off()
@@ -182,40 +478,10 @@ def global_plan_callback(msg):
     #flip_end = time.time()
     #print('\nflip_time = ', flip_end - flip_start)
     output_cv = br.cv2_to_imgmsg(output) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
-    pub_exp_image.publish(output_cv)    
-
-        
-# Define a callback for the local plan
-def odom_callback(msg):
-    #print('\nodom')
-
-    global odom_x, odom_y
-
-    odom_x = msg.pose.pose.position.x
-    odom_y = msg.pose.pose.position.y
-
-# Define a callback for the local plan
-def local_costmap_callback(msg):
-    #print('\nlocal_costmap')
-
-    global localCostmapOriginX, localCostmapOriginY, localCostmapResolution, image
-
-    localCostmapOriginX = msg.info.origin.position.x
-    localCostmapOriginY = msg.info.origin.position.y
-    localCostmapResolution = msg.info.resolution
-
-    image = np.asarray(msg.data)
-    image.resize((msg.info.height,msg.info.width))
-
-    free_space_shade = 180
-    obstacle_shade = 255
+    pub_exp_image.publish(output_cv)
 
 
-    # Turn inflated area to free space and 100s to 99s
-    image[image >= 99] = obstacle_shade
-    image[image <= 98] = free_space_shade
-    #image = gray2rgb(image)
-    image = np.stack(3 * (image,), axis=-1)
+
 
 
 # main part
@@ -246,3 +512,14 @@ sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", Occupan
 while not rospy.is_shutdown():
     #print('spinning')
     rospy.spin()
+
+'''
+local_sub = message_filters.Subscriber('/move_base/TebLocalPlannerROS/global_plan', Path)
+global_sub = message_filters.Subscriber('/move_base/GlobalPlanner/plan', Path)
+costmap_sub = message_filters.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid)
+odom_sub = message_filters.Subscriber('/mobile_base_controller/odom', Odometry)
+#ts = message_filters.TimeSynchronizer([local_sub, global_sub, costmap_sub, odom_sub], 10)
+ts = message_filters.ApproximateTimeSynchronizer([local_sub, global_sub, costmap_sub, odom_sub], 1, 1)  
+ts.registerCallback(callback)
+rospy.spin()
+'''
