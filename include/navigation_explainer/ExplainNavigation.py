@@ -3460,8 +3460,7 @@ class ExplainRobotNavigation:
                                                                                     self.plan_x_list, self.plan_y_list,
                                                                                     hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
                         
-                self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0, positive_only=False, negative_only=False, num_features=100,
-                                                                            hide_rest=False, min_weight=0.0)            
+                self.temp_img, self.exp = self.explanation.get_image_and_mask(label=0)            
                 
                 self.plotMinimalDataset(iteration_ID, self.segments)
 
@@ -3484,7 +3483,7 @@ class ExplainRobotNavigation:
         ax.set_axis_off()
         fig.add_axes(ax)
         gray_shade = 180
-        white_shade = 255
+        white_shade = 0
         image = gray2rgb(self.image)
         for i in range(0, image.shape[0]):
             for j in range(0, image.shape[1]):
