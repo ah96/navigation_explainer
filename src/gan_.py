@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 def predict():
     import os
     path = os.getcwd() + '/src/navigation_explainer/include/GAN'

@@ -4,7 +4,10 @@ import sklearn
 import time
 import matplotlib.pyplot as plt
 import os
-
+import pandas as pd
+import copy
+import itertools
+        
 
 class AnchorImage(object):
     """bla"""
@@ -14,12 +17,8 @@ class AnchorImage(object):
         """"""
         self.hide = True
         self.white = white
-        if segmentation_fn is None:
-            from skimage.segmentation import quickshift
-            segmentation_fn = lambda x: quickshift(x, kernel_size=4, # noqa
-                                                   max_dist=200, ratio=0.2)
         self.segmentation = self.sm_only_obstacles                                           
-        #self.segmentation = segmentation_fn
+        
         if dummys is not None:
             self.hide = False
             self.dummys = dummys
@@ -51,72 +50,75 @@ class AnchorImage(object):
             paths = [os.path.join(distribution_path, f) for f in all_files]
             self.dummys = transform_img_fn(paths)
 
-    def get_sample_fn(self, image, classifier_fn,
-                    costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, 
-                    lime=False):
-        import copy
-        # segments = slic(image, n_segments=100, compactness=20)
-        image_orig = image[:,:,0]
+    def get_sample_fn(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, 
+                    plan_x_list, plan_y_list, lime=False):
+
+        # save original 2D costmap
+        image_orig = copy.deepcopy(image[:,:,0])
+        
+        # find segments
         segments = self.segmentation(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-        #fudged_image = image.copy()
-        fudged_image = image_orig.copy()
-        '''
-        for x in np.unique(segments):
-            fudged_image[segments == x] = (
-                np.mean(image[segments == x][:, 0]),
-                np.mean(image[segments == x][:, 1]),
-                np.mean(image[segments == x][:, 2]))
-        '''        
-        if self.white is not None:
-            fudged_image[:] = self.white
+        
+        # create perturbations
         features = list(np.unique(segments))
-        n_features = len(features)
-
-
-        #### MY PART START
-        #'''
-        # My perturbation - test all possible combinations
-        num_samples = 2 ** (n_features)
-        import itertools
-        lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-        data = np.array(lst).reshape((num_samples, n_features))
-        #'''
-
-        labels = []
-
-        show_free_space = False
-
-        if show_free_space == True:
-            data[0, :] = 1
-            data[-1, :] = 0 # only if I use my perturbation
-        else:
-            data = data[int(data.shape[0]/2):, :]
-            data[0, 1:] = 1
-            data[-1, 1:] = 0 # only if I use my perturbation
-            imgs = []
-
-        print('DATA = ', data)    
-    
-        rows = data
-        i = 0
-        for row in rows:
-            temp = copy.deepcopy(image)
-            zeros = np.where(row == 0)[0]
-            mask = np.zeros(segments.shape).astype(bool)
-            for z in zeros:
-                mask[segments == z] = True
-            #temp[mask] = fudged_image[mask]
-            temp = mask            
-            imgs.append(temp)
-        #if len(imgs) > 0:
-        #    preds = classifier_fn(np.array(imgs))
-        #    labels.extend(preds)
-        #### MY PART END
-
-        true_label = np.argmax(classifier_fn(np.array(imgs)[0,:,:])[0])
+        n_features = len(features) - 1 #=9-1
+        rows = np.array([1]*n_features)
+        # create costmap perturbations
+        imgs = []    
+        temp = copy.deepcopy(image_orig)
+        zeros = np.where(rows == 0)[0]
+        for z in zeros:
+            temp[segments == z + 1] = 0.0
+        imgs.append(temp)
+        output = classifier_fn(np.array(imgs)[0,:,:])
+        print('\nclassifier_fn output = ', output)
+        true_label = output[0][0]
+        print('\ntrue_label = ', true_label)
+        #true_label = np.argmax(output[0])
         #true_label = np.argmax(classifier_fn(np.expand_dims(image, 0))[0])
-        print ('True pred', true_label)
 
+        def sample_fn(present, num_samples, compute_labels=True):
+            print('\nsample_fn started!')
+                            
+            # this if is validated to True only at the beginning when coverage is calculated
+            if not compute_labels:
+                # num_samples = 2**n_features
+                if num_samples == 2**n_features:
+                    lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
+                    data = np.array(lst).reshape((num_samples, n_features))
+                    data[0, :] = 1
+                    data[-1, :] = 0 # only if I use my perturbation
+                    return [], data, []
+                else:
+                    data = np.random.randint(0, 2, num_samples * n_features).reshape((num_samples, n_features))
+                    return [], data, []    
+            elif compute_labels:
+                imgs = []
+                if num_samples == 2**n_features:
+                    lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
+                    rows = np.array(lst).reshape((num_samples, n_features))
+                    rows[0, :] = 1
+                    rows[-1, :] = 0 # only if I use my perturbation
+                    for row in rows:
+                        temp = copy.deepcopy(image_orig)
+                        zeros = np.where(row == 0)[0]
+                        for z in zeros:
+                            temp[segments == z + 1] = 0.0
+                        imgs.append(temp)
+                    preds = classifier_fn(np.array(imgs))
+                    return rows, rows, preds
+                else:
+                    rows = np.random.randint(0, 2, num_samples * n_features).reshape((num_samples, n_features))
+                    rows[:, present] = 1
+                    for row in rows:
+                        temp = copy.deepcopy(image_orig)
+                        zeros = np.where(row == 0)[0]
+                        for z in zeros:
+                            temp[segments == z + 1] = 0.0
+                        imgs.append(temp)
+                    preds = classifier_fn(np.array(imgs))
+                    return rows, rows, preds
+            
         def lime_sample_fn(num_samples, batch_size=50):
             # data = np.random.randint(0, 2, num_samples * n_features).reshape(
             #     (num_samples, n_features))
@@ -152,8 +154,6 @@ class AnchorImage(object):
 
         if lime:
             return segments, lime_sample_fn
-
-
 
         def sample_fn_dummy(present, num_samples, compute_labels=True):
             if not compute_labels:
@@ -199,44 +199,21 @@ class AnchorImage(object):
             raw_data = np.hstack((data, chosen.reshape(-1, 1)))
             return raw_data, data, np.array(labels)
 
-        def sample_fn(present, num_samples, compute_labels=True):
-            # TODO: I'm sampling in this different way because the way we were
-            # sampling confounds size of the document with feature presence
-            # (larger documents are more likely to have features present)
-            data = np.random.randint(0, 2, num_samples * n_features).reshape(
-                (num_samples, n_features))
-            data[:, present] = 1
-            if not compute_labels:
-                return [], data, []
-            imgs = []
-            for row in data:
-                temp = copy.deepcopy(image_orig)
-                zeros = np.where(row == 0)[0]
-                mask = np.zeros(segments.shape).astype(bool)
-                for z in zeros:
-                    mask[segments == z] = True
-                temp[mask] = fudged_image[mask]
-                imgs.append(temp)
-            preds = classifier_fn(np.array(imgs))
-            preds_max = np.argmax(preds, axis=1)
-            labels = (preds_max == true_label).astype(int)
-            # raw_data = imgs
-            raw_data = data
-            return raw_data, data, labels
-
         sample = sample_fn if self.hide else sample_fn_dummy
         return segments, sample
 
     def explain_instance(self, image, classifier_fn, 
                         costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list,
-                        threshold=0.95, delta=0.1, tau=0.15, batch_size=100,
-                           **kwargs):
+                        threshold=0.95, delta=0.1, tau=0.15, batch_size=100, **kwargs):
+        
         # classifier_fn is a predict_proba
         segments, sample = self.get_sample_fn(image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-        exp = anchor_base.AnchorBaseBeam.anchor_beam(
-            sample, delta=delta, epsilon=tau, batch_size=batch_size,
-            desired_confidence=threshold, **kwargs)
-        return segments, self.get_exp_from_hoeffding(image, exp)
+                
+        exp, best_tuples = anchor_base.AnchorBaseBeam.anchor_beam(sample, delta=delta, epsilon=tau, batch_size=batch_size, desired_confidence=threshold, **kwargs)
+        print('\nBEFORE_HOEFFDING_EXP = ', exp)
+        #print('\ntype(exp) = ', type(exp))
+        
+        return segments, self.get_exp_from_hoeffding(image, exp), best_tuples
 
     def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
         # import needed libraries
