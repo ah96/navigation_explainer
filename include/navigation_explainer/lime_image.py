@@ -443,7 +443,7 @@ class LimeImageExplainer(object):
         
         num_of_wanted_obstacle_segments = max(num_of_wanted_obstacle_segments, num_of_existing_obstacle_segments)        
         #print('\nnum_of_wanted_obstacle_segments: ', num_of_wanted_obstacle_segments)
-        num_of_wanted_obstacle_segments = 3 * num_of_existing_obstacle_segments
+        num_of_wanted_obstacle_segments = 2 * num_of_existing_obstacle_segments
         
         if num_of_wanted_obstacle_segments > num_of_existing_obstacle_segments > 0:
             print('IN!!!!!!!!!!!')
@@ -934,6 +934,8 @@ class LimeImageExplainer(object):
 
         return segments
 
+    def sm_semantic(self, image, x_odom, y_odom):
+        return
 
     def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
