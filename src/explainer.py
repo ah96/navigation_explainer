@@ -2206,6 +2206,7 @@ root.title("Navigation Explainer")
 options_exp_alg = [
     "LIME",
     "Anchors"
+    "SHAP"
 ]
 # datatype of menu text
 clicked_exp_alg = StringVar()  

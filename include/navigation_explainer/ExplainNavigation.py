@@ -101,6 +101,17 @@ class ExplainRobotNavigation:
               
             elif self.explanation_mode == 'tabular_costmap':
                 pass
+
+        elif self.explanation_algorithm == 'SHAP':
+            if self.explanation_mode == 'image':
+                pass
+
+            elif self.explanation_mode == 'tabular':
+                pass
+              
+            elif self.explanation_mode == 'tabular_costmap':
+                pass
+
         
         print('\nConstructor ending')
 
@@ -427,6 +438,16 @@ class ExplainRobotNavigation:
             elif self.explanation_mode == 'tabular_costmap':
                 pass
             
+        elif self.explanation_algorithm == 'SHAP':
+            if self.explanation_mode == 'image':
+                pass
+
+            elif self.explanation_mode == 'tabular':
+                pass
+              
+            elif self.explanation_mode == 'tabular_costmap':
+                pass        
+
         print('\nexplain_instance ending')
 
     # save data for local planner in explanation with image
