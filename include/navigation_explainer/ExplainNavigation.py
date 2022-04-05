@@ -4,7 +4,7 @@
 import lime
 import lime.lime_tabular
 
-import shap
+#import shap
 
 import time
 
@@ -36,7 +36,7 @@ from skimage.color import gray2rgb
 from skimage.segmentation import mark_boundaries, felzenszwalb, slic, quickshift
 from skimage.measure import regionprops
 
-import math
+from navigation_explainer import traj_dist
 
 # important global variables
 perturb_hide_color_value = 0 #0 #50
@@ -794,78 +794,84 @@ class ExplainRobotNavigation:
         #transformed_time = end_transformed - start_transformed
         #print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
 
+        # calculate original deviation - sum of minimal point-to-point distances
+        original_deviation = -1.0
+        diff_x = 0
+        diff_y = 0
+        devs = []
+        for j in range(0, len(self.local_plan_x_list)):
+            local_diffs = []
+            deviation_local = True  
+            for k in range(0, len(self.transformed_plan_xs)):
+                diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
+                diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
+                diff = math.sqrt(diff_x + diff_y)
+                local_diffs.append(diff)                        
+            devs.append(min(local_diffs))   
+        original_deviation = sum(devs)
+        print('\noriginal_deviation = ', original_deviation)
+        # original_deviation for big_deviation = 745.5051688094327
+        # original_deviation for big_deviation without wall = 336.53749938826286
+        # original_deviation for no_deviation = 56.05455197218764
+        # original_deviation for small_deviation = 69.0
+        # original_deviation for rotate_in_place = 307.4962940090125
+
+        plot_perturbations = False
+        if plot_perturbations == True:
+            # only needed for classifier_fn_image_plot() function
+            self.sampled_instance = sampled_instance
+            # plot perturbation of local costmap
+            self.classifier_fn_image_lime_plot()
+
+
+        # DETERMINE THE DEVIATION TYPE
+        determine_dev_type = True
+        if determine_dev_type == True:
+            #start_determine_dev = time.time()
+            
+            # thresholds
+            local_plan_gap_threshold = 48.0
+            big_deviation_threshold = 85.0
+            small_deviation_threshold = 32.0 #30
+            no_deviation_threshold = 0.0
+
+            # test for the original local plan gap
+            local_plan_original_gap = False
+            local_plan_gaps = []
+            diff = 0
+            for j in range(0, len(self.local_plan_x_list) - 1):
+                diff = math.sqrt( (self.local_plan_x_list[j]-self.local_plan_x_list[j+1])**2 + (self.local_plan_y_list[j]-self.local_plan_y_list[j+1])**2 )
+                local_plan_gaps.append(diff)
+            if max(local_plan_gaps) > local_plan_gap_threshold:
+                local_plan_original_gap = True
+
+            # local gap too big - stop (rotate_in_place)
+            if local_plan_original_gap == True:
+                deviation_type = 'stop'
+                local_plan_gap_threshold = 55.0
+            
+            # no local gap - test further    
+            elif original_deviation >= big_deviation_threshold:
+                deviation_type = 'big_deviation'
+            elif original_deviation >= small_deviation_threshold:
+                deviation_type = 'small_deviation'
+            else:
+                deviation_type = 'no_deviation'    
+
+            #end_determine_dev = time.time()
+            #determine_dev_time = end_determine_dev - start_determine_dev
+            #print('\ndetermine deviation type runtime = ', determine_dev_time)
+
+            # PRINTING RESULTS                                       
+            print('\ndeviation_type: ', deviation_type)
+
+        
+        mode = self.underlying_model_mode
+        #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
+        #print('\nmode = ', mode)
+
         my_dist_fun = False
         if my_dist_fun == True:
-            # calculate original deviation - sum of minimal point-to-point distances
-            original_deviation = -1.0
-            diff_x = 0
-            diff_y = 0
-            devs = []
-            for j in range(0, len(self.local_plan_x_list)):
-                local_diffs = []
-                deviation_local = True  
-                for k in range(0, len(self.transformed_plan_xs)):
-                    diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
-                    diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
-                    diff = math.sqrt(diff_x + diff_y)
-                    local_diffs.append(diff)                        
-                devs.append(min(local_diffs))   
-            original_deviation = sum(devs)
-            print('\noriginal_deviation = ', original_deviation)
-            # original_deviation for big_deviation = 745.5051688094327
-            # original_deviation for big_deviation without wall = 336.53749938826286
-            # original_deviation for no_deviation = 56.05455197218764
-            # original_deviation for small_deviation = 69.0
-            # original_deviation for rotate_in_place = 307.4962940090125
-
-            plot_perturbations = False
-            if plot_perturbations == True:
-                # only needed for classifier_fn_image_plot() function
-                self.sampled_instance = sampled_instance
-                # plot perturbation of local costmap
-                self.classifier_fn_image_lime_plot()
-
-            # DETERMINE THE DEVIATION TYPE
-            determine_dev_type = True
-            if determine_dev_type == True:
-                #start_determine_dev = time.time()
-                
-                # thresholds
-                local_plan_gap_threshold = 48.0
-                big_deviation_threshold = 85.0
-                small_deviation_threshold = 32.0 #30
-                no_deviation_threshold = 0.0
-
-                # test for the original local plan gap
-                local_plan_original_gap = False
-                local_plan_gaps = []
-                diff = 0
-                for j in range(0, len(self.local_plan_x_list) - 1):
-                    diff = math.sqrt( (self.local_plan_x_list[j]-self.local_plan_x_list[j+1])**2 + (self.local_plan_y_list[j]-self.local_plan_y_list[j+1])**2 )
-                    local_plan_gaps.append(diff)
-                if max(local_plan_gaps) > local_plan_gap_threshold:
-                    local_plan_original_gap = True
-
-                # local gap too big - stop (rotate_in_place)
-                if local_plan_original_gap == True:
-                    deviation_type = 'stop'
-                    local_plan_gap_threshold = 55.0
-                
-                # no local gap - test further    
-                elif original_deviation >= big_deviation_threshold:
-                    deviation_type = 'big_deviation'
-                elif original_deviation >= small_deviation_threshold:
-                    deviation_type = 'small_deviation'
-                else:
-                    deviation_type = 'no_deviation'    
-
-                #end_determine_dev = time.time()
-                #determine_dev_time = end_determine_dev - start_determine_dev
-                #print('\ndetermine deviation type runtime = ', determine_dev_time)
-
-                # PRINTING RESULTS                                       
-                print('\ndeviation_type: ', deviation_type)
-        
             # deviation of local plan from global plan dataframe
             self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
             #print('self.local_plan_deviation: ', self.local_plan_deviation)
@@ -874,10 +880,6 @@ class ExplainRobotNavigation:
 
             print_iterations = False
             
-            mode = self.underlying_model_mode
-            #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
-            #print('\nmode = ', mode)
-
             #start_main = time.time()
 
             if mode == 'regression':
@@ -1420,7 +1422,7 @@ class ExplainRobotNavigation:
 
                     self.local_plan_deviation.iloc[i, 0] = sum(devs) / original_deviation
 
-        else:
+        elif my_dist_fun == False:
             self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
 
             if mode == 'regression':
@@ -1455,6 +1457,7 @@ class ExplainRobotNavigation:
                         continue             
 
                     # find deviation as a sum of minimal point-to-point differences
+                    '''
                     diff_x = 0
                     diff_y = 0
                     devs = []
@@ -1468,9 +1471,17 @@ class ExplainRobotNavigation:
                         devs.append(min(local_diffs))   
 
                     if i == 0:
-                        dev_original = sum(devs)    
+                        dev_original = sum(devs)
+                    '''      
 
-                    self.local_plan_deviation.iloc[i, 0] = sum(devs)
+                    t1 = np.column_stack((local_plan_xs, local_plan_ys))
+                    #print('\nt1 = ', t1)
+                    t1 = t1.fliplr()
+                    print('\nt1.shape = ', t1.shape)
+                    t2 = np.column_stack((self.transformed_plan_xs, self.transformed_plan_ys))
+                    #print('\nt2 = ', t2)
+                    print('\nt2.shape = ', t2.shape)
+                    self.local_plan_deviation.iloc[i, 0] = traj_dist.eucl_dist_traj(np.asarray(local_plan_xs), np.asarray(local_plan_ys))
 
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')

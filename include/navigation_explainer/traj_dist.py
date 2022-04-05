@@ -34,6 +34,7 @@ def eucl_dist_traj(t1, t2):
            L2-norm between x and y
     """
     mdist = cdist(t1, t2, 'euclidean')
+    print('\nmdist = ', mdist)
     return mdist
 
 def point_to_seg(p, s1, s2, dps1, dps2, ds):
