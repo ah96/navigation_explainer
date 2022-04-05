@@ -443,7 +443,7 @@ class LimeImageExplainer(object):
         
         num_of_wanted_obstacle_segments = max(num_of_wanted_obstacle_segments, num_of_existing_obstacle_segments)        
         #print('\nnum_of_wanted_obstacle_segments: ', num_of_wanted_obstacle_segments)
-        num_of_wanted_obstacle_segments = 3 * num_of_existing_obstacle_segments
+        num_of_wanted_obstacle_segments = 2 * num_of_existing_obstacle_segments
         
         if num_of_wanted_obstacle_segments > num_of_existing_obstacle_segments > 0:
             print('IN!!!!!!!!!!!')
