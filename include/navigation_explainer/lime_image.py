@@ -240,7 +240,9 @@ class LimeImageExplainer(object):
                                                     random_seed=random_seed)
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
-            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            segments = self.sm_semantic(image, x_odom, y_odom)
+
             #segments = self.sm1(image)
             #segments = self.sm2(image_orig, image, x_odom, y_odom)
             #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
@@ -248,7 +250,8 @@ class LimeImageExplainer(object):
             #segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
         elif segmentation_fn == 'semantic_segmentation':
-            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            segments = self.sm_semantic(image, x_odom, y_odom)
             #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
             #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
@@ -935,8 +938,59 @@ class LimeImageExplainer(object):
         return segments
 
     def sm_semantic(self, image, x_odom, y_odom):
-        referent = origin = relatum = (x_odom, y_odom)
-        return image
+        relatum = copy.deepcopy([x_odom, y_odom])
+        referent = copy.deepcopy(relatum)
+        origin = copy.deepcopy(relatum)
+        
+        segments = np.zeros(image.shape, np.uint8)
+        height = image.shape[0]
+        width = image.shape[1]
+        
+        '''
+        # left -- right
+        ctr = 0
+        segments[:int(height/2), :] = ctr
+        ctr = ctr + 1
+        segments[int(height/2):, :] = ctr
+        '''
+
+        # TPCC reference system
+        import math
+        origin[0] = int(x_odom / 2)
+        r = int(x_odom / 4)
+        for i in range(0, height):
+            for j in range(0, width):
+                d_x = j - x_odom
+                d_y = i - y_odom
+                
+                #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                k = d_y / max(1, d_x)
+                print('\nabs(k) = ', abs(k))
+                ugao = np.arctan(k)
+                print('\nugao = ', ugao * 180 / math.pi)
+
+                r_ = (i - relatum[1])**2 + (j - relatum[0])**2
+                r_ = math.sqrt(r_)
+                print('\n(r_, r) = ', (r_, r))
+                if r_ <= r:
+                    segments[i, j] = 0
+                else:
+                    segments[i, j] = 1    
+
+        plot_segmentation = True
+        if plot_segmentation == True:
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_SEMANTIC.png', transparent=False)
+            fig.clf()
+
+        return segments
 
     def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
