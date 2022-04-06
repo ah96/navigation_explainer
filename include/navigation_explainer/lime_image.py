@@ -961,17 +961,21 @@ class LimeImageExplainer(object):
         for i in range(0, height):
             for j in range(0, width):
                 d_x = j - x_odom
-                d_y = i - y_odom
+                d_y = -1 * (i - y_odom)
+
+                print('\n(i, j) = ', (i, j))
                 
                 #k = (-plan_y_list[-1] + y_odom) / (d_x)
                 k = d_y / max(1, d_x)
-                print('\nabs(k) = ', abs(k))
-                ugao = np.arctan(k)
-                print('\nugao = ', ugao * 180 / math.pi)
+                print('abs(k) = ', abs(k))
+                ugao = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                print('ugao = ', ugao * 180 / math.pi)
+
+                
 
                 r_ = (i - relatum[1])**2 + (j - relatum[0])**2
                 r_ = math.sqrt(r_)
-                print('\n(r_, r) = ', (r_, r))
+                print('(r_, r) = ', (r_, r))
                 if r_ <= r:
                     segments[i, j] = 0
                 else:
