@@ -124,7 +124,7 @@ class ExplainRobotNavigation:
         self.expID = expID
         self.index = self.expID
 
-        self.manual_instance_loading = False
+        self.manual_instance_loading = True
         
         self.case = 3
         self.eps = False
@@ -1474,14 +1474,34 @@ class ExplainRobotNavigation:
                         dev_original = sum(devs)
                     '''      
 
-                    t1 = np.column_stack((local_plan_xs, local_plan_ys))
+                    #t1 = np.column_stack((local_plan_xs, local_plan_ys))
+                    #t1 = np.vstack((local_plan_xs, local_plan_ys))
                     #print('\nt1 = ', t1)
-                    t1 = t1.fliplr()
-                    print('\nt1.shape = ', t1.shape)
-                    t2 = np.column_stack((self.transformed_plan_xs, self.transformed_plan_ys))
+                    #print('\nt1.shape = ', t1.shape)
+                    #t1 = np.fliplr(t1)
+                    #print('\nt1.shape = ', t1.shape)
+                    #t2 = np.column_stack((self.transformed_plan_xs, self.transformed_plan_ys))
+                    #t2 = np.vstack((self.transformed_plan_xs, self.transformed_plan_ys))
                     #print('\nt2 = ', t2)
-                    print('\nt2.shape = ', t2.shape)
-                    self.local_plan_deviation.iloc[i, 0] = traj_dist.eucl_dist_traj(np.asarray(local_plan_xs), np.asarray(local_plan_ys))
+                    #print('\nt2.shape = ', t2.shape)
+                    #min_len = min(t1.shape[1], t2.shape[1])
+                    #dist = traj_dist.eucl_dist_traj(np.array(local_plan_xs), np.array(self.transformed_plan_xs)) + traj_dist.eucl_dist_traj(np.array(local_plan_ys), np.array(self.transformed_plan_ys))
+                    
+                    #dist = traj_dist.discret_frechet(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.discret_frechet(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
+                    #dist = traj_dist.e_dtw(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_dtw(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
+                    #dist = traj_dist.e_edr(np.array(local_plan_xs), np.array(self.transformed_plan_xs), 0.01)**2 + traj_dist.e_edr(np.array(local_plan_ys), np.array(self.transformed_plan_ys), 0.01)**2
+                    #dist = traj_dist.e_hausdorff(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_hausdorff(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2 #2D
+                    #dist = traj_dist.e_lcss(np.array(local_plan_xs), np.array(self.transformed_plan_xs), 0.01)**2 + traj_dist.e_lcss(np.array(local_plan_ys), np.array(self.transformed_plan_ys), 0.01)**2
+                    #dist = traj_dist.owd_grid_brut(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.owd_grid_brut(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
+                    #dist = traj_dist.e_sspd(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_sspd(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2 #2D
+
+                    dist = math.sqrt(dist)
+                    self.local_plan_deviation.iloc[i, 0] = dist
+                    
+                    #dist = traj_dist.discret_frechet(t1[:,0:min_len], t2[:,0:min_len])
+                    #print('\ndist_raw = ', self.local_plan_deviation.iloc[i, 0])
+                    #self.local_plan_deviation.iloc[i, 0] = math.sqrt(dist[0,0]**2+dist[1,1]**2)
+                    #print('\ndist = ', self.local_plan_deviation.iloc[i, 0])
 
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
