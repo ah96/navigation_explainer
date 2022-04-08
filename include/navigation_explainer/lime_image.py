@@ -951,17 +951,40 @@ class LimeImageExplainer(object):
         height = image.shape[0]
         width = image.shape[1]
         
-        semantic_choice = 1
+        semantic_choice = 3
 
         if semantic_choice == 0:
             # left -- right dichotomy in a relative refence system
+            # from 'moratz2008qualitative'
             ctr = 0
             segments[:, :int(relatum[1])] = ctr
             ctr = ctr + 1
             segments[:, int(relatum[1]):] = ctr
 
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left': 0,
+                'right': 1
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+                
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+
         elif semantic_choice == 1:
-            # single cross calculus
+            # single cross calculus from 'moratz2008qualitative'
             ctr = 0
             segments[:int(relatum[0]), :int(relatum[1])] = ctr
             ctr = ctr + 1
@@ -971,7 +994,31 @@ class LimeImageExplainer(object):
             ctr = ctr + 1
             segments[int(relatum[0]):, int(relatum[1]):] = ctr
 
-        elif semantic_choice == 2:    
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left/front': 0,
+                'right/front': 1,
+                'left/back': 2,
+                'right/back': 3
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+                
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+
+        elif semantic_choice == 2:
             # TPCC reference system
             # my modified version from 'moratz2008qualitative'
             #origin[0] = int(x_odom / 2)
@@ -1058,45 +1105,183 @@ class LimeImageExplainer(object):
 
                     #print('angle = ', angle)
                     if angle == 0:
-                        value += 'sb'
-                    elif 0 < angle <= PI/4:
-                        value += 'lb'
-                    elif PI/4 < angle < PI/2:
-                        value += 'bl'
-                    elif angle == PI/2:
-                        value += 'sl'
-                    elif PI/2 < angle < 3*PI/4:
-                        value += 'fl'
-                    elif 3*PI/4 <= angle < PI:
-                        value += 'lf'
-                    elif angle == PI:
-                        value += 'sf'
-                    elif -PI < angle <= -3*PI/4:
-                        value += 'rf'
-                    elif -3*PI/4 < angle < -PI/2:
-                        value += 'fr'
-                    elif angle == -PI/2:
                         value += 'sr'
+                    elif 0 < angle <= PI/4:
+                        value += 'fr'
+                    elif PI/4 < angle < PI/2:
+                        value += 'rf'
+                    elif angle == PI/2:
+                        value += 'sf'
+                    elif PI/2 < angle < 3*PI/4:
+                        value += 'lf'
+                    elif 3*PI/4 <= angle < PI:
+                        value += 'fl'
+                    elif angle == PI:
+                        value += 'sl'
+                    elif -PI < angle <= -3*PI/4:
+                        value += 'bl'
+                    elif -3*PI/4 < angle < -PI/2:
+                        value += 'lb'
+                    elif angle == -PI/2:
+                        value += 'sb'
                     elif -PI/2 < angle < -PI/4:
-                        value += 'br'        
+                        value += 'rb'        
                     elif -PI/4 <= angle < 0:
-                        value += 'rb'                            
+                        value += 'br'                            
 
                     segments[i, j] = tpcc_dict[value]    
 
-            #pd.DataFrame(segments).to_csv('SEGS.csv')
-
             # reasoning for one random position
-            A = origin
-            B = relatum
-            C = [random.randint(0, width-1), random.randint(0, height-1)]
-            print('\nC = ', C)
-            print('segments[C] = ', segments[C[1],C[0]])
-            print('A, B ' + tpcc_dict_inv[segments[C[1],C[0]]] + ' C')
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
 
         elif semantic_choice == 3:
+            # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'front': 0,
+                'left': 1,
+                'back': 2,
+                'right': 3,
+                'left-front': 4,
+                'left-back': 5,
+                'right-front': 6,
+                'right-back': 7,
+                'straight-front': 8,
+                'exactly-left': 9,
+                'straight-back': 10,
+                'exactly-right': 11
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
+            import math        
+            PI = math.pi
+
+            for i in range(0, height):
+                for j in range(0, width):
+                    d_x = j - x_odom
+                    d_y = -1 * (i - y_odom)
+
+                    #print('\n(i, j) = ', (i, j))
+                    
+                    #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                    k = d_y / max(1, d_x)
+                    #print('abs(k) = ', abs(k))
+                    # angle in radians
+                    angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                    #print('angle (in degrees) = ', angle * 180 / math.pi)
+
+                    value = ''
+
+                    #print('angle = ', angle)
+                    if -PI/4 <= angle <= PI/4:
+                        value += 'right'
+                    elif PI/4 < angle < 3*PI/4:
+                        value += 'front'
+                    elif 3*PI/4 <= angle or angle <= -3*PI/4:
+                        value += 'left'
+                    elif -3*PI/4 < angle < -PI/4:
+                        value += 'back'                            
+
+                    segments[i, j] = tpcc_dict[value]    
+
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+
+        elif semantic_choice == 4:
             # Model for combined expressions from 'moratz2002spatial'
-            pass
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'front': 0,
+                'left': 1,
+                'back': 2,
+                'right': 3,
+                'left-front': 4,
+                'left-back': 5,
+                'right-front': 6,
+                'right-back': 7,
+                'straight-front': 8,
+                'exactly-left': 9,
+                'straight-back': 10,
+                'exactly-right': 11
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
+            import math        
+            PI = math.pi
+
+            for i in range(0, height):
+                for j in range(0, width):
+                    d_x = j - x_odom
+                    d_y = -1 * (i - y_odom)
+
+                    #print('\n(i, j) = ', (i, j))
+                    
+                    #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                    k = d_y / max(1, d_x)
+                    #print('abs(k) = ', abs(k))
+                    # angle in radians
+                    angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                    #print('angle (in degrees) = ', angle * 180 / math.pi)
+
+                    value = ''
+
+                    #print('angle = ', angle)
+                    if angle == 0:
+                        value += 'exactly-right'
+                    elif 0 < angle < PI/2:
+                        value += 'right-front'
+                    elif angle == PI/2:
+                        value += 'straight-front'
+                    elif PI/2 < angle < PI:
+                        value += 'left-front'
+                    elif angle == PI:
+                        value += 'exactly-left'
+                    elif -PI < angle < -PI/2:
+                        value += 'left-back'
+                    elif angle == -PI/2:
+                        value += 'straight-back'
+                    elif -PI/2 < angle < 0:
+                        value += 'right-back'                            
+
+                    segments[i, j] = tpcc_dict[value]    
+
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+            
 
         plot_segmentation = True
         if plot_segmentation == True:
