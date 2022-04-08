@@ -12,6 +12,9 @@ from sklearn.utils import check_random_state
 from skimage.color import gray2rgb
 from tqdm.auto import tqdm
 
+import pandas as pd
+import random
+
 import time
 
 from . import lime_base
@@ -938,48 +941,162 @@ class LimeImageExplainer(object):
         return segments
 
     def sm_semantic(self, image, x_odom, y_odom):
+        # QSR - qualitative spatial reasoning
         relatum = copy.deepcopy([x_odom, y_odom])
         referent = copy.deepcopy(relatum)
         origin = copy.deepcopy(relatum)
+        #print('\norigin = ', origin)
         
-        segments = np.zeros(image.shape, np.uint8)
+        segments = np.zeros(image.shape[:-1], np.uint8)
         height = image.shape[0]
         width = image.shape[1]
         
-        '''
-        # left -- right
-        ctr = 0
-        segments[:int(height/2), :] = ctr
-        ctr = ctr + 1
-        segments[int(height/2):, :] = ctr
-        '''
+        semantic_choice = 1
 
-        # TPCC reference system
-        import math
-        origin[0] = int(x_odom / 2)
-        r = int(x_odom / 4)
-        for i in range(0, height):
-            for j in range(0, width):
-                d_x = j - x_odom
-                d_y = -1 * (i - y_odom)
+        if semantic_choice == 0:
+            # left -- right dichotomy in a relative refence system
+            ctr = 0
+            segments[:, :int(relatum[1])] = ctr
+            ctr = ctr + 1
+            segments[:, int(relatum[1]):] = ctr
 
-                print('\n(i, j) = ', (i, j))
-                
-                #k = (-plan_y_list[-1] + y_odom) / (d_x)
-                k = d_y / max(1, d_x)
-                print('abs(k) = ', abs(k))
-                ugao = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
-                print('ugao = ', ugao * 180 / math.pi)
+        elif semantic_choice == 1:
+            # single cross calculus
+            ctr = 0
+            segments[:int(relatum[0]), :int(relatum[1])] = ctr
+            ctr = ctr + 1
+            segments[:int(relatum[0]), int(relatum[1]):] = ctr
+            ctr = ctr + 1
+            segments[int(relatum[0]):, :int(relatum[1])] = ctr
+            ctr = ctr + 1
+            segments[int(relatum[0]):, int(relatum[1]):] = ctr
 
-                
+        elif semantic_choice == 2:    
+            # TPCC reference system
+            # my modified version from 'moratz2008qualitative'
+            #origin[0] = int(x_odom / 2)
+            r = relatum[0] - origin[0]
+            
+            if r > 0:
+                # used for getting semantic costmap
+                tpcc_dict = {
+                    'csb': 0,
+                    'dsb': 1,
+                    'clb': 2,
+                    'dlb': 3,
+                    'cbl': 4,
+                    'dbl': 5,
+                    'csl': 6,
+                    'dsl': 7,
+                    'cfl': 8,
+                    'dfl': 9,
+                    'clf': 10,
+                    'dlf': 11,
+                    'csf': 12,
+                    'dsf': 13,
+                    'crf': 14,
+                    'drf': 15,
+                    'cfr': 16,
+                    'dfr': 17,
+                    'csr': 18,
+                    'dsr': 19,
+                    'cbr': 20,
+                    'dbr': 21,
+                    'crb': 22,
+                    'drb': 23
+                }
+            elif r == 0:
+                # used for getting semantic costmap
+                tpcc_dict = {
+                    'sb': 0,
+                    'lb': 1,
+                    'bl': 2,
+                    'sl': 3,
+                    'fl': 4,
+                    'lf': 5,
+                    'sf': 6,
+                    'rf': 7,
+                    'fr': 8,
+                    'sr': 9,
+                    'br': 10,
+                    'rb': 11
+                }
 
-                r_ = (i - relatum[1])**2 + (j - relatum[0])**2
-                r_ = math.sqrt(r_)
-                print('(r_, r) = ', (r_, r))
-                if r_ <= r:
-                    segments[i, j] = 0
-                else:
-                    segments[i, j] = 1    
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
+            import math        
+            PI = math.pi
+
+            for i in range(0, height):
+                for j in range(0, width):
+                    d_x = j - x_odom
+                    d_y = -1 * (i - y_odom)
+
+                    #print('\n(i, j) = ', (i, j))
+                    
+                    #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                    k = d_y / max(1, d_x)
+                    #print('abs(k) = ', abs(k))
+                    # angle in radians
+                    angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                    #print('angle (in degrees) = ', angle * 180 / math.pi)
+                    
+                    r_ = (i - relatum[1])**2 + (j - relatum[0])**2
+                    r_ = math.sqrt(r_)
+                    #print('(r_, r) = ', (r_, r))
+
+                    if r > 0:
+                        # starting with 'c'
+                        if r_ <= r:
+                            value = 'c'
+                        # starting with 'd'
+                        else:
+                            value = 'd'
+                    elif r == 0:
+                        value = ''
+
+                    #print('angle = ', angle)
+                    if angle == 0:
+                        value += 'sb'
+                    elif 0 < angle <= PI/4:
+                        value += 'lb'
+                    elif PI/4 < angle < PI/2:
+                        value += 'bl'
+                    elif angle == PI/2:
+                        value += 'sl'
+                    elif PI/2 < angle < 3*PI/4:
+                        value += 'fl'
+                    elif 3*PI/4 <= angle < PI:
+                        value += 'lf'
+                    elif angle == PI:
+                        value += 'sf'
+                    elif -PI < angle <= -3*PI/4:
+                        value += 'rf'
+                    elif -3*PI/4 < angle < -PI/2:
+                        value += 'fr'
+                    elif angle == -PI/2:
+                        value += 'sr'
+                    elif -PI/2 < angle < -PI/4:
+                        value += 'br'        
+                    elif -PI/4 <= angle < 0:
+                        value += 'rb'                            
+
+                    segments[i, j] = tpcc_dict[value]    
+
+            #pd.DataFrame(segments).to_csv('SEGS.csv')
+
+            # reasoning for one random position
+            A = origin
+            B = relatum
+            C = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nC = ', C)
+            print('segments[C] = ', segments[C[1],C[0]])
+            print('A, B ' + tpcc_dict_inv[segments[C[1],C[0]]] + ' C')
+
+        elif semantic_choice == 3:
+            # Model for combined expressions from 'moratz2002spatial'
+            pass
 
         plot_segmentation = True
         if plot_segmentation == True:
@@ -994,7 +1111,8 @@ class LimeImageExplainer(object):
             fig.savefig('segments_SEMANTIC.png', transparent=False)
             fig.clf()
 
-        return segments
+        #return segments
+        return np.zeros(image.shape, np.uint8)
 
     def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
