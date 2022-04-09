@@ -243,8 +243,8 @@ class LimeImageExplainer(object):
                                                     random_seed=random_seed)
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
-            #segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-            segments = self.sm_semantic(image, x_odom, y_odom)
+            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_semantic(image, x_odom, y_odom)
 
             #segments = self.sm1(image)
             #segments = self.sm2(image_orig, image, x_odom, y_odom)
@@ -253,8 +253,8 @@ class LimeImageExplainer(object):
             #segments = self.sm5(image_orig, image, x_odom, y_odom, devDistance, sum)
             #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
         elif segmentation_fn == 'semantic_segmentation':
-            #segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-            segments = self.sm_semantic(image, x_odom, y_odom)
+            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_semantic(image, x_odom, y_odom)
             #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
             #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:

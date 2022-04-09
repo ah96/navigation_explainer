@@ -231,7 +231,10 @@ class ExplainRobotNavigation:
                         print('\nReal (pure) explanation time = ', real_explanation_time)
                         
                         # get explanation image
-                        self.temp_img, self.exp = self.explanation.get_image_and_mask(label=0)            
+                        self.temp_img, self.exp = self.explanation.get_image_and_mask(label=0)
+
+                        # Qualitative Spatial Reasoning
+                        self.QSR()            
                         
                         if self.plot == True:
                             plotting_time_start = time.time()
@@ -451,6 +454,114 @@ class ExplainRobotNavigation:
                 pass        
 
         print('\nexplain_instance ending')
+
+    def QSR(self):
+        # QSR - qualitative spatial reasoning
+        print('\nQSR function beginning!!!')
+
+        relatum = copy.deepcopy([self.localCostmapIndex_x_odom, self.localCostmapIndex_x_odom])
+        #print('\nrelatum = ', relatum)
+        referent = copy.deepcopy(relatum)
+        #print('\nreferent = ', referent)
+        origin = copy.deepcopy(relatum)
+        #print('\norigin = ', origin)
+        
+        qsr_map = np.zeros(self.image.shape, np.uint8)
+        height = self.image.shape[0]
+        #print('\nheight = ', height)
+        width = self.image.shape[1]
+        #print('\nwidth = ', width)
+
+        PI = math.pi
+        # determine the reference system based on the global plan direction
+        d_x = self.plan_x_list[-1] - self.localCostmapIndex_x_odom
+        if d_x == 0:
+            d_x = 1
+        d_y = -self.plan_y_list[-1] + self.localCostmapIndex_y_odom 
+        #k = d_y / d_x
+        #print('\nabs(k) = ', abs(k))
+        angle_gp = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+        print('angle_gp (in rad) = ', angle_gp)
+        print('angle_gp (in deg) = ', angle_gp * 180 / PI)
+        angle_gp -= PI / 2
+
+        # determine the reference system based on the global plan direction
+        d_x = self.local_plan_x_list[14] - self.localCostmapIndex_x_odom
+        if d_x == 0:
+            d_x = 1
+        d_y = -self.local_plan_y_list[14] + self.localCostmapIndex_y_odom 
+        #k = d_y / d_x
+        #print('\nabs(k) = ', abs(k))
+        angle_lp = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+        print('angle_lp (in rad) = ', angle_lp)
+        print('angle_lp (in deg) = ', angle_lp * 180 / PI)
+        angle_lp -= PI / 2
+
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'left': 0,
+            'right': 1
+        }
+
+        # used for deriving NLP annotations
+        tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
+        # populate the qsr_map
+        for i in range(0, height):
+            for j in range(0, width):
+                d_x = j - self.localCostmapIndex_x_odom
+                d_y = -1 * (i - self.localCostmapIndex_y_odom)
+
+                #print('\n(i, j) = ', (i, j))
+                
+                #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                #k = d_y / max(1, d_x)
+                #print('abs(k) = ', abs(k))
+                # angle in radians
+                angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                #print('angle (in degrees) = ', angle * 180 / math.pi)
+                angle += angle_gp
+
+                value = ''
+
+                #print('angle = ', angle)
+                if -PI/2 <= angle < PI/2:
+                    value += 'right'
+                else:
+                    value += 'left'
+
+                qsr_map[i, j] = tpcc_dict[value]
+
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(qsr_map.astype('float64'), aspect='auto')
+        fig.savefig('qsr_map.png', transparent=False)
+        fig.clf()
+
+
+        print('self.exp = ', self.exp)
+        dict_len = len(tpcc_dict)
+        exp_counter_list = []
+        for i in range(0, len(self.exp) - 1):
+            exp_counter_list.append([0]*dict_len)
+        for k in range(0, len(self.exp) - 1):
+            e = self.exp[k]
+            print('\ne = ', e)
+            print('e[0] = ', e[0])
+            print('e[1] = ', e[1])
+            print('k = ', k)
+            for i in range(0, height):
+                for j in range(0, width):
+                    if e[0] == self.segments[i, j]:
+                        exp_counter_list[k][qsr_map[i, j]] += 1    
+        print('\nexp_counter_list = ', exp_counter_list)
+
+        print('QSR function ending!!!')
 
     # save data for local planner in explanation with image
     def SaveImageDataForLocalPlanner(self):
@@ -870,7 +981,7 @@ class ExplainRobotNavigation:
         #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
-        my_dist_fun = False
+        my_dist_fun = True
         if my_dist_fun == True:
             # deviation of local plan from global plan dataframe
             self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
@@ -1487,7 +1598,8 @@ class ExplainRobotNavigation:
                     #min_len = min(t1.shape[1], t2.shape[1])
                     #dist = traj_dist.eucl_dist_traj(np.array(local_plan_xs), np.array(self.transformed_plan_xs)) + traj_dist.eucl_dist_traj(np.array(local_plan_ys), np.array(self.transformed_plan_ys))
                     
-                    #dist = traj_dist.discret_frechet(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.discret_frechet(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
+                    #dist = traj_dist.eucl_dist_traj(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.eucl_dist_traj(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2 #2D
+                    dist = traj_dist.discret_frechet(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.discret_frechet(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
                     #dist = traj_dist.e_dtw(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_dtw(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
                     #dist = traj_dist.e_edr(np.array(local_plan_xs), np.array(self.transformed_plan_xs), 0.01)**2 + traj_dist.e_edr(np.array(local_plan_ys), np.array(self.transformed_plan_ys), 0.01)**2
                     #dist = traj_dist.e_hausdorff(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_hausdorff(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2 #2D
