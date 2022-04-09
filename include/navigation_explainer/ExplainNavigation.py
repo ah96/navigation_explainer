@@ -497,11 +497,81 @@ class ExplainRobotNavigation:
         print('angle_lp (in deg) = ', angle_lp * 180 / PI)
         angle_lp -= PI / 2
 
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'left': 0,
-            'right': 1
-        }
+        qsr_choice = 2
+
+        if qsr_choice == 0:
+            # left -- right dichotomy in a relative refence system
+            # from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left': 0,
+                'right': 1
+            }
+
+        elif qsr_choice == 1:
+            # single cross calculus from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left/front': 0,
+                'right/front': 1,
+                'left/back': 2,
+                'right/back': 3
+            }
+
+        elif qsr_choice == 2:
+            # TPCC reference system
+            # my modified version from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'sb': 0,
+                'lb': 1,
+                'bl': 2,
+                'sl': 3,
+                'fl': 4,
+                'lf': 5,
+                'sf': 6,
+                'rf': 7,
+                'fr': 8,
+                'sr': 9,
+                'br': 10,
+                'rb': 11
+            }
+
+        elif qsr_choice == 3:
+            # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'front': 0,
+                'left': 1,
+                'back': 2,
+                'right': 3,
+                'left-front': 4,
+                'left-back': 5,
+                'right-front': 6,
+                'right-back': 7,
+                'straight-front': 8,
+                'exactly-left': 9,
+                'straight-back': 10,
+                'exactly-right': 11
+            }
+
+        elif qsr_choice == 4:
+            # Model for combined expressions from 'moratz2002spatial'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'front': 0,
+                'left': 1,
+                'back': 2,
+                'right': 3,
+                'left-front': 4,
+                'left-back': 5,
+                'right-front': 6,
+                'right-back': 7,
+                'straight-front': 8,
+                'exactly-left': 9,
+                'straight-back': 10,
+                'exactly-right': 11
+            }    
 
         # used for deriving NLP annotations
         tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
@@ -521,14 +591,45 @@ class ExplainRobotNavigation:
                 angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
                 #print('angle (in degrees) = ', angle * 180 / math.pi)
                 angle += angle_gp
+                if angle > PI:
+                    angle -= 2*PI
+                elif angle < -PI:
+                    angle += 2*PI        
 
                 value = ''
 
-                #print('angle = ', angle)
-                if -PI/2 <= angle < PI/2:
-                    value += 'right'
-                else:
-                    value += 'left'
+                print('angle = ', angle)
+                if qsr_choice == 0:
+                    if -PI/2 <= angle < PI/2:
+                        value += 'right'
+                    else:
+                        value += 'left'
+                
+                elif qsr_choice == 2:
+                    if angle == 0:
+                        value += 'sr'
+                    elif 0 < angle <= PI/4:
+                        value += 'fr'
+                    elif PI/4 < angle < PI/2:
+                        value += 'rf'
+                    elif angle == PI/2:
+                        value += 'sf'
+                    elif PI/2 < angle < 3*PI/4:
+                        value += 'lf'
+                    elif 3*PI/4 <= angle < PI:
+                        value += 'fl'
+                    elif angle == PI or angle == -PI:
+                        value += 'sl'
+                    elif -PI < angle <= -3*PI/4:
+                        value += 'bl'
+                    elif -3*PI/4 < angle < -PI/2:
+                        value += 'lb'
+                    elif angle == -PI/2:
+                        value += 'sb'
+                    elif -PI/2 < angle < -PI/4:
+                        value += 'rb'        
+                    elif -PI/4 <= angle < 0:
+                        value += 'br'
 
                 qsr_map[i, j] = tpcc_dict[value]
 
