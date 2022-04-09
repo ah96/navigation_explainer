@@ -466,7 +466,6 @@ class ExplainRobotNavigation:
         origin = copy.deepcopy(relatum)
         #print('\norigin = ', origin)
         
-        qsr_map = np.zeros(self.image.shape, np.uint8)
         height = self.image.shape[0]
         #print('\nheight = ', height)
         width = self.image.shape[1]
@@ -481,11 +480,12 @@ class ExplainRobotNavigation:
         #k = d_y / d_x
         #print('\nabs(k) = ', abs(k))
         angle_gp = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
-        print('angle_gp (in rad) = ', angle_gp)
-        print('angle_gp (in deg) = ', angle_gp * 180 / PI)
+        #print('angle_gp (in rad) = ', angle_gp)
+        #print('angle_gp (in deg) = ', angle_gp * 180 / PI)
         angle_gp -= PI / 2
 
-        # determine the reference system based on the global plan direction
+        '''
+        # determine the reference system based on the local plan direction
         d_x = self.local_plan_x_list[14] - self.localCostmapIndex_x_odom
         if d_x == 0:
             d_x = 1
@@ -496,8 +496,9 @@ class ExplainRobotNavigation:
         print('angle_lp (in rad) = ', angle_lp)
         print('angle_lp (in deg) = ', angle_lp * 180 / PI)
         angle_lp -= PI / 2
+        '''
 
-        qsr_choice = 2
+        qsr_choice = 4
 
         if qsr_choice == 0:
             # left -- right dichotomy in a relative refence system
@@ -544,39 +545,28 @@ class ExplainRobotNavigation:
                 'front': 0,
                 'left': 1,
                 'back': 2,
-                'right': 3,
-                'left-front': 4,
-                'left-back': 5,
-                'right-front': 6,
-                'right-back': 7,
-                'straight-front': 8,
-                'exactly-left': 9,
-                'straight-back': 10,
-                'exactly-right': 11
+                'right': 3
             }
 
         elif qsr_choice == 4:
             # Model for combined expressions from 'moratz2002spatial'
             # used for getting semantic costmap
             tpcc_dict = {
-                'front': 0,
-                'left': 1,
-                'back': 2,
-                'right': 3,
-                'left-front': 4,
-                'left-back': 5,
-                'right-front': 6,
-                'right-back': 7,
-                'straight-front': 8,
-                'exactly-left': 9,
-                'straight-back': 10,
-                'exactly-right': 11
+                'left-front': 0,
+                'left-back': 1,
+                'right-front': 2,
+                'right-back': 3,
+                'straight-front': 4,
+                'exactly-left': 5,
+                'straight-back': 6,
+                'exactly-right': 7
             }    
 
         # used for deriving NLP annotations
         tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
 
         # populate the qsr_map
+        qsr_map = np.zeros(self.image.shape, np.uint8)
         for i in range(0, height):
             for j in range(0, width):
                 d_x = j - self.localCostmapIndex_x_odom
@@ -598,13 +588,24 @@ class ExplainRobotNavigation:
 
                 value = ''
 
-                print('angle = ', angle)
+                #print('angle = ', angle)
+
                 if qsr_choice == 0:
                     if -PI/2 <= angle < PI/2:
                         value += 'right'
                     else:
                         value += 'left'
-                
+
+                elif qsr_choice == 1:
+                    if 0 <= angle < PI/2:
+                        value += 'right/front'
+                    elif PI/2 <= angle <= PI:
+                        value += 'left/front'
+                    elif -PI/2 <= angle < 0:
+                        value += 'right/back'
+                    elif -PI <= angle < -PI/2:
+                        value += 'left/back'
+
                 elif qsr_choice == 2:
                     if angle == 0:
                         value += 'sr'
@@ -631,6 +632,34 @@ class ExplainRobotNavigation:
                     elif -PI/4 <= angle < 0:
                         value += 'br'
 
+                elif qsr_choice == 3:
+                    if -PI/4 <= angle <= PI/4:
+                        value += 'right'
+                    elif PI/4 < angle < 3*PI/4:
+                        value += 'front'
+                    elif 3*PI/4 <= angle or angle <= -3*PI/4:
+                        value += 'left'
+                    elif -3*PI/4 < angle < -PI/4:
+                        value += 'back'  
+
+                elif qsr_choice == 4:
+                    if angle == 0:
+                        value += 'exactly-right'
+                    elif 0 < angle < PI/2:
+                        value += 'right-front'
+                    elif angle == PI/2:
+                        value += 'straight-front'
+                    elif PI/2 < angle < PI:
+                        value += 'left-front'
+                    elif angle == PI or angle == -PI:
+                        value += 'exactly-left'
+                    elif -PI < angle < -PI/2:
+                        value += 'left-back'
+                    elif angle == -PI/2:
+                        value += 'straight-back'
+                    elif -PI/2 < angle < 0:
+                        value += 'right-back'
+
                 qsr_map[i, j] = tpcc_dict[value]
 
         fig = plt.figure(frameon=False)
@@ -644,7 +673,7 @@ class ExplainRobotNavigation:
         fig.savefig('qsr_map.png', transparent=False)
         fig.clf()
 
-
+        # reasoning part
         print('self.exp = ', self.exp)
         dict_len = len(tpcc_dict)
         exp_counter_list = []
@@ -662,7 +691,46 @@ class ExplainRobotNavigation:
                         exp_counter_list[k][qsr_map[i, j]] += 1    
         print('\nexp_counter_list = ', exp_counter_list)
 
-        print('QSR function ending!!!')
+        referent = [0,0] # ovo srediti sa centroidom prepreke 
+        dodatak = ''
+        if relatum == origin == referent:
+            dodatak = 'tri,'
+        elif relatum == origin:
+            dodatak = 'dou,'
+        elif relatum == referent:
+            dodatak = 'sam,'
+
+        # TCPP reasoning
+        print('\n')
+        utterances = []
+        for k in range(0, len(self.exp) - 1):
+            utterances_local = []
+            for i in range(0, dict_len):
+                if exp_counter_list[k][i] > 0:
+                    utterances_local.append(tpcc_dict_inv[i])
+            utterances.append(utterances_local)
+            utterances_string = ','.join(utterances_local)
+            print('Robot (' + dodatak + utterances_string + ') obstacle_' + str(k+1))
+        print('utterances = ', utterances)
+
+        w_sum = 0
+        print('\n')
+        for k in range(0, len(self.exp) - 1):
+            w_sum += abs(self.exp[k][1])    
+        for k in range(0, len(self.exp) - 1):
+            utterances_sum = sum(exp_counter_list[k])
+            utt_nums = []
+            for i in range(0, dict_len):
+                if exp_counter_list[k][i] > 0:
+                    utt_nums.append(exp_counter_list[k][i])
+            utt_string = ''
+            for i in range(0, len(utterances[k])):
+                utt_string += utterances[k][i] + '-' + str(round(100*utt_nums[i]/utterances_sum,2)) + '%'
+                if i != len(utterances[k]) - 1:
+                    utt_string += ','
+            print('Robot (' + dodatak + utt_string + ') obstacle_' + str(k+1) + ' with weight=' + str(round(self.exp[k][1],2)) + ' and relative absolute (weight) importance ' + str(round(100*abs(self.exp[k][1])/w_sum,2)) + '%')        
+
+        print('\nQSR function ending!!!')
 
     # save data for local planner in explanation with image
     def SaveImageDataForLocalPlanner(self):
