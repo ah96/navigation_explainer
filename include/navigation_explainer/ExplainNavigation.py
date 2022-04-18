@@ -126,7 +126,7 @@ class ExplainRobotNavigation:
 
         self.manual_instance_loading = True
         
-        self.case = 2
+        self.case = 3
         self.eps = False
         self.semantic_seg = False
         self.manually_make_semantic_map = False
@@ -472,8 +472,10 @@ class ExplainRobotNavigation:
         
         # origin = human or robot
         origin = copy.deepcopy(relatum)
-        origin[0] /= 2
-        origin[1] /= 3
+        different = True
+        if different == True:
+            origin[0] /= 2
+            origin[1] /= 3
         origin_orient = self.yaw_odom
         #print('\norigin = ', origin)
         
@@ -510,6 +512,73 @@ class ExplainRobotNavigation:
         angle_lp -= PI / 2
         '''
 
+        qsr_choice = 4
+
+        if qsr_choice == 0:
+            # left -- right dichotomy in a relative refence system
+            # from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left': 0,
+                'right': 1
+            }
+
+        elif qsr_choice == 1:
+            # single cross calculus from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left/front': 0,
+                'right/front': 1,
+                'left/back': 2,
+                'right/back': 3
+            }
+
+        elif qsr_choice == 2:
+            # TPCC reference system
+            # my modified version from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'sb': 0,
+                'lb': 1,
+                'bl': 2,
+                'sl': 3,
+                'fl': 4,
+                'lf': 5,
+                'sf': 6,
+                'rf': 7,
+                'fr': 8,
+                'sr': 9,
+                'br': 10,
+                'rb': 11
+            }
+
+        elif qsr_choice == 3:
+            # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'front': 0,
+                'left': 1,
+                'back': 2,
+                'right': 3
+            }
+
+        elif qsr_choice == 4:
+            # Model for combined expressions from 'moratz2002spatial'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left-front': 0,
+                'left-back': 1,
+                'right-front': 2,
+                'right-back': 3,
+                'straight-front': 4,
+                'exactly-left': 5,
+                'straight-back': 6,
+                'exactly-right': 7
+            }    
+
+        # used for deriving NLP annotations
+        tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
         # determine the reference system based on relatum and origin
         if origin == relatum:
             # reference direction == robot's orientation
@@ -531,6 +600,101 @@ class ExplainRobotNavigation:
 
         qsr_map = np.zeros(self.image.shape, np.uint8)
 
+        for i in range(0, height):
+            for j in range(0, width):
+                d_x = j - relatum[0]
+                d_y = -1 * (i - relatum[0])
+
+                #print('\n(i, j) = ', (i, j))
+                
+                #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                #k = d_y / max(1, d_x)
+                #print('abs(k) = ', abs(k))
+                # angle in radians
+                angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                #print('angle (in degrees) = ', angle * 180 / math.pi)
+                angle -= angle_ref
+                if angle > PI:
+                    angle -= 2*PI
+                elif angle < -PI:
+                    angle += 2*PI        
+
+                value = ''
+
+                #print('angle = ', angle)
+
+                if qsr_choice == 0:
+                    if -PI <= angle < 0:
+                        value += 'right'
+                    else:
+                        value += 'left'
+
+                elif qsr_choice == 1:
+                    if 0 <= angle < PI/2:
+                        value += 'left/front'
+                    elif PI/2 <= angle <= PI:
+                        value += 'left/back'
+                    elif -PI/2 <= angle < 0:
+                        value += 'right/front'
+                    elif -PI <= angle < -PI/2:
+                        value += 'right/back'
+
+                elif qsr_choice == 2:
+                    if angle == 0:
+                        value += 'sb'
+                    elif 0 < angle <= PI/4:
+                        value += 'lb'
+                    elif PI/4 < angle < PI/2:
+                        value += 'bl'
+                    elif angle == PI/2:
+                        value += 'sl'
+                    elif PI/2 < angle < 3*PI/4:
+                        value += 'fl'
+                    elif 3*PI/4 <= angle < PI:
+                        value += 'lf'
+                    elif angle == PI or angle == -PI:
+                        value += 'sf'
+                    elif -PI < angle <= -3*PI/4:
+                        value += 'rf'
+                    elif -3*PI/4 < angle < -PI/2:
+                        value += 'fr'
+                    elif angle == -PI/2:
+                        value += 'sr'
+                    elif -PI/2 < angle < -PI/4:
+                        value += 'br'        
+                    elif -PI/4 <= angle < 0:
+                        value += 'rb'
+
+                elif qsr_choice == 3:
+                    if -PI/4 <= angle <= PI/4:
+                        value += 'front'
+                    elif PI/4 < angle < 3*PI/4:
+                        value += 'left'
+                    elif 3*PI/4 <= angle or angle <= -3*PI/4:
+                        value += 'back'
+                    elif -3*PI/4 < angle < -PI/4:
+                        value += 'right'  
+
+                elif qsr_choice == 4:
+                    if angle == 0:
+                        value += 'straight-front'
+                    elif 0 < angle < PI/2:
+                        value += 'left-front'
+                    elif angle == PI/2:
+                        value += 'exactly-left'
+                    elif PI/2 < angle < PI:
+                        value += 'left-back'
+                    elif angle == PI or angle == -PI:
+                        value += 'straight-back'
+                    elif -PI < angle < -PI/2:
+                        value += 'right-back'
+                    elif angle == -PI/2:
+                        value += 'exactly-right'
+                    elif -PI/2 < angle < 0:
+                        value += 'right-front'
+
+                qsr_map[i, j] = tpcc_dict[value]
+
         # qsr_map plotting
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
@@ -547,9 +711,345 @@ class ExplainRobotNavigation:
         plt.plot(relatum[0], relatum[1], 'x', color='blue')
         plt.plot(origin[0], origin[1], 'x', color='red')
 
+        qsr_map += 1
+        regions = regionprops(qsr_map.astype(int))
+        labels = []
+        for props in regions:
+            labels.append(props.label)
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            ax.scatter(cy, cx, c='white', marker='o')   
+            # printing/plotting explanation weights
+            ax.text(cy, cx, tpcc_dict_inv[v-1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
+        qsr_map -= 1
+
         ax.imshow(qsr_map.astype('float64'), aspect='auto')
         fig.savefig('qsr_map.png', transparent=False)
         fig.clf()
+
+        
+        # plot segments with weights
+        self.segments += 1
+        regions = regionprops(self.segments.astype(int))
+        labels = []
+        for props in regions:
+            labels.append(props.label)
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)    
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            if v == 1:
+                i = i + 1
+                continue
+            cx, cy = props.centroid  # centroid coordinates
+            ax.scatter(cy, cx, c='white', marker='o')   
+            # printing/plotting explanation weights
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == v - 1:
+                    ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='black')  # str(round(self.exp[j][1],4)) #str(v))
+                    break
+            i = i + 1
+        # Save segments with nice numbering as a picture
+        ax.imshow(self.segments, aspect='auto')
+        fig.savefig(path_core + '/labeled_segments.png')
+        fig.clf()
+        #self.segments -= 1
+
+        # reasoning part
+        print('self.exp = ', self.exp)
+        dict_len = len(tpcc_dict)
+        exp_counter_list = []
+        for i in range(0, len(self.exp) - 1):
+            exp_counter_list.append([0]*dict_len)
+        for k in range(0, len(self.exp) - 1):
+            e = self.exp[k]
+            print('\ne = ', e)
+            print('e[0] = ', e[0])
+            print('e[1] = ', e[1])
+            print('k = ', k)
+            for i in range(0, height):
+                for j in range(0, width):
+                    if e[0] == self.segments[i, j]:
+                        exp_counter_list[k][qsr_map[i, j]] += 1    
+        print('\nexp_counter_list = ', exp_counter_list)
+
+        referent = [0,0] # ovo srediti sa centroidom prepreke 
+        dodatak = ''
+        if relatum == origin == referent:
+            dodatak = 'tri,'
+        elif relatum == origin:
+            dodatak = 'dou,'
+        elif relatum == referent:
+            dodatak = 'sam,'
+
+        # TCPP reasoning
+        print('\n')
+        utterances = []
+        for k in range(0, len(self.exp) - 1):
+            utterances_local = []
+            for i in range(0, dict_len):
+                if exp_counter_list[k][i] > 0:
+                    utterances_local.append(tpcc_dict_inv[i])
+            utterances.append(utterances_local)
+            utterances_string = ','.join(utterances_local)
+            print('Robot (' + dodatak + utterances_string + ') segment_' + str(k+1))
+        print('utterances = ', utterances)
+
+        w_sum = 0
+        print('\n')
+        for k in range(0, len(self.exp) - 1):
+            w_sum += abs(self.exp[k][1])    
+        for k in range(0, len(self.exp) - 1):
+            utterances_sum = sum(exp_counter_list[k])
+            utt_nums = []
+            for i in range(0, dict_len):
+                if exp_counter_list[k][i] > 0:
+                    utt_nums.append(exp_counter_list[k][i])
+            utt_string = ''
+            for i in range(0, len(utterances[k])):
+                utt_string += utterances[k][i] + '-' + str(round(100*utt_nums[i]/utterances_sum,2)) + '%'
+                if i != len(utterances[k]) - 1:
+                    utt_string += ','
+            print('Robot (' + dodatak + utt_string + ') segment_' + str(k+1) + ' with weight=' + str(round(self.exp[k][1],2)) + ' and relative absolute (weight) importance ' + str(round(100*abs(self.exp[k][1])/w_sum,2)) + '%')        
+
+        # semantic tags
+        semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
+        costmap_segmented = np.array(pd.read_csv('~/amar_ws/costmap_segmented.csv'))
+        costmap_static_new = np.array(pd.read_csv('~/amar_ws/costmap_static_new.csv'))
+
+        print('\nsemantic_tags = ', semantic_tags)
+        print('\n')
+
+        # finding unknown obstacles
+        unknown_obstacles_vals = []
+        segments = copy.deepcopy(self.segments)
+        #segments -= 1
+        for val in np.unique(segments):
+            # static known obstacle
+            if np.all(self.image[segments == val] == 99) == True and np.all(costmap_static_new[segments == val] == 0) == True:
+
+                unknown_obstacles_vals.append(val)
+                #print('val = ', val)
+                
+                '''
+                semantic_num = np.bincount(costmap_segmented[segments == val]).argmax()
+                
+                if semantic_num >= 90:
+                    pass
+                else:
+                    unknown_obstacles_vals.append(val)
+                '''
+            # free space    
+            else:
+                pass
+
+        # plot semantic map
+        fig = plt.figure(frameon=False)
+        w = 1.6*3
+        h = 1.6*3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+
+        for i in range(0, len(unknown_obstacles_vals)):
+            x_s = []
+            y_s = []
+            color = []
+            for j in range(0, self.segments.shape[0]):
+                for k in range(0, self.segments.shape[1]):
+                    if self.segments[j, k] == unknown_obstacles_vals[i]:
+                        x_s.append(k)
+                        y_s.append(j)
+                        R = self.temp_img[x_s[0], y_s[0]][0] / 255
+                        G = self.temp_img[x_s[0], y_s[0]][1] / 255
+                        B = self.temp_img[x_s[0], y_s[0]][2] / 255
+                        color.append(np.array([R, G, B]))
+
+            x_center = sum(x_s) / len(x_s)
+            y_center = sum(y_s) / len(y_s)
+            deltas = []
+
+            for j in range(0, len(x_s)):
+                delta = (x_s[j] - x_center)**2 + (y_s[j] - y_center)**2
+                delta = math.sqrt(delta)
+                deltas.append(delta)
+
+            max_delta = max(deltas)
+
+            points_to_plot_x = []
+            points_to_plot_y = []    
+
+            for j in range(0, len(x_s)):
+                if deltas[j] >= 0.8 * max_delta:
+                    points_to_plot_x.append(x_s[j])
+                    points_to_plot_y.append(y_s[j])
+
+            ax.scatter(points_to_plot_x, points_to_plot_y, c='yellow', marker='.')
+            for j in range(0, len(self.exp)):
+                if self.exp[j][0] == unknown_obstacles_vals[i]:
+                    print('Unknown obstacle ' + str(i+1) + ' has a coefficient ' + str(round(self.exp[j][1], 4)))
+                    
+                    if self.case == 1:
+                        # case 1
+                        ax.text(x_center + 2, y_center - 4, 'Unknown obstacle ' + str(i+1), c='white')
+                    
+                    elif self.case == 2:
+                        # case 2
+                        if i == 1:
+                            ax.text(x_center, y_center-3, 'Unknown obstacle ' + str(i), c='white')
+
+                    elif self.case == 3:
+                        # case 3
+                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+
+                    else:
+                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
+
+                    break
+                
+
+        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
+        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='purple', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+        regions = regionprops(np.array(costmap_segmented).astype(int))
+        
+        #'''
+        labels = []
+        for props in regions:
+            labels.append(props.label)
+        #print('labels_semantic: ', labels)
+        #'''    
+        i = 0
+        for props in regions:
+            v = props.label  # value of label
+            cx, cy = props.centroid  # centroid coordinates
+            #ax.scatter(cy, cx, c='white', marker='o')   
+            # printing/plotting explanation weights
+            for j in range(0, len(semantic_tags)):
+                if semantic_tags.iloc[j, 0] == v:
+                    if self.case == 3:
+                        # case 3
+                        if semantic_tags.iloc[j, 1] == 'lab south':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                            ax.text(cy - 10, cx + 5, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                            ax.text(cy, cx + 12, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab north':    
+                            ax.text(cy - 20, cx - 10, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab east':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall I':    
+                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall II':    
+                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall III':    
+                            ax.text(cy - 3, cx + 5, semantic_tags.iloc[j, 1], c='white')
+
+                    elif self.case == 2:
+                        # case 2
+                        if semantic_tags.iloc[j, 1] == 'lab south':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                            ax.text(cy-15, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab north':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab east':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall I':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall II':    
+                            ax.text(cy-8, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall III':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+
+                    elif self.case == 1:
+                        # case 1
+                        if semantic_tags.iloc[j, 1] == 'lab south':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab north':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'lab east':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall I':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall II':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                        elif semantic_tags.iloc[j, 1] == 'wall III':    
+                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')    
+
+                    else:
+                        ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
+
+                    break
+            i = i + 1
+
+        marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
+
+        ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
+
+        for i in range(0, semantic_tags.shape[0]):
+            segments_label = np.unique(self.segments[costmap_segmented == semantic_tags.iloc[i, 0]])
+            
+            #if len(segments_label) == 1 and segments_label == [0]:
+            #    continue
+            if 0 in segments_label:
+                continue
+
+            '''
+            print('\n')
+            print('i = ', i)
+            print('segments_label: ', segments_label)
+            print('semantic_tags.iloc[i, 1]: ', semantic_tags.iloc[i, 1])
+            print('semantic_tags.iloc[i, 0]: ', semantic_tags.iloc[i, 0])
+            '''
+            
+            weights_unique = []
+            for label in segments_label:
+                #if label in unknown_obstacles_vals:
+                    #print('label pass: ', label)
+                #    continue
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == label:
+                        rounded = str(round(self.exp[j][1], 4))
+                        if rounded not in weights_unique:
+                            '''
+                            print('label:', label)
+                            print('rounded: ', rounded)
+                            print('weights_unique: ', weights_unique)
+                            '''
+                            weights_unique.append(rounded)        
+                        break
+            #print('weights_unique: ', weights_unique)
+        
+            if len(weights_unique) == 1:        
+                print(semantic_tags.iloc[i, 1] + " has a coefficient " + weights_unique[0])
+            else:
+                weights_string = ""
+                for j in range(0, len(weights_unique) - 1):
+                    weights_string += weights_unique[j] + ", "
+                if len(weights_unique) > 0:    
+                    weights_string += weights_unique[-1] + " "    
+                    print(semantic_tags.iloc[i, 1] + " segments have coefficients " + weights_string)
+        
+        print('\nQSR function ending!!!')
 
         return 0
 
