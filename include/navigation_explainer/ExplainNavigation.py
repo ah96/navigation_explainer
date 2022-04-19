@@ -484,6 +484,8 @@ class ExplainRobotNavigation:
         width = self.image.shape[1]
         #print('\nwidth = ', width)
 
+        R = math.sqrt((relatum[0] - origin[0])**2+(relatum[1] - origin[1])**2)
+
         PI = math.pi
 
         '''
@@ -537,20 +539,49 @@ class ExplainRobotNavigation:
             # TPCC reference system
             # my modified version from 'moratz2008qualitative'
             # used for getting semantic costmap
-            tpcc_dict = {
-                'sb': 0,
-                'lb': 1,
-                'bl': 2,
-                'sl': 3,
-                'fl': 4,
-                'lf': 5,
-                'sf': 6,
-                'rf': 7,
-                'fr': 8,
-                'sr': 9,
-                'br': 10,
-                'rb': 11
-            }
+            if R == 0:
+                tpcc_dict = {
+                    'sb': 0,
+                    'lb': 1,
+                    'bl': 2,
+                    'sl': 3,
+                    'fl': 4,
+                    'lf': 5,
+                    'sf': 6,
+                    'rf': 7,
+                    'fr': 8,
+                    'sr': 9,
+                    'br': 10,
+                    'rb': 11
+                }
+            else:
+                tpcc_dict = {
+                    'csb': 0,
+                    'clb': 1,
+                    'cbl': 2,
+                    'csl': 3,
+                    'cfl': 4,
+                    'clf': 5,
+                    'csf': 6,
+                    'crf': 7,
+                    'cfr': 8,
+                    'csr': 9,
+                    'cbr': 10,
+                    'crb': 11,
+                    'dsb': 12,
+                    'dlb': 13,
+                    'dbl': 14,
+                    'dsl': 15,
+                    'dfl': 16,
+                    'dlf': 17,
+                    'dsf': 18,
+                    'drf': 19,
+                    'dfr': 20,
+                    'dsr': 21,
+                    'dbr': 22,
+                    'drb': 23
+                }
+
 
         elif qsr_choice == 3:
             # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
@@ -605,6 +636,8 @@ class ExplainRobotNavigation:
                 d_x = j - relatum[0]
                 d_y = -1 * (i - relatum[0])
 
+                r = math.sqrt(d_x**2+d_y**2)
+
                 #print('\n(i, j) = ', (i, j))
                 
                 #k = (-plan_y_list[-1] + y_odom) / (d_x)
@@ -640,6 +673,11 @@ class ExplainRobotNavigation:
                         value += 'right/back'
 
                 elif qsr_choice == 2:
+                    if r <= R:
+                        value += 'c'
+                    else: 
+                        value += 'd'    
+
                     if angle == 0:
                         value += 'sb'
                     elif 0 < angle <= PI/4:
