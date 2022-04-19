@@ -1509,7 +1509,7 @@ class ExplainRobotNavigation:
         #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
-        my_dist_fun = True
+        my_dist_fun = False
         if my_dist_fun == True:
             # deviation of local plan from global plan dataframe
             self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
@@ -2127,14 +2127,15 @@ class ExplainRobotNavigation:
                     #dist = traj_dist.eucl_dist_traj(np.array(local_plan_xs), np.array(self.transformed_plan_xs)) + traj_dist.eucl_dist_traj(np.array(local_plan_ys), np.array(self.transformed_plan_ys))
                     
                     #dist = traj_dist.eucl_dist_traj(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.eucl_dist_traj(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2 #2D
-                    dist = traj_dist.discret_frechet(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.discret_frechet(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
-                    #dist = traj_dist.e_dtw(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_dtw(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
-                    #dist = traj_dist.e_edr(np.array(local_plan_xs), np.array(self.transformed_plan_xs), 0.01)**2 + traj_dist.e_edr(np.array(local_plan_ys), np.array(self.transformed_plan_ys), 0.01)**2
                     #dist = traj_dist.e_hausdorff(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_hausdorff(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2 #2D
-                    #dist = traj_dist.e_lcss(np.array(local_plan_xs), np.array(self.transformed_plan_xs), 0.01)**2 + traj_dist.e_lcss(np.array(local_plan_ys), np.array(self.transformed_plan_ys), 0.01)**2
-                    #dist = traj_dist.owd_grid_brut(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.owd_grid_brut(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
                     #dist = traj_dist.e_sspd(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_sspd(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2 #2D
 
+                    #dist = traj_dist.discret_frechet(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.discret_frechet(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
+                    #dist = traj_dist.e_dtw(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.e_dtw(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
+                    #dist = traj_dist.e_edr(np.array(local_plan_xs), np.array(self.transformed_plan_xs), 0.01)**2 + traj_dist.e_edr(np.array(local_plan_ys), np.array(self.transformed_plan_ys), 0.01)**2
+                    #dist = traj_dist.e_lcss(np.array(local_plan_xs), np.array(self.transformed_plan_xs), 0.01)**2 + traj_dist.e_lcss(np.array(local_plan_ys), np.array(self.transformed_plan_ys), 0.01)**2
+                    dist = traj_dist.owd_grid_brut(np.array(local_plan_xs), np.array(self.transformed_plan_xs))**2 + traj_dist.owd_grid_brut(np.array(local_plan_ys), np.array(self.transformed_plan_ys))**2
+                    
                     dist = math.sqrt(dist)
                     self.local_plan_deviation.iloc[i, 0] = dist
                     
