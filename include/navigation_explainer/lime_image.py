@@ -12,6 +12,9 @@ from sklearn.utils import check_random_state
 from skimage.color import gray2rgb
 from tqdm.auto import tqdm
 
+import pandas as pd
+import random
+
 import time
 
 from . import lime_base
@@ -241,6 +244,8 @@ class LimeImageExplainer(object):
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
             segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_semantic(image, x_odom, y_odom)
+
             #segments = self.sm1(image)
             #segments = self.sm2(image_orig, image, x_odom, y_odom)
             #segments = self.sm3(image_orig, image, x_odom, y_odom, devDistance, sum)
@@ -249,6 +254,7 @@ class LimeImageExplainer(object):
             #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
         elif segmentation_fn == 'semantic_segmentation':
             segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_semantic(image, x_odom, y_odom)
             #segments = self.sm6(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
             #segments = self.semantic_segment(image_orig, image, costmap_info, map_info, tf_odom_map)    
         else:
@@ -387,7 +393,7 @@ class LimeImageExplainer(object):
 
         return data, np.array(labels)
 
-    def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):        
+    def sm_only_obstacles_NEW(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
         print('\nsm_only_obstacles started')
         
         # show original image
@@ -935,7 +941,363 @@ class LimeImageExplainer(object):
         return segments
 
     def sm_semantic(self, image, x_odom, y_odom):
-        return
+        # QSR - qualitative spatial reasoning
+        relatum = copy.deepcopy([x_odom, y_odom])
+        referent = copy.deepcopy(relatum)
+        origin = copy.deepcopy(relatum)
+        #print('\norigin = ', origin)
+        
+        segments = np.zeros(image.shape[:-1], np.uint8)
+        height = image.shape[0]
+        width = image.shape[1]
+        
+        semantic_choice = 3
+
+        if semantic_choice == 0:
+            # left -- right dichotomy in a relative refence system
+            # from 'moratz2008qualitative'
+            ctr = 0
+            segments[:, :int(relatum[1])] = ctr
+            ctr = ctr + 1
+            segments[:, int(relatum[1]):] = ctr
+
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left': 0,
+                'right': 1
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+                
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+
+        elif semantic_choice == 1:
+            # single cross calculus from 'moratz2008qualitative'
+            ctr = 0
+            segments[:int(relatum[0]), :int(relatum[1])] = ctr
+            ctr = ctr + 1
+            segments[:int(relatum[0]), int(relatum[1]):] = ctr
+            ctr = ctr + 1
+            segments[int(relatum[0]):, :int(relatum[1])] = ctr
+            ctr = ctr + 1
+            segments[int(relatum[0]):, int(relatum[1]):] = ctr
+
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'left/front': 0,
+                'right/front': 1,
+                'left/back': 2,
+                'right/back': 3
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+                
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+
+        elif semantic_choice == 2:
+            # TPCC reference system
+            # my modified version from 'moratz2008qualitative'
+            #origin[0] = int(x_odom / 2)
+            r = relatum[0] - origin[0]
+            
+            if r > 0:
+                # used for getting semantic costmap
+                tpcc_dict = {
+                    'csb': 0,
+                    'dsb': 1,
+                    'clb': 2,
+                    'dlb': 3,
+                    'cbl': 4,
+                    'dbl': 5,
+                    'csl': 6,
+                    'dsl': 7,
+                    'cfl': 8,
+                    'dfl': 9,
+                    'clf': 10,
+                    'dlf': 11,
+                    'csf': 12,
+                    'dsf': 13,
+                    'crf': 14,
+                    'drf': 15,
+                    'cfr': 16,
+                    'dfr': 17,
+                    'csr': 18,
+                    'dsr': 19,
+                    'cbr': 20,
+                    'dbr': 21,
+                    'crb': 22,
+                    'drb': 23
+                }
+            elif r == 0:
+                # used for getting semantic costmap
+                tpcc_dict = {
+                    'sb': 0,
+                    'lb': 1,
+                    'bl': 2,
+                    'sl': 3,
+                    'fl': 4,
+                    'lf': 5,
+                    'sf': 6,
+                    'rf': 7,
+                    'fr': 8,
+                    'sr': 9,
+                    'br': 10,
+                    'rb': 11
+                }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
+            import math        
+            PI = math.pi
+
+            for i in range(0, height):
+                for j in range(0, width):
+                    d_x = j - x_odom
+                    d_y = -1 * (i - y_odom)
+
+                    #print('\n(i, j) = ', (i, j))
+                    
+                    #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                    k = d_y / max(1, d_x)
+                    #print('abs(k) = ', abs(k))
+                    # angle in radians
+                    angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                    #print('angle (in degrees) = ', angle * 180 / math.pi)
+                    
+                    r_ = (i - relatum[1])**2 + (j - relatum[0])**2
+                    r_ = math.sqrt(r_)
+                    #print('(r_, r) = ', (r_, r))
+
+                    if r > 0:
+                        # starting with 'c'
+                        if r_ <= r:
+                            value = 'c'
+                        # starting with 'd'
+                        else:
+                            value = 'd'
+                    elif r == 0:
+                        value = ''
+
+                    #print('angle = ', angle)
+                    if angle == 0:
+                        value += 'sr'
+                    elif 0 < angle <= PI/4:
+                        value += 'fr'
+                    elif PI/4 < angle < PI/2:
+                        value += 'rf'
+                    elif angle == PI/2:
+                        value += 'sf'
+                    elif PI/2 < angle < 3*PI/4:
+                        value += 'lf'
+                    elif 3*PI/4 <= angle < PI:
+                        value += 'fl'
+                    elif angle == PI:
+                        value += 'sl'
+                    elif -PI < angle <= -3*PI/4:
+                        value += 'bl'
+                    elif -3*PI/4 < angle < -PI/2:
+                        value += 'lb'
+                    elif angle == -PI/2:
+                        value += 'sb'
+                    elif -PI/2 < angle < -PI/4:
+                        value += 'rb'        
+                    elif -PI/4 <= angle < 0:
+                        value += 'br'                            
+
+                    segments[i, j] = tpcc_dict[value]    
+
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+
+        elif semantic_choice == 3:
+            # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'front': 0,
+                'left': 1,
+                'back': 2,
+                'right': 3,
+                'left-front': 4,
+                'left-back': 5,
+                'right-front': 6,
+                'right-back': 7,
+                'straight-front': 8,
+                'exactly-left': 9,
+                'straight-back': 10,
+                'exactly-right': 11
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
+            import math        
+            PI = math.pi
+
+            for i in range(0, height):
+                for j in range(0, width):
+                    d_x = j - x_odom
+                    d_y = -1 * (i - y_odom)
+
+                    #print('\n(i, j) = ', (i, j))
+                    
+                    #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                    k = d_y / max(1, d_x)
+                    #print('abs(k) = ', abs(k))
+                    # angle in radians
+                    angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                    #print('angle (in degrees) = ', angle * 180 / math.pi)
+
+                    value = ''
+
+                    #print('angle = ', angle)
+                    if -PI/4 <= angle <= PI/4:
+                        value += 'right'
+                    elif PI/4 < angle < 3*PI/4:
+                        value += 'front'
+                    elif 3*PI/4 <= angle or angle <= -3*PI/4:
+                        value += 'left'
+                    elif -3*PI/4 < angle < -PI/4:
+                        value += 'back'                            
+
+                    segments[i, j] = tpcc_dict[value]    
+
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+
+        elif semantic_choice == 4:
+            # Model for combined expressions from 'moratz2002spatial'
+            # used for getting semantic costmap
+            tpcc_dict = {
+                'front': 0,
+                'left': 1,
+                'back': 2,
+                'right': 3,
+                'left-front': 4,
+                'left-back': 5,
+                'right-front': 6,
+                'right-back': 7,
+                'straight-front': 8,
+                'exactly-left': 9,
+                'straight-back': 10,
+                'exactly-right': 11
+            }
+
+            # used for deriving NLP annotations
+            tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
+            import math        
+            PI = math.pi
+
+            for i in range(0, height):
+                for j in range(0, width):
+                    d_x = j - x_odom
+                    d_y = -1 * (i - y_odom)
+
+                    #print('\n(i, j) = ', (i, j))
+                    
+                    #k = (-plan_y_list[-1] + y_odom) / (d_x)
+                    k = d_y / max(1, d_x)
+                    #print('abs(k) = ', abs(k))
+                    # angle in radians
+                    angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
+                    #print('angle (in degrees) = ', angle * 180 / math.pi)
+
+                    value = ''
+
+                    #print('angle = ', angle)
+                    if angle == 0:
+                        value += 'exactly-right'
+                    elif 0 < angle < PI/2:
+                        value += 'right-front'
+                    elif angle == PI/2:
+                        value += 'straight-front'
+                    elif PI/2 < angle < PI:
+                        value += 'left-front'
+                    elif angle == PI:
+                        value += 'exactly-left'
+                    elif -PI < angle < -PI/2:
+                        value += 'left-back'
+                    elif angle == -PI/2:
+                        value += 'straight-back'
+                    elif -PI/2 < angle < 0:
+                        value += 'right-back'                            
+
+                    segments[i, j] = tpcc_dict[value]    
+
+            # reasoning for one random position
+            referent = [random.randint(0, width-1), random.randint(0, height-1)]
+            print('\nreferent = ', referent)
+            print('segments[referent] = ', segments[referent[1],referent[0]])
+            if referent == relatum == origin:
+                print('origin, relatum (tri, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif origin == relatum:
+                print('origin, relatum (dou, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            elif referent == relatum:
+                print('origin, relatum (sam, ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ') referent')
+            else:
+                print('origin, relatum ' + tpcc_dict_inv[segments[referent[1],referent[0]]] + ' referent')
+            
+
+        plot_segmentation = True
+        if plot_segmentation == True:
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_SEMANTIC.png', transparent=False)
+            fig.clf()
+
+        #return segments
+        return np.zeros(image.shape, np.uint8)
 
     def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
@@ -1087,6 +1449,502 @@ class LimeImageExplainer(object):
         return data, np.array(labels), classifier_fn_time, planner_time, target_calculation_time, costmap_save_time
 
 
+
+    def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
+        # import needed libraries
+        from skimage.segmentation import slic
+        #from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        #import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+
+        print('\nsm7 started')
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        #start = time.time()
+
+        # Find segments_2
+        segments_slic = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
+                            start_label=1, mask=None)
+
+        '''
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_slic.astype('float64'), aspect='auto')
+        fig.savefig('segments_slic.png', transparent=False)
+        fig.clf()
+        '''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        '''
+        devDistance_x = int(devDistance_x)
+        devDistance_x = abs(devDistance_x)
+        devDistance_y = int(devDistance_y)
+        devDistance_y = abs(devDistance_y)
+        devDistance = int(devDistance)
+        '''
+
+        '''
+        footprint_radius = 13
+        add = 15
+        '''
+
+        d_x = plan_x_list[-1] - x_odom
+        if d_x == 0:
+            d_x = 1
+        k = (-plan_y_list[-1] + y_odom) / (d_x)
+
+        print('abs(k) = ', abs(k)) 
+
+        '''
+        delta_y = plan_y_list[-1] - y_odom
+        delta_x = plan_x_list[-1] - x_odom  
+        '''
+
+        # make one free space segment
+        ctr = 0
+        segments[:, :] = ctr
+        ctr = ctr + 1
+
+        num_of_obstacles = 0
+        # add obstacle segments        
+        for i in np.unique(segments_slic):
+            temp = img[segments_slic == i]
+            count_of_99_s = np.count_nonzero(temp == 99)
+            #print('count: ', count)
+            #print('temp: ', temp)
+            #print('len(temp): ', temp.shape[0])
+            if np.all(img[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
+                #print('obstacle')
+                segments[segments_slic == i] = ctr
+                ctr = ctr + 1
+                num_of_obstacles += 1
+
+        print('num_of_obstacles: ', num_of_obstacles)        
+
+        if 8 > num_of_obstacles > 0:
+            # divide segment obstacles    
+            seg_labels = np.unique(segments)[1:]        
+
+            num_of_seg = len(seg_labels)
+            num_of_wanted_seg = 8
+
+            #print('\nnumber of wanted segments: ', num_of_wanted_seg)
+            #print('number of current segments: ', num_of_seg)
+
+            seg_sizes = []
+
+            if num_of_seg < num_of_wanted_seg:
+                for i in range(0, num_of_seg):
+                    #print(len(segments[segments == seg_labels[i]]))
+                    seg_sizes.append(len(segments[segments == seg_labels[i]]))
+
+            #print('\nsizes of segments original: ', seg_sizes)
+            #print('labels of segments original: ', seg_labels)
+            seg_labels = [x for _, x in sorted(zip(seg_sizes, seg_labels))]
+            seg_labels.reverse()
+            #print('\nsizes of segemnts sorted: ', seg_sizes)
+            #print('labels of segemnts sorted: ', seg_labels)
+
+            seg_missing = num_of_wanted_seg - num_of_seg
+            print('\nnumber of segments missing: ', seg_missing)
+
+            # if a number of missing segments is smaller or equal than the number of existing segments
+            if seg_missing <= num_of_seg:
+                label_current = len(seg_labels) + 1
+                for i in range(0, seg_missing):
+                    temp = segments[segments == seg_labels[i]]
+                    #print('temp = ', temp)
+
+                    # check obstacle shape
+                    w_min = 161
+                    w_max = -1
+                    h_min = 161
+                    h_max = -1
+                    for j in range(0, segments.shape[0]):
+                        for q in range(0, segments.shape[1]):
+                            if segments[j, q] == seg_labels[i]:
+                                if j > h_max:
+                                    h_max = j
+                                if j < h_min:
+                                    h_min = j
+                                if q > w_max:
+                                    w_max = q
+                                if q < w_min:
+                                    w_min = q           
+
+                    #print('\n(h_min, h_max): ', (h_min, h_max))
+                    #print('(w_min, w_max): ', (w_min, w_max))
+
+                    height = h_max - h_min + 1
+                    #print('\nheight', height)
+                    width = w_max - w_min + 1
+                    #print('width', width)
+           
+
+                    # if upright
+                    if abs(k) >= 1:
+                        if height > width:
+                            for j in range(0, int(len(temp) / 2)):
+                                temp[j] = label_current
+                            segments[segments == seg_labels[i]] = temp
+                        else:
+                            label_original = temp[0]
+                            num_of_pixels = len(temp)
+                            counter = 0
+                            finished = False
+                            for q in range(0, segments.shape[1]):
+                                if finished == True:
+                                    break
+                                for j in range(0, segments.shape[0]):
+                                    if segments[j, q] == label_original:
+                                        segments[j, q] = label_current
+                                        counter += 1
+                                        if counter == int(num_of_pixels / 2 + 0.5):
+                                            label_current += 1
+                                            finished = True
+                                            break        
+
+                    # if to the side
+                    elif abs(k) < 1:
+                        #print('OVAJ SLUCAJ')
+                        if width > height:
+                            #print('width > height')
+                            #print('label_current: ', label_current)
+                            label_current
+                            for j in range(0, int(len(temp) / 2)):
+                                temp[j] = label_current
+                            segments[segments == seg_labels[i]] = temp   
+                        else:
+                            #print('width < height')
+                            #print('label_current: ', label_current)
+                            label_original = temp[0]
+                            #print('label_original = ', label_original)
+                            num_of_pixels = len(temp)
+                            counter = 0
+                            for q in range(0, segments.shape[1]):
+                                for j in range(0, segments.shape[0]):
+                                    if segments[j, q] == label_original:
+                                        #print('IN')
+                                        #print('counter = ', counter)
+                                        if 0 <= counter <= num_of_pixels / 2:
+                                            segments[j, q] = label_current
+                                        counter += 1
+
+                            '''
+                            for j in range(0, height):
+                                for q in range(0, int(width/2)):
+                                    if j * width + q > len(temp) - 1:
+                                        continue
+                                    temp[j * width + q] = label_original
+                                for q in range(int(width/2), width):
+                                    if j * width + q > len(temp) - 1:
+                                        continue
+                                    temp[j * width + q] = label_current
+                            '''
+                    
+                    label_current += 1
+
+            # if a number of missing segments is greater than the number of existing segments
+            else:
+                num_of_new_seg_per_old_seg = int(seg_missing / num_of_seg)
+                
+                # if a number of new segment per old segments is integer and same for all old segments
+                if num_of_new_seg_per_old_seg == seg_missing / num_of_seg:
+                    #print('CIO BROJ')
+                    #print('\nnumber of new segments per existing segment: ', num_of_new_seg_per_old_seg)
+
+                    label_current = len(seg_labels) + 1
+                    
+                    for i in range(0, num_of_seg):
+                        temp = segments[segments == seg_labels[i]]
+
+                        # check obstacle shape
+                        w_min = 161
+                        w_max = -1
+                        h_min = 161
+                        h_max = -1
+                        for j in range(0, segments.shape[0]):
+                            for q in range(0, segments.shape[1]):
+                                if segments[j, q] == seg_labels[i]:
+                                    if j > h_max:
+                                        h_max = j
+                                    if j < h_min:
+                                        h_min = j
+                                    if q > w_max:
+                                        w_max = q
+                                    if q < w_min:
+                                        w_min = q
+
+                        #print('\n(h_min, h_max): ', (h_min, h_max))
+                        #print('(w_min, w_max): ', (w_min, w_max))
+
+                        height = h_max - h_min + 1
+                        #print('\nheight', height)
+                        width = w_max - w_min + 1
+                        #print('width', width)
+
+                        # if upright
+                        if abs(k) >= 1:
+                            #print('UPRIGHT')
+                            if height > width:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    label_current += 1
+                                segments[segments == seg_labels[i]] = temp
+                            else:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
+                                label_original = temp[0]
+                                num_of_pixels = len(temp)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if (counter + 1) % step == 0:
+                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg:
+                                                        label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                label_current += 1
+                                                finished = True
+                                                break
+                        # if to the side
+                        else:
+                            #print('UPRIGHT')
+                            if width > height:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    label_current += 1
+                                segments[segments == seg_labels[i]] = temp
+                            else:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
+                                label_original = temp[0]
+                                num_of_pixels = len(temp)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if (counter + 1) % step == 0:
+                                                    label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                label_current += 1
+                                                finished = True
+                                                break
+
+                # if a number of new segment per old segments is integer and same for all old segments
+                else:
+                    #print('NON-CIO BROJ')
+
+                    whole_part = int(seg_missing / num_of_seg)
+                    #print('whole part = ', whole_part)
+                    rest = seg_missing % num_of_seg
+                    #print('rest = ', rest)
+
+                    put_rest_to_biggest_segment = False
+
+                    num_of_new_seg_per_old_seg_list = [whole_part] * num_of_seg
+
+                    if put_rest_to_biggest_segment == False:
+                        for i in range(0, rest):
+                            num_of_new_seg_per_old_seg_list[i] += 1
+                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)    
+                    else:
+                        num_of_new_seg_per_old_seg_list[0] += rest
+                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)
+
+
+                    label_current = len(seg_labels) + 1
+                    #print('\nlabel_current = ', label_current)
+                    
+                    for i in range(0, num_of_seg):
+                        temp = segments[segments == seg_labels[i]]
+
+                        # check obstacle shape
+                        w_min = 161
+                        w_max = -1
+                        h_min = 161
+                        h_max = -1
+                        for j in range(0, segments.shape[0]):
+                            for q in range(0, segments.shape[1]):
+                                if segments[j, q] == seg_labels[i]:
+                                    if j > h_max:
+                                        h_max = j
+                                    if j < h_min:
+                                        h_min = j
+                                    if q > w_max:
+                                        w_max = q
+                                    if q < w_min:
+                                        w_min = q
+
+                        #print('\n(h_min, h_max): ', (h_min, h_max))
+                        #print('(w_min, w_max): ', (w_min, w_max))
+
+                        height = h_max - h_min + 1
+                        #print('\nheight', height)
+                        width = w_max - w_min + 1
+                        #print('width', width)
+
+                        # if upright
+                        if abs(k) >= 1:
+                            #print('UPRIGHT')
+                            if height > width:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    label_current += 1
+                                segments[segments == seg_labels[i]] = temp
+                            else:
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                label_original = temp[0]
+                                num_of_pixels = len(temp)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
+                                                        label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                label_current += 1
+                                                finished = True
+                                                break
+
+                        # if to the side
+                        else:
+                            #print('SIDE')
+                            if width > height:
+                                #print('WIDTH')
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
+                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
+                                    temp[j*step:(j+1)*step] = label_current
+                                    #print('label_current: ', label_current)
+                                    label_current += 1
+                                segments[segments == seg_labels[i]] = temp
+                            else:
+                                #print('HEIGHT')
+                                #print('len(temp): ', len(temp))
+                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
+                                #print('step: ', step)
+                                label_original = temp[0]
+                                num_of_pixels = len(temp)
+                                counter = 0
+                                finished = False
+                                for q in range(0, segments.shape[1]):
+                                    if finished == True:
+                                        break
+                                    for j in range(0, segments.shape[0]):
+                                        if segments[j, q] == label_original:
+                                            if counter < step:
+                                                segments[j, q] = label_original
+                                            else:
+                                                segments[j, q] = label_current
+                                                if (counter + 1) % step == 0:
+                                                    #print('counter + 1 = ', counter + 1)
+                                                    #print('label_current = ', label_current)
+                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
+                                                        label_current += 1
+                                            counter += 1
+                                            if counter == num_of_pixels:
+                                                #print('counter_end = ', counter)
+                                                label_current += 1
+                                                finished = True
+                                                break
+
+
+        #end = time.time()
+
+        #print("\nsm7 runtime: ", end - start)
+
+        '''
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments_final.png', transparent=False)
+        fig.clf()
+        '''
+
+        # fix labels of segments
+        seg_labels = np.unique(segments)
+        for i in range(1, len(seg_labels)):
+            label = seg_labels[i]
+            if label != i:
+                segments[segments == label] = i
+
+        #print('\nnp.unique(segments): ', np.unique(segments))
+        #print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
+
+        if len(np.unique(segments)) > 9:
+            # make one free space segment
+            ctr = 0
+            segments[:, :] = ctr
+            ctr = ctr + 1
+
+            num_of_obstacles = 0
+            # add obstacle segments        
+            for i in np.unique(segments_slic):
+                if np.all(img[segments_slic == i] == 99):
+                    #print('obstacle')
+                    segments[segments_slic == i] = ctr
+                    ctr = ctr + 1
+                    num_of_obstacles += 1
+            '''
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_final_corrected.png', transparent=False)
+            fig.clf()
+            '''
+
+        print('\nsm7 ended')
+
+        return segments
 
 
 
