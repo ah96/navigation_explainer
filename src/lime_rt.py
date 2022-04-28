@@ -865,17 +865,6 @@ def data_labels(image,
     #num_samples = 2 ** n_features
     #lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
     #data = np.array(lst).reshape((num_samples, n_features))
-    #'''
-
-    num_samples = n_features
-    lst = []
-    for i in range(0, num_samples):
-        lst.append([0]*num_samples)
-        lst[i][i] = 1    
-    data = np.array(lst).reshape((num_samples, n_features))
-
-    labels = []
-
     show_free_space = False
 
     if show_free_space == True:
@@ -884,8 +873,19 @@ def data_labels(image,
     else:
         data = data[int(data.shape[0]/2):, :]
         data[0, 1:] = 1
-        data[-1, 1:] = 0 # only if I use my perturbation    
-    
+        data[-1, 1:] = 0 # only if I use my perturbation   
+    #'''
+
+    num_samples = n_features-1
+    lst = []
+    for i in range(0, num_samples):
+        lst.append([0]*n_features)
+        lst[i][0] = 1
+        lst[i][n_features-i-1] = 1
+    data = np.array(lst).reshape((num_samples, n_features))
+
+    labels = []
+     
     imgs = []
     rows = data
     for row in rows:

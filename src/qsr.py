@@ -33,6 +33,27 @@ models = []
 init = True
 triples = []
 marker_array_msg = MarkerArray()
+marker_array_orients_msg = MarkerArray()
+
+# convert orientation quaternion to euler angles
+def quaternion_to_euler(x, y, z, w):
+    # roll (x-axis rotation)
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    # pitch (y-axis rotation)
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+
+    # yaw (z-axis rotation)
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return [yaw, pitch, roll]
 
 def updateRefSys():
     global ORIGIN_pos, ORIGIN_name, RELATUM_pos, RELATUM_name, R, angle_ref
@@ -45,23 +66,80 @@ def updateRefSys():
     #print('angle_ref = ', angle_ref)
     #print('angle_ref (in deg) = ', angle_ref * 180 / PI)
     
-def reason():
-    pass
+def reason(states_msg):
+    global ORIGIN_name, RELATUM_name, origin_name, relatum_name, referent_name
+    # ABC and ABD -> BCD, we must choose C
+    A_name = ORIGIN_name
+    B_name = RELATUM_name
+    #C_name = 
+    D_name = referent_name
+    
+    # choose C first one that is different from A, B and D
+    for i in range(0, len(states_msg.name)):
+        if states_msg.name[i] != A_name and states_msg.name[i] != B_name and states_msg.name[i] != D_name:
+            C_name = states_msg.name[i]
+            break
+
+    if C_name == '':
+        return 0
+
+    # do ABC
+
+    # do BCD
 
 def printTriples(triples):
     for t in triples:
         print(t)
 
 def model_state_callback(states_msg):
-    global triples, init, pose, twist, ORIGIN_pos, ORIGIN_name, RELATUM_pos, RELATUM_name, R, angle_ref, qsr_choice, marker_array_msg 
+    global triples, init, pose, twist, ORIGIN_pos, ORIGIN_name, RELATUM_pos, RELATUM_name, R, angle_ref, qsr_choice, marker_array_msg, marker_array_orients_msg, pub_markers_orients 
     global origin_name, origin_pos, relatum_name, relatum_pos, referent_name, referent_pos,referents_poss, referents_names, tpcc_dict, tpcc_dict_inv, PI, pub_markers, I
 
     referents_poss = []
     referents_names = []
     marker_array_msg.markers = []
+    marker_array_orients_msg.markers = []
     
 
     for i in range(0, len(states_msg.name)):
+        # get orientations of the objects/models
+        #print('\nstates_msg.name[i] = ', states_msg.name[i])
+        #print('states_msg.pose[i] = ', states_msg.pose[i])
+        [yaw, pitch, roll] = quaternion_to_euler(states_msg.pose[i].orientation.x, states_msg.pose[i].orientation.y, states_msg.pose[i].orientation.z, states_msg.pose[i].orientation.w)
+        #print('[yaw, pitch, roll] = ', [yaw, pitch, roll])
+        if yaw > 2*PI:
+            while yaw > 2*PI:
+                yaw -= 2*PI
+        elif yaw < -2*PI:
+            while yaw < -2*PI:
+                yaw += 2*PI
+        #print('[yaw, pitch, roll] = ', [yaw, pitch, roll])
+        #print('YAW in DEG = ', yaw * 180.0 / PI)
+        marker = Marker()
+        marker.header.frame_id = 'map'
+        marker.id = i
+        marker.type = marker.ARROW
+        marker.action = marker.ADD
+        marker.pose = Pose()
+        marker.pose.position.x = states_msg.pose[i].position.x
+        marker.pose.position.y = states_msg.pose[i].position.y
+        marker.pose.position.z = 2.0
+        marker.pose.orientation.x = states_msg.pose[i].orientation.x
+        marker.pose.orientation.y = states_msg.pose[i].orientation.y
+        marker.pose.orientation.z = states_msg.pose[i].orientation.z
+        marker.pose.orientation.w = states_msg.pose[i].orientation.w
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+        marker.scale.x = 0.8
+        marker.scale.y = 0.3
+        marker.scale.z = 0.1
+        #marker.frame_locked = False
+        marker.ns = "my_namespace"
+        if marker not in marker_array_orients_msg.markers:
+            marker_array_orients_msg.markers.append(marker)
+
         if states_msg.name[i] == 'ground_plane':
             continue
         elif states_msg.name[i] == ORIGIN_name:
@@ -243,13 +321,16 @@ def model_state_callback(states_msg):
         triples.append(ORIGIN_name + ',' + RELATUM_name + ' ' + value + ' ' + referents_names[i])
 
     pub_markers.publish(marker_array_msg)
+    pub_markers_orients.publish(marker_array_orients_msg)
 
     I += 1
     # print triples
     if I == 100:
-        print('\n\n')
-        printTriples(triples)
+        #print('\n\n')
+        #printTriples(triples)
         I = 0
+
+    #reason(states_msg)
 
 def defineQsrCalculus(qsr_choice):
     global tpcc_dict, tpcc_dict_inv, R
@@ -359,24 +440,17 @@ def RELATUM_callback(msg):
     #marker_array_msg.markers = []
     RELATUM_name = copy.deepcopy(msg.data)
    
-def origin_callback(msg):
-    print('\nreceived origin string: ' + msg.data)
-    global origin_name
-    origin_name = copy.deepcopy(msg.data)
-    reason()
-
-def relatum_callback(msg):
-    print('\nreceived relatum string: ' + msg.data)
-    global relatum_name
-    relatum_name = copy.deepcopy(msg.data)
-    reason()
-
-def referent_callback(msg):
-    print('\nreceived referent string: ' + msg.data)
-    global referent_name
-    referent_name = copy.deepcopy(msg.data)
-    reason()
-
+def triple_callback(msg):
+    print('\nreceived triple string: ' + msg.data)
+    global origin_name, relatum_name, referent_name
+    strings = msg.data.split(',', -1)
+    origin_name = strings[0]
+    print('origin_name = ', origin_name)
+    relatum_name = strings[1]
+    print('relatum_name = ', relatum_name)
+    referent_name = strings[2]
+    print('referent_name = ', referent_name)
+    
 
 
 # choose qsr calculus [0,4]
@@ -390,14 +464,14 @@ rospy.init_node('qsr', anonymous=True)
 sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, model_state_callback)
 
 pub_markers = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
+pub_markers_orients = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
 
 sub_ORIGIN = rospy.Subscriber("/ORIGIN", String, ORIGIN_callback)
 sub_RELATUM = rospy.Subscriber("/RELATUM", String, RELATUM_callback)
-sub_origin = rospy.Subscriber("/origin", String, origin_callback)
-sub_relatum = rospy.Subscriber("/relatum", String, relatum_callback)
-sub_referent = rospy.Subscriber("/referent", String, referent_callback)
 #rostopic pub /ORIGIN std_msgs/String 'cabinet'
 #rostopic pub /RELATUM std_msgs/String 'tiago'
+sub_triple = rospy.Subscriber("/triple", String, triple_callback)
+#rostopic pub /triple std_msgs/String 'cabinet,tiago,wall_1_model'
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
