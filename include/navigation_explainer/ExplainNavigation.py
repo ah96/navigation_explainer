@@ -1455,7 +1455,7 @@ class ExplainRobotNavigation:
         # original_deviation for small_deviation = 69.0
         # original_deviation for rotate_in_place = 307.4962940090125
 
-        plot_perturbations = False
+        plot_perturbations = True
         if plot_perturbations == True:
             # only needed for classifier_fn_image_plot() function
             self.sampled_instance = sampled_instance
@@ -2410,43 +2410,33 @@ class ExplainRobotNavigation:
         fig.clf()
                         
         if self.semantic_seg == False:
-            # plot segments with centroids and labels/weights
+            # plot segments with weights
+            #self.segments += 1
+            regions = regionprops(self.segments.astype(int))
+            labels = []
+            for props in regions:
+                labels.append(props.label)
             fig = plt.figure(frameon=False)
             w = 1.6*3
             h = 1.6*3
             fig.set_size_inches(w, h)
             ax = plt.Axes(fig, [0., 0., 1., 1.])
             ax.set_axis_off()
-            fig.add_axes(ax)
-            ax.imshow(self.segments, aspect='auto')
-
-            #'''
-            self.segments += 1
-            #print('self.exp: ', self.exp)
-            #print('np.unique(self.segments): ', np.unique(self.segments))
-            #'''
-            regions = regionprops(self.segments.astype(int))
-            #'''
-            labels = []
-            for props in regions:
-                labels.append(props.label)
-            #print('labels: ', labels)
-            #'''    
-            i = 0
+            fig.add_axes(ax)    
             for props in regions:
                 v = props.label  # value of label
                 cx, cy = props.centroid  # centroid coordinates
                 ax.scatter(cy, cx, c='white', marker='o')   
                 # printing/plotting explanation weights
                 for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v - 1:
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)), c='white')  # str(round(self.exp[j][1],4)) #str(v))
+                    if self.exp[j][0] == v-1:
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='black')  # str(round(self.exp[j][1],4)) #str(v))
                         break
-                i = i + 1
-
             # Save segments with nice numbering as a picture
+            ax.imshow(self.segments, aspect='auto')
             fig.savefig(path_core + '/weighted_segments.png')
-            fig.clf()                
+            fig.clf()
+            self.segments -= 1                
 
         elif self.semantic_seg == True:
             #semantic_map_1 = np.array(pd.read_csv('~/amar_ws/semantic_map_1.csv'))
