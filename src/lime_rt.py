@@ -29,6 +29,8 @@ from sensor_msgs import point_cloud2
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 import struct
+from skimage.measure import regionprops
+from std_msgs.msg import Float32MultiArray
 
 free_space_shade = 0# 180
 obstacle_shade = 99 #255
@@ -1100,6 +1102,29 @@ def local_costmap_callback(msg):
     pub_exp_pointcloud.publish(pc2)
     #rospy.sleep(1.0)
 
+    transf = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+    exp_with_centroids = Float32MultiArray()
+    #segments += 1
+    regions = regionprops(segments.astype(int))
+    for props in regions:
+        v = props.label  # value of label
+        cx, cy = props.centroid  # centroid coordinates
+        for j in range(0, len(exp)):
+            if exp[j][0] == v - 1:
+                cx = cx*localCostmapResolution + localCostmapOriginX
+                cy = cy*localCostmapResolution + localCostmapOriginY
+                p = np.array([cx, cy, 0.0])
+                t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+                r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+                r_ = np.asarray(r.as_matrix())
+                pnew = p.dot(r_) + t
+                exp_with_centroids.data.append(exp[j][1])
+                exp_with_centroids.data.append(pnew[0])
+                exp_with_centroids.data.append(pnew[1])
+                break
+    pub_lime.publish(exp_with_centroids)
+
+
 
 # Define a callback for the local plan
 def odom_callback(msg):
@@ -1170,8 +1195,8 @@ def footprint_callback(msg):
 def amcl_callback(msg):
     global amcl_pose_tmp
     amcl_pose_tmp = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
-    
 
+    
 # Initialize the ROS Node named 'get_model_state', allow multiple nodes to be run with this name
 rospy.init_node('lime_rt', anonymous=True)
 
@@ -1196,6 +1221,8 @@ pub_exp_image = rospy.Publisher('/lime_explanation_image', Image, queue_size=10)
 br = CvBridge()
 
 pub_exp_pointcloud = rospy.Publisher("/local_explanation_layer", PointCloud2)
+
+pub_lime = rospy.Publisher("/lime_exp", Float32MultiArray, queue_size=10)
 
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
