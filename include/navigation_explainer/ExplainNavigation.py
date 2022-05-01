@@ -232,9 +232,10 @@ class ExplainRobotNavigation:
                         
                         # get explanation image
                         self.temp_img, self.exp = self.explanation.get_image_and_mask(label=0)
+                        print('self.exp = ', self.exp)
 
                         # Qualitative Spatial Reasoning
-                        self.QSR()            
+                        #self.QSR()            
                         
                         if self.plot == True:
                             plotting_time_start = time.time()
@@ -1432,7 +1433,7 @@ class ExplainRobotNavigation:
         #end_transformed = time.time()
         #transformed_time = end_transformed - start_transformed
         #print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
-
+        
         # calculate original deviation - sum of minimal point-to-point distances
         original_deviation = -1.0
         diff_x = 0
@@ -1440,7 +1441,6 @@ class ExplainRobotNavigation:
         devs = []
         for j in range(0, len(self.local_plan_x_list)):
             local_diffs = []
-            deviation_local = True  
             for k in range(0, len(self.transformed_plan_xs)):
                 diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
                 diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
@@ -2143,6 +2143,8 @@ class ExplainRobotNavigation:
                     #print('\ndist_raw = ', self.local_plan_deviation.iloc[i, 0])
                     #self.local_plan_deviation.iloc[i, 0] = math.sqrt(dist[0,0]**2+dist[1,1]**2)
                     #print('\ndist = ', self.local_plan_deviation.iloc[i, 0])
+
+        print(self.local_plan_deviation)
 
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')

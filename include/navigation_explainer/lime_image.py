@@ -351,42 +351,37 @@ class LimeImageExplainer(object):
         #print('data.shape: ', data.shape)
         '''
 
-        '''
-        # My perturbation - test all possible combinations
-        num_samples = 2 ** n_features
-        import itertools
-        lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-        data = np.array(lst).reshape((num_samples, n_features))
-        show_free_space = False
+        test_all_comb = False
 
-        if show_free_space == True:
-            data[0, :] = 1
-            data[-1, :] = 0 # only if I use my perturbation
+        if test_all_comb == True:
+            # My perturbation - test all possible combinations
+            num_samples = 2 ** n_features
+            import itertools
+            lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
+            data = np.array(lst).reshape((num_samples, n_features))
+            show_free_space = False
+
+            if show_free_space == True:
+                data[0, :] = 1
+                data[-1, :] = 0 # only if I use my perturbation
+            else:
+                data = data[int(data.shape[0]/2):, :]
+                data[0, 1:] = 1
+                data[-1, 1:] = 0 # only if I use my perturbation    
+            print('data = ', data)
+            print('data.shape = ', data.shape)
         else:
-            data = data[int(data.shape[0]/2):, :]
-            data[0, 1:] = 1
-            data[-1, 1:] = 0 # only if I use my perturbation    
-        print('data = ', data)
-        print('data.shape = ', data.shape)
-        '''
-
-        #'''
-        # My perturbation - n_features perturbations - only 1 segment active per perturbation
-        num_samples = n_features-1
-        lst = []
-        #lst.append([1]*n_features)
-        for i in range(0, num_samples):
-            lst.append([0]*n_features)
-            lst[i][0] = 1
-            lst[i][n_features-i-1] = 1    
-        print('data = ', lst)
-        data = np.array(lst).reshape((num_samples, n_features))
-        print('data = ', data)
-        #data = data[2:, :]
-        #print('data = ', data)
-        #data = data[:,1:]
-        #print('data = ', data)
-        #'''
+            # My perturbation - n_features perturbations - only 1 segment active per perturbation
+            num_samples = n_features
+            lst = [[1]*n_features]
+            for i in range(1, num_samples):
+                lst.append([1]*n_features)
+                lst[i][n_features-i] = 0    
+            data = np.array(lst).reshape((num_samples, n_features))
+            print('data = ', data)
+            #to_add = np.array([1]*n_features).reshape(1,n_features)
+            #data = np.concatenate((to_add,data))
+            #print('data = ', data)
     
         labels = []
 

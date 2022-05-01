@@ -25,8 +25,10 @@ import os
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import lime_base
-
-
+from sensor_msgs import point_cloud2
+from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
+import struct
 
 free_space_shade = 0# 180
 obstacle_shade = 99 #255
@@ -57,6 +59,31 @@ localCostmapResolution = 0
 start = time.time()
 end = time.time()
 
+#'''
+kernel_width=.25
+kernel=None
+feature_selection='auto'
+random_state=None
+verbose=True
+kernel_width = float(kernel_width)
+if kernel is None:
+    def kernel(d, kernel_width):
+        return np.sqrt(np.exp(-(d ** 2) / kernel_width ** 2))
+kernel_fn = partial(kernel, kernel_width=kernel_width)
+random_state = check_random_state(random_state)    
+feature_selection = feature_selection
+base = lime_base.LimeBase(kernel_fn, verbose, random_state=random_state)
+#'''
+
+
+fields = [PointField('x', 0, PointField.FLOAT32, 1),
+        PointField('y', 4, PointField.FLOAT32, 1),
+        PointField('z', 8, PointField.FLOAT32, 1),
+        PointField('rgba', 12, PointField.UINT32, 1),
+        ]
+
+header = Header()
+    
 class ImageExplanation(object):
     def __init__(self, image, segments):
         self.image = image
@@ -444,7 +471,7 @@ def sm_only_obstacles(image, img_rgb, x_odom, y_odom, plan_x_list, plan_y_list):
         seg_labels = np.unique(segments)[1:]        
 
         num_of_seg = len(seg_labels)
-        num_of_wanted_seg = 6
+        num_of_wanted_seg = 8
 
         #print('\nnumber of wanted segments: ', num_of_wanted_seg)
         #print('number of current segments: ', num_of_seg)
@@ -860,28 +887,11 @@ def data_labels(image,
 
     n_features = np.unique(segments).shape[0]
 
-    #'''
-    # My perturbation - test all possible combinations
-    #num_samples = 2 ** n_features
-    #lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-    #data = np.array(lst).reshape((num_samples, n_features))
-    show_free_space = False
-
-    if show_free_space == True:
-        data[0, :] = 1
-        data[-1, :] = 0 # only if I use my perturbation
-    else:
-        data = data[int(data.shape[0]/2):, :]
-        data[0, 1:] = 1
-        data[-1, 1:] = 0 # only if I use my perturbation   
-    #'''
-
-    num_samples = n_features-1
-    lst = []
-    for i in range(0, num_samples):
-        lst.append([0]*n_features)
-        lst[i][0] = 1
-        lst[i][n_features-i-1] = 1
+    num_samples = n_features
+    lst = [[1]*n_features]
+    for i in range(1, num_samples):
+        lst.append([1]*n_features)
+        lst[i][n_features-i] = 0    
     data = np.array(lst).reshape((num_samples, n_features))
 
     labels = []
@@ -912,11 +922,13 @@ def data_labels(image,
 def local_costmap_callback(msg):
     #print('\nlocal_costmap')
 
-    global free_space_shade, obstacle_shade, start, end, odom_x, odom_y, transformed_plan_xs, transformed_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, costmap_info_tmp
+    global pub_exp_pointcloud, base, free_space_shade, obstacle_shade, start, end, odom_x, odom_y 
+    global transformed_plan_xs, transformed_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, costmap_info_tmp
+    global header, fields
 
-    end = time.time()
-    print('TIME AVAILABLE BETWEEN TWO COSTMAPS = ', end - start)
-    start = end
+    #end = time.time()
+    #print('TIME AVAILABLE BETWEEN TWO COSTMAPS = ', end - start)
+    #start = end
 
     localCostmapOriginX = msg.info.origin.position.x
     localCostmapOriginY = msg.info.origin.position.y
@@ -927,7 +939,7 @@ def local_costmap_callback(msg):
     image = np.asarray(msg.data)
     image.resize((msg.info.height,msg.info.width))
 
-    print('image.shape = ', image.shape)
+    #print('image.shape = ', image.shape)
 
     SaveImageDataForLocalPlanner()
 
@@ -1015,22 +1027,6 @@ def local_costmap_callback(msg):
     num_features=100000
     feature_selection='auto'
 
-    #'''
-    kernel_width=.25
-    kernel=None
-    feature_selection='auto'
-    random_state=None
-    verbose=True
-    kernel_width = float(kernel_width)
-    if kernel is None:
-        def kernel(d, kernel_width):
-            return np.sqrt(np.exp(-(d ** 2) / kernel_width ** 2))
-    kernel_fn = partial(kernel, kernel_width=kernel_width)
-    random_state = check_random_state(random_state)    
-    feature_selection = feature_selection
-    base = lime_base.LimeBase(kernel_fn, verbose, random_state=random_state)
-    #'''
-
     ret_exp = ImageExplanation(image_rgb, segments)
     if top_labels:
         top = np.argsort(labels[0])[-top_labels:]
@@ -1044,12 +1040,9 @@ def local_costmap_callback(msg):
             data, labels, distances, label, num_features,
             model_regressor=model_regressor,
             feature_selection=feature_selection)
-    
-    #return ret_exp, segments
-    #print('\nexplanation = ', ret_exp)
 
     # get explanation image
-    temp_img, exp = ret_exp.get_image_and_mask(label=0)
+    output, exp = ret_exp.get_image_and_mask(label=0)
     print('\nexp = ', exp)
 
     '''
@@ -1072,15 +1065,44 @@ def local_costmap_callback(msg):
     fig.clf()
     '''
 
-    print('\ntemp_img.shape = ', temp_img.shape)
-    output_cv = br.cv2_to_imgmsg(temp_img.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
+    output = output[:, :, [2, 1, 0]]
+
+    # publish explanation layer
+    #points_start = time.time()
+    z = 0.0
+    a = 255                    
+    points = []
+    for i in range(0, 160):
+        for j in range(0, 160):
+            x = localCostmapOriginX + i * localCostmapResolution
+            y = localCostmapOriginY + j * localCostmapResolution
+            r = int(output[j, i, 2])
+            g = int(output[j, i, 1])
+            b = int(output[j, i, 0])
+            rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+            pt = [x, y, z, rgb]
+            points.append(pt)
+    #points_end = time.time()
+    #print('\npoints_time = ', points_end - points_start)
+
+
+    output[:,:,0] = np.flip(output[:,:,0], axis=1)
+    output[:,:,1] = np.flip(output[:,:,1], axis=1)
+    output[:,:,2] = np.flip(output[:,:,2], axis=1)
+    #print('\nBGR time = ', end_bgr - start_bgr)
+    output_cv = br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
     pub_exp_image.publish(output_cv)
+
+
+    header.frame_id = 'odom'
+    pc2 = point_cloud2.create_cloud(header, fields, points)
+    pc2.header.stamp = rospy.Time.now()
+    pub_exp_pointcloud.publish(pc2)
+    #rospy.sleep(1.0)
 
 
 # Define a callback for the local plan
 def odom_callback(msg):
-    #print('\nodom')
-
     global odom_x, odom_y, odom_tmp
 
     odom_x = msg.pose.pose.position.x
@@ -1089,26 +1111,15 @@ def odom_callback(msg):
 
 # Define a callback for the global plan
 def global_plan_callback(msg):
-    #print('\nglobal_plan started')
-    
     global global_plan_xs, global_plan_ys, odom_x, odom_y, transformed_plan_xs, transformed_plan_ys, plan_tmp, global_plan_tmp, tf_odom_map_tmp, tf_map_odom_tmp 
     global_plan_xs = [] 
     global_plan_ys = []
     global_plan_tmp = []
     plan_tmp = []
+    transformed_plan_xs = []
+    transformed_plan_ys = []
 
-    #global_plan_position_x,global_plan_position_y,global_plan_orientation_z,global_plan_orientation_w
-
-    for i in range(0,len(msg.poses)):
-        global_plan_xs.append(msg.poses[i].pose.position.x) 
-        global_plan_ys.append(msg.poses[i].pose.position.y)
-        global_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-        plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-
-    #print('\nglobal_plan finished')    
-    #return 0
-
-    # catch transform from /map to /odom
+    # catch transform from /map to /odom and vice versa
     transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
     t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
     r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
@@ -1119,26 +1130,21 @@ def global_plan_callback(msg):
     tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
     tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
 
-    # transform global plan to from /map to /odom
-    transformed_plan_xs = []
-    transformed_plan_ys = []
-    #global_plan_start = time.time()
-    for i in range(0, len(global_plan_xs)):
-        p = np.array([global_plan_xs[i], global_plan_ys[i], 0.0])
+    for i in range(0,len(msg.poses)):
+        global_plan_xs.append(msg.poses[i].pose.position.x) 
+        global_plan_ys.append(msg.poses[i].pose.position.y)
+        global_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+        plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+        p = np.array([global_plan_xs[-1], global_plan_ys[-1], 0.0])
         pnew = p.dot(r_) + t
         x_temp = round((pnew[0] - localCostmapOriginX) / localCostmapResolution)
         y_temp = round((pnew[1] - localCostmapOriginY) / localCostmapResolution)
         if 0 <= x_temp < 160 and 0 <= y_temp < 160:
             transformed_plan_xs.append(x_temp)
             transformed_plan_ys.append(y_temp)
-    #global_plan_end = time.time()
-    #print('global_plan_transform_time = ', global_plan_end - global_plan_start)
-
 
 # Define a callback for the local plan
 def local_plan_callback(msg):
-    #print('\nglobal_plan started')
-    
     global local_plan_tmp, local_plan_x_list, local_plan_y_list
     local_plan_x_list = [] 
     local_plan_y_list = [] 
@@ -1146,7 +1152,7 @@ def local_plan_callback(msg):
 
     for i in range(0,len(msg.poses)):
         local_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-        
+
         x_temp = int((msg.poses[i].pose.position.x - localCostmapOriginX) / localCostmapResolution)
         y_temp = int((msg.poses[i].pose.position.y - localCostmapOriginY) / localCostmapResolution)
         if 0 <= x_temp < 160 and 0 <= y_temp < 160:
@@ -1155,11 +1161,8 @@ def local_plan_callback(msg):
         
 # Define a callback for the footprint
 def footprint_callback(msg):
-    #print('\nglobal_plan started')
-    
     global footprint_tmp 
     footprint_tmp = []
-
     for i in range(0,len(msg.polygon.points)):
         footprint_tmp.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
         
@@ -1191,6 +1194,8 @@ sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", Occupan
 
 pub_exp_image = rospy.Publisher('/lime_explanation_image', Image, queue_size=10)
 br = CvBridge()
+
+pub_exp_pointcloud = rospy.Publisher("/local_explanation_layer", PointCloud2)
 
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
