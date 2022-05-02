@@ -432,8 +432,8 @@ def model_state_callback(states_msg):
     #reason(states_msg)
 
     # append lime coefficients to the objects
-    objects_names = []
-    objects_coeffs = []
+    lime_names = []
+    lime_coeffs = []
     for exp in lime_exp:
         mini = math.sqrt( (exp[1] - referents_poss[0][0])**2 + (exp[2] - referents_poss[0][1])**2 )
         id = 0
@@ -442,21 +442,21 @@ def model_state_callback(states_msg):
             if dist < mini:
                 mini = dist
                 id = j
-        if referents_names[id] not in objects_names:
-            objects_names.append(referents_names[id])
-            objects_coeffs.append([exp[0]])
+        if referents_names[id] not in lime_names:
+            lime_names.append(referents_names[id])
+            lime_coeffs.append([exp[0]])
         else:
-            index = objects_names.index(referents_names[id])
-            objects_coeffs[index].append([exp[0]])    
+            index = lime_names.index(referents_names[id])
+            lime_coeffs[index].append(exp[0])    
     
-    for j in range(0, len(objects_names)):
-        if len(objects_coeffs[j]) == 1:
-            print(objects_names[j] + ' has a weight ' + str(objects_coeffs[j][0]))
-        elif len(objects_coeffs[j]) > 1:
+    for j in range(0, len(lime_names)):
+        if len(lime_coeffs[j]) == 1:
+            print(lime_names[j] + ' has a weight ' + str(lime_coeffs[j][0]))
+        elif len(lime_coeffs[j]) > 1:
             s = ''
-            for c in objects_coeffs[j]:
+            for c in lime_coeffs[j]:
                 s += str(c) + ', '
-            print(objects_names[j] + ' has weights ' + s)    
+            print(lime_names[j] + ' has weights ' + s)    
 
 
 def ORIGIN_callback(msg):
@@ -484,6 +484,7 @@ def triple_callback(msg):
 
 def lime_callback(msg):
     global lime_exp
+    lime_exp = []
     for i in range(1, int(len(msg.data)/3)):
         lime_exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
     #print("LIME = ", lime_exp)
