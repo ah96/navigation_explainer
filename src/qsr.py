@@ -38,6 +38,102 @@ marker_array_msg = MarkerArray()
 marker_array_orients_msg = MarkerArray()
 lime_exp = []
 
+def defineQsrCalculus(qsr_choice):
+    global tpcc_dict, tpcc_dict_inv, R
+
+    if qsr_choice == 0:
+        # left -- right dichotomy in a relative refence system
+        # from 'moratz2008qualitative'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'left': 0,
+            'right': 1
+        }
+
+    elif qsr_choice == 1:
+        # single cross calculus from 'moratz2008qualitative'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'left/front': 0,
+            'right/front': 1,
+            'left/back': 2,
+            'right/back': 3
+        }
+
+    elif qsr_choice == 2:
+        # TPCC reference system
+        # my modified version from 'moratz2008qualitative'
+        # used for getting semantic costmap
+        if R == 0:
+            tpcc_dict = {
+                'sb': 0,
+                'lb': 1,
+                'bl': 2,
+                'sl': 3,
+                'fl': 4,
+                'lf': 5,
+                'sf': 6,
+                'rf': 7,
+                'fr': 8,
+                'sr': 9,
+                'br': 10,
+                'rb': 11
+            }
+        else:
+            tpcc_dict = {
+                'csb': 0,
+                'clb': 1,
+                'cbl': 2,
+                'csl': 3,
+                'cfl': 4,
+                'clf': 5,
+                'csf': 6,
+                'crf': 7,
+                'cfr': 8,
+                'csr': 9,
+                'cbr': 10,
+                'crb': 11,
+                'dsb': 12,
+                'dlb': 13,
+                'dbl': 14,
+                'dsl': 15,
+                'dfl': 16,
+                'dlf': 17,
+                'dsf': 18,
+                'drf': 19,
+                'dfr': 20,
+                'dsr': 21,
+                'dbr': 22,
+                'drb': 23
+            }
+
+    elif qsr_choice == 3:
+        # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'front': 0,
+            'left': 1,
+            'back': 2,
+            'right': 3
+        }
+
+    elif qsr_choice == 4:
+        # Model for combined expressions from 'moratz2002spatial'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'left-front': 0,
+            'left-back': 1,
+            'right-front': 2,
+            'right-back': 3,
+            'straight-front': 4,
+            'exactly-left': 5,
+            'straight-back': 6,
+            'exactly-right': 7
+        }    
+
+    # used for deriving NLP annotations
+    tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+
 # convert orientation quaternion to euler angles
 def quaternion_to_euler(x, y, z, w):
     # roll (x-axis rotation)
@@ -95,7 +191,7 @@ def printTriples(triples):
         print(t)
 
 def model_state_callback(states_msg):
-    global triples, init, pose, twist, ORIGIN_pos, ORIGIN_name, RELATUM_pos, RELATUM_name, R, angle_ref, qsr_choice, marker_array_msg, marker_array_orients_msg, pub_markers_orients 
+    global lime_exp, triples, init, pose, twist, ORIGIN_pos, ORIGIN_name, RELATUM_pos, RELATUM_name, R, angle_ref, qsr_choice, marker_array_msg, marker_array_orients_msg, pub_markers_orients 
     global origin_name, origin_pos, relatum_name, relatum_pos, referent_name, referent_pos,referents_poss, referents_names, tpcc_dict, tpcc_dict_inv, PI, pub_markers, I
 
     referents_poss = []
@@ -335,101 +431,33 @@ def model_state_callback(states_msg):
 
     #reason(states_msg)
 
-def defineQsrCalculus(qsr_choice):
-    global tpcc_dict, tpcc_dict_inv, R
-
-    if qsr_choice == 0:
-        # left -- right dichotomy in a relative refence system
-        # from 'moratz2008qualitative'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'left': 0,
-            'right': 1
-        }
-
-    elif qsr_choice == 1:
-        # single cross calculus from 'moratz2008qualitative'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'left/front': 0,
-            'right/front': 1,
-            'left/back': 2,
-            'right/back': 3
-        }
-
-    elif qsr_choice == 2:
-        # TPCC reference system
-        # my modified version from 'moratz2008qualitative'
-        # used for getting semantic costmap
-        if R == 0:
-            tpcc_dict = {
-                'sb': 0,
-                'lb': 1,
-                'bl': 2,
-                'sl': 3,
-                'fl': 4,
-                'lf': 5,
-                'sf': 6,
-                'rf': 7,
-                'fr': 8,
-                'sr': 9,
-                'br': 10,
-                'rb': 11
-            }
+    # append lime coefficients to the objects
+    objects_names = []
+    objects_coeffs = []
+    for exp in lime_exp:
+        mini = math.sqrt( (exp[1] - referents_poss[0][0])**2 + (exp[2] - referents_poss[0][1])**2 )
+        id = 0
+        for j in range(1, len(referents_names)):
+            dist = math.sqrt( (exp[1] - referents_poss[j][0])**2 + (exp[2] - referents_poss[j][1])**2 )
+            if dist < mini:
+                mini = dist
+                id = j
+        if referents_names[id] not in objects_names:
+            objects_names.append(referents_names[id])
+            objects_coeffs.append([exp[0]])
         else:
-            tpcc_dict = {
-                'csb': 0,
-                'clb': 1,
-                'cbl': 2,
-                'csl': 3,
-                'cfl': 4,
-                'clf': 5,
-                'csf': 6,
-                'crf': 7,
-                'cfr': 8,
-                'csr': 9,
-                'cbr': 10,
-                'crb': 11,
-                'dsb': 12,
-                'dlb': 13,
-                'dbl': 14,
-                'dsl': 15,
-                'dfl': 16,
-                'dlf': 17,
-                'dsf': 18,
-                'drf': 19,
-                'dfr': 20,
-                'dsr': 21,
-                'dbr': 22,
-                'drb': 23
-            }
+            index = objects_names.index(referents_names[id])
+            objects_coeffs[index].append([exp[0]])    
+    
+    for j in range(0, len(objects_names)):
+        if len(objects_coeffs[j]) == 1:
+            print(objects_names[j] + ' has a weight ' + str(objects_coeffs[j][0]))
+        elif len(objects_coeffs[j]) > 1:
+            s = ''
+            for c in objects_coeffs[j]:
+                s += str(c) + ', '
+            print(objects_names[j] + ' has weights ' + s)    
 
-    elif qsr_choice == 3:
-        # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'front': 0,
-            'left': 1,
-            'back': 2,
-            'right': 3
-        }
-
-    elif qsr_choice == 4:
-        # Model for combined expressions from 'moratz2002spatial'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'left-front': 0,
-            'left-back': 1,
-            'right-front': 2,
-            'right-back': 3,
-            'straight-front': 4,
-            'exactly-left': 5,
-            'straight-back': 6,
-            'exactly-right': 7
-        }    
-
-    # used for deriving NLP annotations
-    tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
 
 def ORIGIN_callback(msg):
     print('\nreceived ORIGIN string:' + msg.data)
@@ -456,8 +484,9 @@ def triple_callback(msg):
 
 def lime_callback(msg):
     global lime_exp
-    for i in range(0, int(len(msg.data)/3)):
+    for i in range(1, int(len(msg.data)/3)):
         lime_exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
+    #print("LIME = ", lime_exp)
 
 
 # choose qsr calculus [0,4]
