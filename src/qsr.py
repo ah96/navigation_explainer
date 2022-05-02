@@ -8,6 +8,8 @@ import math
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String
 import copy
+from std_msgs.msg import Float32MultiArray
+
 
 I = 0
 
@@ -34,6 +36,7 @@ init = True
 triples = []
 marker_array_msg = MarkerArray()
 marker_array_orients_msg = MarkerArray()
+lime_exp = []
 
 # convert orientation quaternion to euler angles
 def quaternion_to_euler(x, y, z, w):
@@ -450,7 +453,11 @@ def triple_callback(msg):
     print('relatum_name = ', relatum_name)
     referent_name = strings[2]
     print('referent_name = ', referent_name)
-    
+
+def lime_callback(msg):
+    global lime_exp
+    for i in range(0, int(len(msg.data)/3)):
+        lime_exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
 
 
 # choose qsr calculus [0,4]
@@ -472,6 +479,9 @@ sub_RELATUM = rospy.Subscriber("/RELATUM", String, RELATUM_callback)
 #rostopic pub /RELATUM std_msgs/String 'tiago'
 sub_triple = rospy.Subscriber("/triple", String, triple_callback)
 #rostopic pub /triple std_msgs/String 'cabinet,tiago,wall_1_model'
+
+sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, lime_callback)
+
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
