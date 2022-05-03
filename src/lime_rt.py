@@ -52,6 +52,12 @@ tf_odom_map_tmp = []
 tf_map_odom_tmp = [] 
 odom_tmp = []
 
+image_rgb = np.array([]) 
+segments = np.array([])
+labels = np.array([]) 
+data = np.array([]) 
+distances = np.array([])
+
 odom_x = 0
 odom_y = 0
 localCostmapOriginX = 0 
@@ -927,6 +933,7 @@ def local_costmap_callback(msg):
     global pub_exp_pointcloud, base, free_space_shade, obstacle_shade, start, end, odom_x, odom_y 
     global transformed_plan_xs, transformed_plan_ys, localCostmapOriginX, localCostmapOriginY, localCostmapResolution, costmap_info_tmp
     global header, fields
+    global image_rgb, segments, labels, data, distances
 
     #end = time.time()
     #print('TIME AVAILABLE BETWEEN TWO COSTMAPS = ', end - start)
@@ -941,64 +948,17 @@ def local_costmap_callback(msg):
     image = np.asarray(msg.data)
     image.resize((msg.info.height,msg.info.width))
 
-    #print('image.shape = ', image.shape)
-
     SaveImageDataForLocalPlanner()
 
-    #pd.DataFrame(image).to_csv('COSTMAP.CSV')
-    
-    '''
-    fig = plt.figure(frameon=False)
-    w = 1.6 * 3
-    h = 1.6 * 3
-    fig.set_size_inches(w, h)
-    ax = plt.Axes(fig, [0., 0., 1.0, 1.0])
-    ax.set_axis_off()
-    fig.add_axes(ax)
-    ax.imshow(image.astype('float64'), aspect='auto')
-    fig.savefig('COSTMAP_0.png', transparent=False)
-    fig.clf()
-    '''
-
     # Turn inflated area to free space and 100s to 99s
-    #image[image >= 99] = obstacle_shade
-    #image[image <= 98] = free_space_shade
     image[image == 100] = 99
     image[image <= 98] = 0
 
     # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
     image = image * 1.0
 
-    '''
-    fig = plt.figure(frameon=False)
-    w = 1.6 * 3
-    h = 1.6 * 3
-    fig.set_size_inches(w, h)
-    ax = plt.Axes(fig, [0., 0., 1.0, 1.0])
-    ax.set_axis_off()
-    fig.add_axes(ax)
-    ax.imshow(image.astype('float64'), aspect='auto')
-    fig.savefig('COSTMAP_1.png', transparent=False)
-    fig.clf()
-    '''
-
     image_rgb = gray2rgb(image)
     #image = np.stack(3 * (image,), axis=-1)
-
-    #print('image.shape = ', image.shape)
-
-    '''
-    fig = plt.figure(frameon=False)
-    w = 1.6 * 3
-    h = 1.6 * 3
-    fig.set_size_inches(w, h)
-    ax = plt.Axes(fig, [0., 0., 1.0, 1.0])
-    ax.set_axis_off()
-    fig.add_axes(ax)
-    ax.imshow(image.astype('float64'), aspect='auto')
-    fig.savefig('COSTMAP_2.png', transparent=False)
-    fig.clf()
-    '''
 
     # save indices of robot's odometry location in local costmap to class variables
     x_odom_index = round((odom_x - localCostmapOriginX) / localCostmapResolution)
@@ -1024,6 +984,70 @@ def local_costmap_callback(msg):
         metric=distance_metric
     ).ravel()
 
+# Define a callback for the local plan
+def odom_callback(msg):
+    global odom_x, odom_y, odom_tmp
+
+    odom_x = msg.pose.pose.position.x
+    odom_y = msg.pose.pose.position.y
+    odom_tmp = [odom_x, odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+
+# Define a callback for the global plan
+def global_plan_callback(msg):
+    global global_plan_xs, global_plan_ys, odom_x, odom_y, transformed_plan_xs, transformed_plan_ys, plan_tmp, global_plan_tmp, tf_odom_map_tmp, tf_map_odom_tmp 
+    global_plan_xs = [] 
+    global_plan_ys = []
+    global_plan_tmp = []
+    plan_tmp = []
+    transformed_plan_xs = []
+    transformed_plan_ys = []
+
+    # catch transform from /map to /odom and vice versa
+    transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+    t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+    r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+    r_ = np.asarray(r.as_matrix())
+
+    transf_ = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+
+    tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
+    tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
+
+    for i in range(0,len(msg.poses)):
+        global_plan_xs.append(msg.poses[i].pose.position.x) 
+        global_plan_ys.append(msg.poses[i].pose.position.y)
+        global_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+        plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+        p = np.array([global_plan_xs[-1], global_plan_ys[-1], 0.0])
+        pnew = p.dot(r_) + t
+        x_temp = round((pnew[0] - localCostmapOriginX) / localCostmapResolution)
+        y_temp = round((pnew[1] - localCostmapOriginY) / localCostmapResolution)
+        if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+            transformed_plan_xs.append(x_temp)
+            transformed_plan_ys.append(y_temp)
+
+# Define a callback for the local plan
+def local_plan_callback(msg):
+    global local_plan_tmp, local_plan_x_list, local_plan_y_list
+    global localCostmapOriginX, localCostmapOriginY, localCostmapResolution
+
+    local_plan_x_list = [] 
+    local_plan_y_list = [] 
+    local_plan_tmp = []
+
+    for i in range(0,len(msg.poses)):
+        local_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+
+        x_temp = int((msg.poses[i].pose.position.x - localCostmapOriginX) / localCostmapResolution)
+        y_temp = int((msg.poses[i].pose.position.y - localCostmapOriginY) / localCostmapResolution)
+        if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+            local_plan_x_list.append(x_temp)
+            local_plan_y_list.append(y_temp)
+
+    
+    # Explanation part
+    global image_rgb, segments, labels, data, distances
+
     top_labels=10
     model_regressor = None
     num_features=100000
@@ -1046,26 +1070,6 @@ def local_costmap_callback(msg):
     # get explanation image
     output, exp = ret_exp.get_image_and_mask(label=0)
     print('\nexp = ', exp)
-
-    '''
-    path_core = os.getcwd()
-    # plot explanation
-    fig = plt.figure(frameon=True)
-    w = 1.6
-    h = 1.6
-    fig.set_size_inches(w, h)
-    ax = plt.Axes(fig, [0., 0., 1., 1.])
-    ax.set_axis_off()
-    fig.add_axes(ax)
-    
-    ax.scatter(transformed_plan_xs, transformed_plan_ys, c='blue', marker='o')
-    ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
-    ax.scatter(x_odom_index, y_odom_index, c='white', marker='o')
-
-    ax.imshow(temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
-    fig.savefig(path_core + '/explanation.png', transparent=False)
-    fig.clf()
-    '''
 
     output = output[:, :, [2, 1, 0]]
 
@@ -1123,66 +1127,6 @@ def local_costmap_callback(msg):
                 exp_with_centroids.data.append(pnew[1])
                 break
     pub_lime.publish(exp_with_centroids)
-
-
-
-# Define a callback for the local plan
-def odom_callback(msg):
-    global odom_x, odom_y, odom_tmp
-
-    odom_x = msg.pose.pose.position.x
-    odom_y = msg.pose.pose.position.y
-    odom_tmp = [odom_x, odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
-
-# Define a callback for the global plan
-def global_plan_callback(msg):
-    global global_plan_xs, global_plan_ys, odom_x, odom_y, transformed_plan_xs, transformed_plan_ys, plan_tmp, global_plan_tmp, tf_odom_map_tmp, tf_map_odom_tmp 
-    global_plan_xs = [] 
-    global_plan_ys = []
-    global_plan_tmp = []
-    plan_tmp = []
-    transformed_plan_xs = []
-    transformed_plan_ys = []
-
-    # catch transform from /map to /odom and vice versa
-    transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
-    t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
-    r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
-    r_ = np.asarray(r.as_matrix())
-
-    transf_ = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
-
-    tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
-    tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
-
-    for i in range(0,len(msg.poses)):
-        global_plan_xs.append(msg.poses[i].pose.position.x) 
-        global_plan_ys.append(msg.poses[i].pose.position.y)
-        global_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-        plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-        p = np.array([global_plan_xs[-1], global_plan_ys[-1], 0.0])
-        pnew = p.dot(r_) + t
-        x_temp = round((pnew[0] - localCostmapOriginX) / localCostmapResolution)
-        y_temp = round((pnew[1] - localCostmapOriginY) / localCostmapResolution)
-        if 0 <= x_temp < 160 and 0 <= y_temp < 160:
-            transformed_plan_xs.append(x_temp)
-            transformed_plan_ys.append(y_temp)
-
-# Define a callback for the local plan
-def local_plan_callback(msg):
-    global local_plan_tmp, local_plan_x_list, local_plan_y_list
-    local_plan_x_list = [] 
-    local_plan_y_list = [] 
-    local_plan_tmp = []
-
-    for i in range(0,len(msg.poses)):
-        local_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-
-        x_temp = int((msg.poses[i].pose.position.x - localCostmapOriginX) / localCostmapResolution)
-        y_temp = int((msg.poses[i].pose.position.y - localCostmapOriginY) / localCostmapResolution)
-        if 0 <= x_temp < 160 and 0 <= y_temp < 160:
-            local_plan_x_list.append(x_temp)
-            local_plan_y_list.append(y_temp)
         
 # Define a callback for the footprint
 def footprint_callback(msg):
