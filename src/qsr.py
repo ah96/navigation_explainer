@@ -8,6 +8,8 @@ import math
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String
 import copy
+from std_msgs.msg import Float32MultiArray
+
 
 I = 0
 
@@ -34,6 +36,105 @@ init = True
 triples = []
 marker_array_msg = MarkerArray()
 marker_array_orients_msg = MarkerArray()
+lime_exp = []
+lime_names = []
+lime_coeffs = []
+
+def defineQsrCalculus(qsr_choice):
+    global tpcc_dict, tpcc_dict_inv, R
+
+    if qsr_choice == 0:
+        # left -- right dichotomy in a relative refence system
+        # from 'moratz2008qualitative'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'left': 0,
+            'right': 1
+        }
+
+    elif qsr_choice == 1:
+        # single cross calculus from 'moratz2008qualitative'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'left/front': 0,
+            'right/front': 1,
+            'left/back': 2,
+            'right/back': 3
+        }
+
+    elif qsr_choice == 2:
+        # TPCC reference system
+        # my modified version from 'moratz2008qualitative'
+        # used for getting semantic costmap
+        if R == 0:
+            tpcc_dict = {
+                'sb': 0,
+                'lb': 1,
+                'bl': 2,
+                'sl': 3,
+                'fl': 4,
+                'lf': 5,
+                'sf': 6,
+                'rf': 7,
+                'fr': 8,
+                'sr': 9,
+                'br': 10,
+                'rb': 11
+            }
+        else:
+            tpcc_dict = {
+                'csb': 0,
+                'clb': 1,
+                'cbl': 2,
+                'csl': 3,
+                'cfl': 4,
+                'clf': 5,
+                'csf': 6,
+                'crf': 7,
+                'cfr': 8,
+                'csr': 9,
+                'cbr': 10,
+                'crb': 11,
+                'dsb': 12,
+                'dlb': 13,
+                'dbl': 14,
+                'dsl': 15,
+                'dfl': 16,
+                'dlf': 17,
+                'dsf': 18,
+                'drf': 19,
+                'dfr': 20,
+                'dsr': 21,
+                'dbr': 22,
+                'drb': 23
+            }
+
+    elif qsr_choice == 3:
+        # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'front': 0,
+            'left': 1,
+            'back': 2,
+            'right': 3
+        }
+
+    elif qsr_choice == 4:
+        # Model for combined expressions from 'moratz2002spatial'
+        # used for getting semantic costmap
+        tpcc_dict = {
+            'left-front': 0,
+            'left-back': 1,
+            'right-front': 2,
+            'right-back': 3,
+            'straight-front': 4,
+            'exactly-left': 5,
+            'straight-back': 6,
+            'exactly-right': 7
+        }    
+
+    # used for deriving NLP annotations
+    tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
 
 # convert orientation quaternion to euler angles
 def quaternion_to_euler(x, y, z, w):
@@ -92,7 +193,7 @@ def printTriples(triples):
         print(t)
 
 def model_state_callback(states_msg):
-    global triples, init, pose, twist, ORIGIN_pos, ORIGIN_name, RELATUM_pos, RELATUM_name, R, angle_ref, qsr_choice, marker_array_msg, marker_array_orients_msg, pub_markers_orients 
+    global lime_names, lime_coeffs, lime_exp, triples, init, pose, twist, ORIGIN_pos, ORIGIN_name, RELATUM_pos, RELATUM_name, R, angle_ref, qsr_choice, marker_array_msg, marker_array_orients_msg, pub_markers_orients 
     global origin_name, origin_pos, relatum_name, relatum_pos, referent_name, referent_pos,referents_poss, referents_names, tpcc_dict, tpcc_dict_inv, PI, pub_markers, I
 
     referents_poss = []
@@ -115,6 +216,7 @@ def model_state_callback(states_msg):
                 yaw += 2*PI
         #print('[yaw, pitch, roll] = ', [yaw, pitch, roll])
         #print('YAW in DEG = ', yaw * 180.0 / PI)
+        # Orientation
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = i
@@ -219,83 +321,9 @@ def model_state_callback(states_msg):
         elif angle < -PI:
             angle += 2*PI
         
-        value = ''    
+        value = getValue(r, angle)
 
-        if qsr_choice == 0:
-            if -PI <= angle < 0:
-                value += 'right'
-            else:
-                value += 'left'
-
-        elif qsr_choice == 1:
-            if 0 <= angle < PI/2:
-                value += 'left/front'
-            elif PI/2 <= angle <= PI:
-                value += 'left/back'
-            elif -PI/2 <= angle < 0:
-                value += 'right/front'
-            elif -PI <= angle < -PI/2:
-                value += 'right/back'
-
-        elif qsr_choice == 2:
-            if r <= R:
-                value += 'c'
-            else: 
-                value += 'd'    
-
-            if angle == 0:
-                value += 'sb'
-            elif 0 < angle <= PI/4:
-                value += 'lb'
-            elif PI/4 < angle < PI/2:
-                value += 'bl'
-            elif angle == PI/2:
-                value += 'sl'
-            elif PI/2 < angle < 3*PI/4:
-                value += 'fl'
-            elif 3*PI/4 <= angle < PI:
-                value += 'lf'
-            elif angle == PI or angle == -PI:
-                value += 'sf'
-            elif -PI < angle <= -3*PI/4:
-                value += 'rf'
-            elif -3*PI/4 < angle < -PI/2:
-                value += 'fr'
-            elif angle == -PI/2:
-                value += 'sr'
-            elif -PI/2 < angle < -PI/4:
-                value += 'br'        
-            elif -PI/4 <= angle < 0:
-                value += 'rb'
-
-        elif qsr_choice == 3:
-            if -PI/4 <= angle <= PI/4:
-                value += 'front'
-            elif PI/4 < angle < 3*PI/4:
-                value += 'left'
-            elif 3*PI/4 <= angle or angle <= -3*PI/4:
-                value += 'back'
-            elif -3*PI/4 < angle < -PI/4:
-                value += 'right'  
-
-        elif qsr_choice == 4:
-            if angle == 0:
-                value += 'straight-front'
-            elif 0 < angle < PI/2:
-                value += 'left-front'
-            elif angle == PI/2:
-                value += 'exactly-left'
-            elif PI/2 < angle < PI:
-                value += 'left-back'
-            elif angle == PI or angle == -PI:
-                value += 'straight-back'
-            elif -PI < angle < -PI/2:
-                value += 'right-back'
-            elif angle == -PI/2:
-                value += 'exactly-right'
-            elif -PI/2 < angle < 0:
-                value += 'right-front'
-
+        # code for publish
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = 2+i
@@ -332,101 +360,180 @@ def model_state_callback(states_msg):
 
     #reason(states_msg)
 
-def defineQsrCalculus(qsr_choice):
-    global tpcc_dict, tpcc_dict_inv, R
+    # append lime coefficients to the objects
+    lime_names = []
+    lime_coeffs = []
+    for exp in lime_exp:
+        mini = math.sqrt( (exp[1] - referents_poss[0][0])**2 + (exp[2] - referents_poss[0][1])**2 )
+        id = 0
+        #print('len(referents_names) = ', len(referents_names))
+        #print('exp = ', exp)
+        #print('len(referents_poss) = ', len(referents_poss))
+        for j in range(1, len(referents_names)):
+            dist = math.sqrt( (exp[1] - referents_poss[j][0])**2 + (exp[2] - referents_poss[j][1])**2 )
+            if dist < mini:
+                mini = dist
+                id = j
+        if referents_names[id] not in lime_names:
+            lime_names.append(referents_names[id])
+            lime_coeffs.append([exp[0]])
+        else:
+            index = lime_names.index(referents_names[id])
+            lime_coeffs[index].append(exp[0])    
+    
+
+    '''
+    # printing out contributing obstacles with all their  weights
+    for j in range(0, len(lime_names)):
+        if len(lime_coeffs[j]) == 1:
+            print(lime_names[j] + ' has a weight ' + str(lime_coeffs[j][0]))
+        elif len(lime_coeffs[j]) > 1:
+            s = ''
+            for c in lime_coeffs[j]:
+                s += str(c) + ', '
+            print(lime_names[j] + ' has weights ' + s)    
+    '''
+
+    '''
+    # printing out contributing obstacles with their triples and max absolute weights
+    #print('len(lime_names) = ', len(lime_names))
+    print('\n\n')
+    for i in range(0, len(lime_names)):
+        name = lime_names[i]
+        idx = referents_names.index(name)
+     
+        if len(lime_coeffs[i]) > 1:
+            coeff = max(lime_coeffs[i], key=abs)
+        else:
+            coeff = lime_coeffs[i][0]
+
+        d_x = referents_poss[idx][0] - RELATUM_pos[0]
+        d_y = referents_poss[idx][1] - RELATUM_pos[1]
+        r = math.sqrt(d_x**2+d_y**2)
+        angle = np.arctan2(d_y, d_x)
+        angle -= angle_ref
+        if angle > PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        value = getValue(r, angle)    
+        print(ORIGIN_name + ',' + RELATUM_name + ' ' + value + ' ' + name + ' with weight of ' + str(coeff))
+    '''
+
+    # printing with the sorted obstacles
+    lime_coeffs_max_by_abs = []
+    for i in range(0, len(lime_coeffs)):
+        lime_coeffs_max_by_abs.append(max(lime_coeffs[i], key=abs))
+    lime_coeffs_max_by_abs_sorted = sorted(lime_coeffs_max_by_abs, key=abs, reverse=True)
+    for i in range(0, len(lime_coeffs_max_by_abs_sorted)):
+        idx_ = lime_coeffs_max_by_abs.index(lime_coeffs_max_by_abs_sorted[i])
+        name = lime_names[idx_]
+        idx = referents_names.index(name)
+        d_x = referents_poss[idx][0] - RELATUM_pos[0]
+        d_y = referents_poss[idx][1] - RELATUM_pos[1]
+        r = math.sqrt(d_x**2+d_y**2)
+        angle = np.arctan2(d_y, d_x)
+        angle -= angle_ref
+        if angle > PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        value = getValue(r, angle)
+
+        coeff = lime_coeffs_max_by_abs[idx_]
+        if coeff > 0:
+            print('\n')
+            print(ORIGIN_name + ',' + RELATUM_name + ' ' + value + ' ' + name + ' is the ' + str(i+1) + '. most important reason for the robot\'s deviation with the weight of ' + str(coeff))
+            print('Robot must deviate from its initial path because of ' + name)
+            if i == 0:
+                print(name + ' is the main reason for the robot’s deviation and it increases it')
+            print('without that segment, the local plan would deviate less from the global plan')    
+        else:
+            print('\n')
+            print(ORIGIN_name + ',' + RELATUM_name + ' ' + value + ' ' + name + ' with the weight of ' + str(coeff))
+            print('If ' + name + ' was not there robot would deviate (more) from its initial path')
+            print('without that segment, the local plan would deviate more from the global plan')
+
+def getValue(r, angle):
+    value = ''    
 
     if qsr_choice == 0:
-        # left -- right dichotomy in a relative refence system
-        # from 'moratz2008qualitative'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'left': 0,
-            'right': 1
-        }
+        if -PI <= angle < 0:
+            value += 'right'
+        else:
+            value += 'left'
 
     elif qsr_choice == 1:
-        # single cross calculus from 'moratz2008qualitative'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'left/front': 0,
-            'right/front': 1,
-            'left/back': 2,
-            'right/back': 3
-        }
+        if 0 <= angle < PI/2:
+            value += 'left/front'
+        elif PI/2 <= angle <= PI:
+            value += 'left/back'
+        elif -PI/2 <= angle < 0:
+            value += 'right/front'
+        elif -PI <= angle < -PI/2:
+            value += 'right/back'
 
     elif qsr_choice == 2:
-        # TPCC reference system
-        # my modified version from 'moratz2008qualitative'
-        # used for getting semantic costmap
-        if R == 0:
-            tpcc_dict = {
-                'sb': 0,
-                'lb': 1,
-                'bl': 2,
-                'sl': 3,
-                'fl': 4,
-                'lf': 5,
-                'sf': 6,
-                'rf': 7,
-                'fr': 8,
-                'sr': 9,
-                'br': 10,
-                'rb': 11
-            }
-        else:
-            tpcc_dict = {
-                'csb': 0,
-                'clb': 1,
-                'cbl': 2,
-                'csl': 3,
-                'cfl': 4,
-                'clf': 5,
-                'csf': 6,
-                'crf': 7,
-                'cfr': 8,
-                'csr': 9,
-                'cbr': 10,
-                'crb': 11,
-                'dsb': 12,
-                'dlb': 13,
-                'dbl': 14,
-                'dsl': 15,
-                'dfl': 16,
-                'dlf': 17,
-                'dsf': 18,
-                'drf': 19,
-                'dfr': 20,
-                'dsr': 21,
-                'dbr': 22,
-                'drb': 23
-            }
+        if r <= R:
+            value += 'c'
+        else: 
+            value += 'd'    
+
+        if angle == 0:
+            value += 'sb'
+        elif 0 < angle <= PI/4:
+            value += 'lb'
+        elif PI/4 < angle < PI/2:
+            value += 'bl'
+        elif angle == PI/2:
+            value += 'sl'
+        elif PI/2 < angle < 3*PI/4:
+            value += 'fl'
+        elif 3*PI/4 <= angle < PI:
+            value += 'lf'
+        elif angle == PI or angle == -PI:
+            value += 'sf'
+        elif -PI < angle <= -3*PI/4:
+            value += 'rf'
+        elif -3*PI/4 < angle < -PI/2:
+            value += 'fr'
+        elif angle == -PI/2:
+            value += 'sr'
+        elif -PI/2 < angle < -PI/4:
+            value += 'br'        
+        elif -PI/4 <= angle < 0:
+            value += 'rb'
 
     elif qsr_choice == 3:
-        # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'front': 0,
-            'left': 1,
-            'back': 2,
-            'right': 3
-        }
+        if -PI/4 <= angle <= PI/4:
+            value += 'front'
+        elif PI/4 < angle < 3*PI/4:
+            value += 'left'
+        elif 3*PI/4 <= angle or angle <= -3*PI/4:
+            value += 'back'
+        elif -3*PI/4 < angle < -PI/4:
+            value += 'right'  
 
     elif qsr_choice == 4:
-        # Model for combined expressions from 'moratz2002spatial'
-        # used for getting semantic costmap
-        tpcc_dict = {
-            'left-front': 0,
-            'left-back': 1,
-            'right-front': 2,
-            'right-back': 3,
-            'straight-front': 4,
-            'exactly-left': 5,
-            'straight-back': 6,
-            'exactly-right': 7
-        }    
+        if angle == 0:
+            value += 'straight-front'
+        elif 0 < angle < PI/2:
+            value += 'left-front'
+        elif angle == PI/2:
+            value += 'exactly-left'
+        elif PI/2 < angle < PI:
+            value += 'left-back'
+        elif angle == PI or angle == -PI:
+            value += 'straight-back'
+        elif -PI < angle < -PI/2:
+            value += 'right-back'
+        elif angle == -PI/2:
+            value += 'exactly-right'
+        elif -PI/2 < angle < 0:
+            value += 'right-front'
 
-    # used for deriving NLP annotations
-    tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
+    return value
+
 
 def ORIGIN_callback(msg):
     print('\nreceived ORIGIN string:' + msg.data)
@@ -450,7 +557,13 @@ def triple_callback(msg):
     print('relatum_name = ', relatum_name)
     referent_name = strings[2]
     print('referent_name = ', referent_name)
-    
+
+def lime_callback(msg):
+    global lime_exp
+    lime_exp = []
+    for i in range(1, int(len(msg.data)/3)):
+        lime_exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
+    #print("LIME = ", lime_exp)
 
 
 # choose qsr calculus [0,4]
@@ -472,6 +585,9 @@ sub_RELATUM = rospy.Subscriber("/RELATUM", String, RELATUM_callback)
 #rostopic pub /RELATUM std_msgs/String 'tiago'
 sub_triple = rospy.Subscriber("/triple", String, triple_callback)
 #rostopic pub /triple std_msgs/String 'cabinet,tiago,wall_1_model'
+
+sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, lime_callback)
+
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
