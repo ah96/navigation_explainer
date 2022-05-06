@@ -42,6 +42,7 @@ class qsr():
         self.lime_names = []
         self.lime_coeffs = []
         self.I = 0
+        self.original_deviation = -1
 
     # define QSR calculus
     def defineQsrCalculus(self, qsr_choice):
@@ -86,28 +87,28 @@ class qsr():
             else:
                 self.tpcc_dict = {
                     'csb': 0,
-                    'clb': 1,
-                    'cbl': 2,
-                    'csl': 3,
-                    'cfl': 4,
-                    'clf': 5,
-                    'csf': 6,
-                    'crf': 7,
-                    'cfr': 8,
-                    'csr': 9,
-                    'cbr': 10,
-                    'crb': 11,
-                    'dsb': 12,
-                    'dlb': 13,
-                    'dbl': 14,
-                    'dsl': 15,
-                    'dfl': 16,
-                    'dlf': 17,
-                    'dsf': 18,
-                    'drf': 19,
-                    'dfr': 20,
-                    'dsr': 21,
-                    'dbr': 22,
+                    'dsb': 1,
+                    'clb': 2,
+                    'dlb': 3,
+                    'cbl': 4,
+                    'dbl': 5,
+                    'csl': 6,
+                    'dsl': 7,
+                    'cfl': 8,
+                    'dfl': 9,
+                    'clf': 10,
+                    'dlf': 11,
+                    'csf': 12,
+                    'dsf': 13,
+                    'crf': 14,
+                    'drf': 15,
+                    'cfr': 16,
+                    'dfr': 17,
+                    'csr': 18,
+                    'dsr': 19,
+                    'cbr': 20,
+                    'dbr': 21,
+                    'crb': 22,                    
                     'drb': 23
                 }
 
@@ -436,6 +437,7 @@ class qsr():
                 angle += 2*self.PI
             value = self.getValue(r, angle)
 
+            '''
             coeff = lime_coeffs_max_by_abs[idx_]
             if coeff > 0:
                 print('\n')
@@ -449,6 +451,7 @@ class qsr():
                 print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with the weight of ' + str(coeff))
                 print('If ' + name + ' was not there robot would deviate (more) from its initial path')
                 print('without that segment, the local plan would deviate more from the global plan')
+            '''
 
     def getValue(self, r, angle):
         value = ''    
@@ -519,7 +522,7 @@ class qsr():
                 value += 'exactly-left'
             elif self.PI/2 < angle < self.PI:
                 value += 'left-back'
-            elif angle == PI or angle == -self.PI:
+            elif angle == self.PI or angle == -self.PI:
                 value += 'straight-back'
             elif -self.PI < angle < -self.PI/2:
                 value += 'right-back'
@@ -532,35 +535,37 @@ class qsr():
 
     def ORIGIN_callback(self, msg):
         print('\nreceived ORIGIN string:' + msg.data)
-        #marker_array_msg.markers = []
         self.ORIGIN_name = copy.deepcopy(msg.data)
     
     def RELATUM_callback(self, msg):
         print('\nreceived RELATUM string: ' + msg.data)
-        #marker_array_msg.markers = []
         self.RELATUM_name = copy.deepcopy(msg.data)
     
     def triple_callback(self, msg):
-        print('\nreceived triple string: ' + msg.data)
+        #print('\nreceived triple string: ' + msg.data)
         strings = msg.data.split(',', -1)
         self.origin_name = strings[0]
-        print('origin_name = ', self.origin_name)
+        #print('origin_name = ', self.origin_name)
         self.relatum_name = strings[1]
-        print('relatum_name = ', self.relatum_name)
+        #print('relatum_name = ', self.relatum_name)
         self.referent_name = strings[2]
-        print('referent_name = ', self.referent_name)
+        #print('referent_name = ', self.referent_name)
 
     def lime_callback(self, msg):
+        # [x, y, exp]*N_FEATURES + ORIGINAL_DEVIATION
         self.lime_exp = []
-        for i in range(1, int(len(msg.data)/3)):
+        for i in range(1, int((len(msg.data)-1)/3)): # not taking free-space weight, which is always 0
             self.lime_exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
-        #print("LIME = ", self.lime_exp)
+        self.original_deviation = msg.data[-1]
+        #print("\nLIME message received = ", msg.data)
+        #print("\nLIME message received processed = ", self.lime_exp)
+        #print('\nLIME original deviation = ', self.original_deviation)
 
 
 # choose qsr calculus [0,4]
 qsr_obj = qsr()
 
-qsr_choice = 0 
+qsr_choice = 2 
 qsr_obj.defineQsrCalculus(qsr_choice)
 
 # Initialize the ROS Node named 'qsr', allow multiple nodes to be run with this name
@@ -573,14 +578,15 @@ pub_markers = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
 pub_markers_orients = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
 
 sub_ORIGIN = rospy.Subscriber("/ORIGIN", String, qsr_obj.ORIGIN_callback)
-sub_RELATUM = rospy.Subscriber("/RELATUM", String, qsr_obj.RELATUM_callback)
 #rostopic pub /ORIGIN std_msgs/String 'cabinet'
+
+sub_RELATUM = rospy.Subscriber("/RELATUM", String, qsr_obj.RELATUM_callback)
 #rostopic pub /RELATUM std_msgs/String 'tiago'
+
 sub_triple = rospy.Subscriber("/triple", String, qsr_obj.triple_callback)
 #rostopic pub /triple std_msgs/String 'cabinet,tiago,wall_1_model'
 
 sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, qsr_obj.lime_callback)
-
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():

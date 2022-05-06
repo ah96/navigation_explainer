@@ -154,6 +154,7 @@ class lime_rt(object):
         self.localCostmapOriginX = 0 
         self.localCostmapOriginY = 0 
         self.localCostmapResolution = 0
+        self.original_deviation = 0
 
         #'''
         kernel_width=.25
@@ -290,7 +291,7 @@ class lime_rt(object):
                 diff = math.sqrt(diff_x + diff_y)
                 local_diffs.append(diff)                        
             devs.append(min(local_diffs))   
-        original_deviation = sum(devs)
+        self.original_deviation = sum(devs)
         #print('\noriginal_deviation = ', original_deviation)
         # original_deviation for big_deviation = 745.5051688094327
         # original_deviation for big_deviation without wall = 336.53749938826286
@@ -1040,7 +1041,7 @@ class lime_rt(object):
         # publish explanation coefficients
         transf = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
         exp_with_centroids = Float32MultiArray()
-        #segments += 1
+        self.segments += 1
         regions = regionprops(self.segments.astype(int))
         for props in regions:
             v = props.label  # value of label
@@ -1054,11 +1055,13 @@ class lime_rt(object):
                     r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
                     r_ = np.asarray(r.as_matrix())
                     pnew = p.dot(r_) + t
-                    exp_with_centroids.data.append(exp[j][1])
                     exp_with_centroids.data.append(pnew[0])
                     exp_with_centroids.data.append(pnew[1])
+                    exp_with_centroids.data.append(exp[j][1])
                     break
+        exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
         pub_lime.publish(exp_with_centroids)
+        #self.segments-1
 
     # Define a callback for the local plan
     def odom_callback(self, msg):
