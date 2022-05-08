@@ -50,7 +50,11 @@ class qsr():
         
         # markers
         self.marker = Marker()
-        self.marker_orientation = Marker()     
+        self.marker_orientation = Marker()
+
+        # objects in local costmap
+        self.objects_in_lc_positions = []
+        self.objects_in_lc_names = []     
 
     # define QSR calculus
     def defineQsrCalculus(self, qsr_choice):
@@ -254,6 +258,8 @@ class qsr():
         self.referents_names = []
         self.marker_array_semantic_labels.markers = []
         self.marker_array_orientations.markers = []
+        self.objects_in_lc_names = []
+        self.objects_in_lc_positions = []
 
         #'''
         # go through objects
@@ -401,6 +407,15 @@ class qsr():
                 self.marker.ns = "my_namespace"
                 if self.marker not in self.marker_array_semantic_labels.markers:
                     self.marker_array_semantic_labels.markers.append(self.marker)
+
+                # test if an object is in a local costmap
+                d_x = states_msg.pose[i].position.x - self.RELATUM_pos[0] # should be robot, not relatum
+                d_y = states_msg.pose[i].position.y - self.RELATUM_pos[1] # should be robot, not relatum
+                r = math.sqrt((d_x)**2+(d_y)**2)
+                if r <= 4:
+                    self.objects_in_lc_names.append(states_msg.name[i])
+                    self.objects_in_lc_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
+                    
             #'''
         #'''    
         
@@ -413,10 +428,18 @@ class qsr():
         # update R and angle_ref
         self.updateRefSys()
 
+        print('\n\nThere are ' + str(len(self.objects_in_lc_names)) + " obstacles in the local costmap")
+        print('They are: ')
+        self.printTriples(self.objects_in_lc_names)
+
+        
         #'''
-        # make QSR triples without reasoning included, after we have collected the freshest positions of objects
+        # Do something every 100 iterations, so things are not printed too fast
         self.I += 1
         if self.I == 100:
+            self.I = 0
+
+            # make QSR triples without reasoning included, after we have collected the freshest positions of objects
             #self.marker_array_semantic_labels.markers = []
             triples = []
             for i in range(0, len(self.referents_names)):
@@ -460,39 +483,89 @@ class qsr():
                 '''
 
             # publish semantic labels with QSR without reasoning
+            # visualize referents with QSR without reasoning
             #pub_markers_semantic_labels.publish(self.marker_array_semantic_labels)
         
             # print QSR triples every I=100 iterations
-            print('\n\n')
-            print(self.printTriples(triples))
+            #print('\n\n')
+            #print(self.printTriples(triples))
+        #'''
             
-            # Textual explanations based on LIME
-            #'''
+        
+        # Textual explanations based on LIME
+        '''
+        print('\n\n')
+        print('\nraw LIME explanations: ', self.lime_exp)
+        print('\nnumber of LIME segments-objects: ', len(self.lime_exp))
+        
+        mini_ids_global = []
+        mini_distances_global = []
+        mini_mini_distances_global = []
+        # find the closest obstacle to the obstacle with current LIME coefficient
+        for exp in self.lime_exp:
+            mini_ids = []
+            mini_distances = []
+            mini = math.sqrt( (exp[0] - self.referents_positions[0][0])**2 + (exp[1] - self.referents_positions[0][1])**2 )
+            id = 0
+            mini_ids.append(id)
+            mini_distances.append(mini)
+            
+
+            for j in range(1, len(self.referents_names)):
+                dist = math.sqrt( (exp[0] - self.referents_positions[j][0])**2 + (exp[1] - self.referents_positions[j][1])**2 )
+                if dist < mini:
+                    mini = dist
+                    id = j
+                    mini_ids.append(id)
+                    mini_distances.append(dist)
+
+            mini_ids_global.append(mini_ids)
+            mini_distances_global.append(mini_distances)
+            mini_mini_distances_global.append(mini_distances[-1])
+
             # append lime coefficients to the objects
             lime_names = []
             lime_coeffs = []
-            # find the closest obstacle to the obstacle with current LIME coefficient
-            for exp in self.lime_exp:
-                mini = math.sqrt( (exp[0] - self.referents_positions[0][0])**2 + (exp[1] - self.referents_positions[0][1])**2 )
-                id = 0
+            sorted_indices_of_minimal_distances = sorted(range(len(mini_mini_distances_global)), key = lambda k: mini_mini_distances_global[k])
+            print('mini_mini_distances_global = ', mini_mini_distances_global)
+            print('sorted_indices_of_minimal_distances = ', sorted_indices_of_minimal_distances)
+            for br in range(0, len(sorted_indices_of_minimal_distances)):
+                s_i = sorted_indices_of_minimal_distances[br]
 
-                for j in range(1, len(self.referents_names)):
-                    dist = math.sqrt( (exp[0] - self.referents_positions[j][0])**2 + (exp[1] - self.referents_positions[j][1])**2 )
-                    if dist < mini:
-                        mini = dist
-                        id = j
+                print('s_i =  ', s_i)
 
-                if self.referents_names[id] not in lime_names:
-                    lime_names.append(self.referents_names[id])
-                    lime_coeffs.append([exp[2]])
+                mini_ids = mini_ids_global[s_i]
+                print('mini_ids = ', mini_ids)
+                mini_distances = mini_distances_global[s_i]
+                print('mini_distances = ', mini_distances)
+                # only one candidate for the closest object
+                if len(mini_ids) == 1:
+                    if self.referents_names[id] not in lime_names:
+                        lime_names.append(self.referents_names[id])
+                        lime_coeffs.append([exp[2]])
+                    else:
+                        index = lime_names.index(self.referents_names[id])
+                        lime_coeffs[index].append(exp[2])
+                # more candidates for the closest object        
                 else:
-                    index = lime_names.index(self.referents_names[id])
-                    lime_coeffs[index].append(exp[2])    
-            #'''
-
-            #'''
+                    for tmp in range(0, len(mini_ids)):
+                        #print('tmp = ', tmp)
+                        id = mini_ids[-tmp-1]
+                        name_ = self.referents_names[id]
+                        
+                        if name_ not in lime_names:
+                            lime_names.append(self.referents_names[id])
+                            lime_coeffs.append([exp[2]])
+                            break
+                        else:
+                            if 'wall' not in name_:
+                                continue
+                            else:
+                                index = lime_names.index(name_)
+                                lime_coeffs[index].append(exp[2])
+                                break            
+            
             # printing out contributing obstacles with all their  weights
-            print('\n\n')
             for j in range(0, len(lime_names)):
                 if len(lime_coeffs[j]) == 1:
                     print(lime_names[j] + ' has a weight ' + str(lime_coeffs[j][0]))
@@ -501,9 +574,8 @@ class qsr():
                     for c in lime_coeffs[j]:
                         s += str(c) + ', '
                     print(lime_names[j] + ' has weights ' + s)    
-            #'''
-
-            #'''
+            
+            
             # printing out contributing obstacles with their triples and max absolute weights
             print('\n\n')
             for i in range(0, len(lime_names)):
@@ -526,9 +598,7 @@ class qsr():
                     angle += 2*self.PI
                 value = self.getValue(r, angle)    
                 print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with weight of ' + str(coeff))
-            #'''
-
-            #'''
+            
             # printing with the sorted obstacles
             lime_coeffs_max_by_abs = []
             for i in range(0, len(lime_coeffs)):
@@ -562,10 +632,7 @@ class qsr():
                     print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with the weight of ' + str(coeff))
                     print('If ' + name + ' was not there robot would deviate (more) from its initial path')
                     print('without that segment, the local plan would deviate more from the global plan')    
-            #'''
-
-            self.I = 0
-        #'''
+        '''
 
         # do QSR reasoning with 4 points
         #reason(states_msg)
