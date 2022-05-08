@@ -427,10 +427,11 @@ class qsr():
 
         # update R and angle_ref
         self.updateRefSys()
-
-        print('\n\nThere are ' + str(len(self.objects_in_lc_names)) + " obstacles in the local costmap")
-        print('They are: ')
-        self.printTriples(self.objects_in_lc_names)
+        
+        # print obstacles in local costmap
+        #print('\n\nThere are ' + str(len(self.objects_in_lc_names)) + " obstacles in the local costmap")
+        #print('These obstacles are: ')
+        #self.printTriples(self.objects_in_lc_names)
 
         
         #'''
@@ -490,152 +491,34 @@ class qsr():
             #print('\n\n')
             #print(self.printTriples(triples))
         #'''
-            
-        
-        # Textual explanations based on LIME
-        '''
-        print('\n\n')
-        print('\nraw LIME explanations: ', self.lime_exp)
-        print('\nnumber of LIME segments-objects: ', len(self.lime_exp))
-        
-        mini_ids_global = []
-        mini_distances_global = []
-        mini_mini_distances_global = []
-        # find the closest obstacle to the obstacle with current LIME coefficient
-        for exp in self.lime_exp:
-            mini_ids = []
-            mini_distances = []
-            mini = math.sqrt( (exp[0] - self.referents_positions[0][0])**2 + (exp[1] - self.referents_positions[0][1])**2 )
-            id = 0
-            mini_ids.append(id)
-            mini_distances.append(mini)
-            
-
-            for j in range(1, len(self.referents_names)):
-                dist = math.sqrt( (exp[0] - self.referents_positions[j][0])**2 + (exp[1] - self.referents_positions[j][1])**2 )
-                if dist < mini:
-                    mini = dist
-                    id = j
-                    mini_ids.append(id)
-                    mini_distances.append(dist)
-
-            mini_ids_global.append(mini_ids)
-            mini_distances_global.append(mini_distances)
-            mini_mini_distances_global.append(mini_distances[-1])
-
-            # append lime coefficients to the objects
-            lime_names = []
-            lime_coeffs = []
-            sorted_indices_of_minimal_distances = sorted(range(len(mini_mini_distances_global)), key = lambda k: mini_mini_distances_global[k])
-            print('mini_mini_distances_global = ', mini_mini_distances_global)
-            print('sorted_indices_of_minimal_distances = ', sorted_indices_of_minimal_distances)
-            for br in range(0, len(sorted_indices_of_minimal_distances)):
-                s_i = sorted_indices_of_minimal_distances[br]
-
-                print('s_i =  ', s_i)
-
-                mini_ids = mini_ids_global[s_i]
-                print('mini_ids = ', mini_ids)
-                mini_distances = mini_distances_global[s_i]
-                print('mini_distances = ', mini_distances)
-                # only one candidate for the closest object
-                if len(mini_ids) == 1:
-                    if self.referents_names[id] not in lime_names:
-                        lime_names.append(self.referents_names[id])
-                        lime_coeffs.append([exp[2]])
-                    else:
-                        index = lime_names.index(self.referents_names[id])
-                        lime_coeffs[index].append(exp[2])
-                # more candidates for the closest object        
-                else:
-                    for tmp in range(0, len(mini_ids)):
-                        #print('tmp = ', tmp)
-                        id = mini_ids[-tmp-1]
-                        name_ = self.referents_names[id]
-                        
-                        if name_ not in lime_names:
-                            lime_names.append(self.referents_names[id])
-                            lime_coeffs.append([exp[2]])
-                            break
-                        else:
-                            if 'wall' not in name_:
-                                continue
-                            else:
-                                index = lime_names.index(name_)
-                                lime_coeffs[index].append(exp[2])
-                                break            
-            
-            # printing out contributing obstacles with all their  weights
-            for j in range(0, len(lime_names)):
-                if len(lime_coeffs[j]) == 1:
-                    print(lime_names[j] + ' has a weight ' + str(lime_coeffs[j][0]))
-                elif len(lime_coeffs[j]) > 1:
-                    s = ''
-                    for c in lime_coeffs[j]:
-                        s += str(c) + ', '
-                    print(lime_names[j] + ' has weights ' + s)    
-            
-            
-            # printing out contributing obstacles with their triples and max absolute weights
-            print('\n\n')
-            for i in range(0, len(lime_names)):
-                name = lime_names[i]
-                idx = self.referents_names.index(name)
-            
-                if len(lime_coeffs[i]) > 1:
-                    coeff = max(lime_coeffs[i], key=abs)
-                else:
-                    coeff = lime_coeffs[i][0]
-
-                d_x = self.referents_positions[idx][0] - self.RELATUM_pos[0]
-                d_y = self.referents_positions[idx][1] - self.RELATUM_pos[1]
-                r = math.sqrt(d_x**2+d_y**2)
-                angle = np.arctan2(d_y, d_x)
-                angle -= self.angle_ref
-                if angle > self.PI:
-                    angle -= 2*self.PI
-                elif angle <= -self.PI:
-                    angle += 2*self.PI
-                value = self.getValue(r, angle)    
-                print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with weight of ' + str(coeff))
-            
-            # printing with the sorted obstacles
-            lime_coeffs_max_by_abs = []
-            for i in range(0, len(lime_coeffs)):
-                lime_coeffs_max_by_abs.append(max(lime_coeffs[i], key=abs))
-            lime_coeffs_max_by_abs_sorted = sorted(lime_coeffs_max_by_abs, key=abs, reverse=True)
-            for i in range(0, len(lime_coeffs_max_by_abs_sorted)):
-                idx_ = lime_coeffs_max_by_abs.index(lime_coeffs_max_by_abs_sorted[i])
-                name = lime_names[idx_]
-                idx = self.referents_names.index(name)
-                d_x = self.referents_positions[idx][0] - self.RELATUM_pos[0]
-                d_y = self.referents_positions[idx][1] - self.RELATUM_pos[1]
-                r = math.sqrt(d_x**2+d_y**2)
-                angle = np.arctan2(d_y, d_x)
-                angle -= self.angle_ref
-                if angle > self.PI:
-                    angle -= 2*self.PI
-                elif angle < -self.PI:
-                    angle += 2*self.PI
-                value = self.getValue(r, angle)
-
-                coeff = lime_coeffs_max_by_abs[idx_]
-                if coeff > 0:
-                    print('\n')
-                    print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' is the ' + str(i+1) + '. most important reason for the robot\'s deviation with the weight of ' + str(coeff))
-                    print('Robot must deviate from its initial path because of ' + name)
-                    if i == 0:
-                        print(name + ' is the main reason for the robot’s deviation and it increases it')
-                    print('without that segment, the local plan would deviate less from the global plan')    
-                else:
-                    print('\n')
-                    print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with the weight of ' + str(coeff))
-                    print('If ' + name + ' was not there robot would deviate (more) from its initial path')
-                    print('without that segment, the local plan would deviate more from the global plan')    
-        '''
 
         # do QSR reasoning with 4 points
         #reason(states_msg)
+
+
+        # Textual explanations based on LIME
+        N_segments = len(self.lime_exp)
+        if N_segments > 0:
+            print('\n\n')
+            print('self.lime_exp = ', self.lime_exp)
+            N_objects_in_lc = len(self.objects_in_lc_names)
+            
+            distances = [[0.0]*N_segments]*N_objects_in_lc
+            objects_min_dist = []
+
+            for i in range(0, N_objects_in_lc):
+                for j in range(0, N_segments):
+                    d_x = self.objects_in_lc_positions[i][0] - self.lime_exp[j][0]
+                    d_y = self.objects_in_lc_positions[i][1] - self.lime_exp[j][1]
+                    dist = math.sqrt((d_x)**2+(d_y)**2)
+                    distances[i][j] = dist
+                objects_min_dist.append(min(distances[i]))
+
+            sorted_indices_of_obj_min_dist = sorted(range(N_objects_in_lc), key = lambda k: objects_min_dist[k])
+
+            for i in range(0, N_objects_in_lc):
+                idx = sorted_indices_of_obj_min_dist[i]
+                print(self.objects_in_lc_names[idx] + ' has weight ' + str(self.lime_exp[distances[idx].index(min(distances[idx]))][2]))
 
     def getValue(self, r, angle):
         value = ''    
