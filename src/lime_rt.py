@@ -43,6 +43,10 @@ class ImageExplanation(object):
         self.local_pred = {}
         self.score = {}
 
+        self.color_free_space = False
+        self.use_maximum_weight = False
+        self.all_weights_zero = False
+
     def get_image_and_mask(self, label):
         #print('get_image_and_mask starting')
 
@@ -56,9 +60,9 @@ class ImageExplanation(object):
 
         temp = np.zeros(self.image.shape)
 
-        color_free_space = False
-        use_maximum_weight = True
-        all_weights_zero = False
+        #color_free_space = False
+        #use_maximum_weight = False
+        #all_weights_zero = False
 
         val_low = 0.0
         val_high = 255.0
@@ -71,10 +75,10 @@ class ImageExplanation(object):
             w_s.append(abs(w))
         max_w = max(w_s)
         if max_w == 0:
-            all_weights_zero = True
+            self.all_weights_zero = True
             max_w = 1
 
-        if all_weights_zero == True:
+        if self.all_weights_zero == True:
             temp[self.image == 0] = gray_shade
             temp[self.image != 0] = val_low
             return temp, exp        
@@ -97,16 +101,16 @@ class ImageExplanation(object):
 
             # free space
             if free_space_percentage > 0.9:
-                if color_free_space == False:
+                if self.color_free_space == False:
                     temp[segments == f, 0] = gray_shade
                     temp[segments == f, 1] = gray_shade
                     temp[segments == f, 2] = gray_shade
             # obstacle
             else:
-                if color_free_space == False:
+                if self.color_free_space == False:
                     if c == 1:
                         temp[segments == f, 0] = 0.0
-                        if use_maximum_weight == True:
+                        if self.use_maximum_weight == True:
                             temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / max_w
                         else:
                             temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / w_sum 
@@ -116,7 +120,7 @@ class ImageExplanation(object):
                         temp[segments == f, 1] = 0.0
                         temp[segments == f, 2] = 0.0
                     elif c == -1:
-                        if use_maximum_weight == True:
+                        if self.use_maximum_weight == True:
                             temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / max_w
                         else:
                             temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / w_sum 
@@ -155,6 +159,8 @@ class lime_rt(object):
         self.localCostmapOriginY = 0 
         self.localCostmapResolution = 0
         self.original_deviation = 0
+
+        self.divide_obstacles = False
 
         #'''
         kernel_width=.25
@@ -473,7 +479,11 @@ class lime_rt(object):
 
         #print('num_of_obstacles: ', num_of_obstacles)        
 
-        if 8 > num_of_obstacles > 0:
+        if self.divide_obstacles == False:
+            num_wanted_local_temp = num_of_obstacles
+        else:
+            num_wanted_local_temp = 8 
+        if num_wanted_local_temp > num_of_obstacles > 0:  #8 > num_of_obstacles > 0:
             # divide segment obstacles    
             seg_labels = np.unique(segments)[1:]        
 
