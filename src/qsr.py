@@ -503,22 +503,25 @@ class qsr():
             print('self.lime_exp = ', self.lime_exp)
             N_objects_in_lc = len(self.objects_in_lc_names)
             
-            distances = [[0.0]*N_segments]*N_objects_in_lc
+            distances = [[0.0]*N_objects_in_lc]*N_segments
             objects_min_dist = []
 
-            for i in range(0, N_objects_in_lc):
-                for j in range(0, N_segments):
-                    d_x = self.objects_in_lc_positions[i][0] - self.lime_exp[j][0]
-                    d_y = self.objects_in_lc_positions[i][1] - self.lime_exp[j][1]
+            for i in range(0, N_segments):
+                for j in range(0, N_objects_in_lc):
+                    d_x = self.objects_in_lc_positions[j][0] - self.lime_exp[i][0]
+                    d_y = self.objects_in_lc_positions[j][1] - self.lime_exp[i][1]
                     dist = math.sqrt((d_x)**2+(d_y)**2)
                     distances[i][j] = dist
                 objects_min_dist.append(min(distances[i]))
 
-            sorted_indices_of_obj_min_dist = sorted(range(N_objects_in_lc), key = lambda k: objects_min_dist[k])
+            #print('\ndistances = ', distances)
+            print('\nobjects_min_dist = ', objects_min_dist)
 
-            for i in range(0, N_objects_in_lc):
+            sorted_indices_of_obj_min_dist = sorted(range(N_segments), key = lambda k: objects_min_dist[k])
+
+            for i in range(0, N_segments):
                 idx = sorted_indices_of_obj_min_dist[i]
-                print(self.objects_in_lc_names[idx] + ' has weight ' + str(self.lime_exp[distances[idx].index(min(distances[idx]))][2]))
+                print(self.objects_in_lc_names[distances[i].index(min(distances[i]))] + ' has weight ' + str(self.lime_exp[idx][2]))
 
     def getValue(self, r, angle):
         value = ''    
