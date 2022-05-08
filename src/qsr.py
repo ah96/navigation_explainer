@@ -9,6 +9,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String
 import copy
 from std_msgs.msg import Float32MultiArray
+#import tf2_ros
 
 
 class qsr():
@@ -495,33 +496,52 @@ class qsr():
         # do QSR reasoning with 4 points
         #reason(states_msg)
 
+        #transf = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+        #p = np.array([px, py, 0.0])
+        #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+        #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+        #r_ = np.asarray(r.as_matrix())
+        #pnew = p.dot(r_) + t
 
         # Textual explanations based on LIME
         N_segments = len(self.lime_exp)
         if N_segments > 0:
+            N_objects_in_lc = len(self.objects_in_lc_names)
             print('\n\n')
             print('self.lime_exp = ', self.lime_exp)
-            N_objects_in_lc = len(self.objects_in_lc_names)
-            
-            distances = [[0.0]*N_objects_in_lc]*N_segments
+            print('N_segments = ', N_segments)
+            print('N_objects_in_lc = ', N_objects_in_lc)
+            print('self.objects_in_lc_names = ', self.objects_in_lc_names)
+
+            #distances = [[0.0]*N_objects_in_lc]*N_segments # N_segments x N_objects_in_lc
+            distances = []
             objects_min_dist = []
+            segments_min_dist = []
 
             for i in range(0, N_segments):
+                distances.append([])
                 for j in range(0, N_objects_in_lc):
                     d_x = self.objects_in_lc_positions[j][0] - self.lime_exp[i][0]
                     d_y = self.objects_in_lc_positions[j][1] - self.lime_exp[i][1]
                     dist = math.sqrt((d_x)**2+(d_y)**2)
-                    distances[i][j] = dist
-                objects_min_dist.append(min(distances[i]))
+                    distances[i].append(dist)
+                segments_min_dist.append(min(distances[i]))
+                print('distances[' + str(i) + '] = ', distances[i])
+                print('min(distances[' + str(i) + ']) = ', min(distances[i]))    
+                
+            #objects_min_dist = [min(distances[:][j]) for j in range(0, N_objects_in_lc)]    
 
-            #print('\ndistances = ', distances)
-            print('\nobjects_min_dist = ', objects_min_dist)
+            print('\ndistances = ', distances)
+            #print('\nobjects_min_dist = ', objects_min_dist)
+            print('\nsegments_min_dist = ', segments_min_dist)
 
-            sorted_indices_of_obj_min_dist = sorted(range(N_segments), key = lambda k: objects_min_dist[k])
+            #sorted_indices_of_obj_min_dist = sorted(range(N_objects_in_lc), key = lambda k: objects_min_dist[k])
+            sorted_indices_of_seg_min_dist = sorted(range(N_segments), key = lambda k: segments_min_dist[k])
+            print('sorted_indices_of_seg_min_dist = ', sorted_indices_of_seg_min_dist)
 
             for i in range(0, N_segments):
-                idx = sorted_indices_of_obj_min_dist[i]
-                print(self.objects_in_lc_names[distances[i].index(min(distances[i]))] + ' has weight ' + str(self.lime_exp[idx][2]))
+                idx = sorted_indices_of_seg_min_dist[i]
+                print(self.objects_in_lc_names[distances[idx].index(segments_min_dist[idx])] + ' has weight ' + str(self.lime_exp[idx][2]))
 
     def getValue(self, r, angle):
         value = ''    
@@ -637,6 +657,8 @@ qsr_obj = qsr()
 
 qsr_choice = 2 
 qsr_obj.defineQsrCalculus(qsr_choice)
+
+#tfBuffer = tf2_ros.Buffer()
 
 # Initialize the ROS Node named 'qsr', allow multiple nodes to be run with this name
 rospy.init_node('qsr', anonymous=True)

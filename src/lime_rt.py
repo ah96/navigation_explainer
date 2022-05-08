@@ -1037,6 +1037,7 @@ class lime_rt(object):
         self.header.frame_id = 'odom'
         pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
         pc2.header.stamp = rospy.Time.now()
+        transf = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
         pub_exp_pointcloud.publish(pc2)
         #rospy.sleep(1.0)
 
@@ -1049,7 +1050,6 @@ class lime_rt(object):
         pub_exp_image.publish(output_cv)
 
         # publish explanation coefficients
-        transf = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
         exp_with_centroids = Float32MultiArray()
         self.segments += 1
         regions = regionprops(self.segments.astype(int))
@@ -1058,15 +1058,15 @@ class lime_rt(object):
             cx, cy = props.centroid  # centroid coordinates
             for j in range(0, len(exp)):
                 if exp[j][0] == v - 1:
-                    cx = cx*self.localCostmapResolution + self.localCostmapOriginX
-                    cy = cy*self.localCostmapResolution + self.localCostmapOriginY
-                    p = np.array([cx, cy, 0.0])
+                    px = cy*self.localCostmapResolution + self.localCostmapOriginX
+                    py = cx*self.localCostmapResolution + self.localCostmapOriginY
+                    p = np.array([px, py, 0.0])
                     t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
                     r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
                     r_ = np.asarray(r.as_matrix())
                     pnew = p.dot(r_) + t
-                    exp_with_centroids.data.append(pnew[0])
-                    exp_with_centroids.data.append(pnew[1])
+                    exp_with_centroids.data.append(px) #(pnew[0])
+                    exp_with_centroids.data.append(py) #(pnew[1])
                     exp_with_centroids.data.append(exp[j][1])
                     break
         exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
