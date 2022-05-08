@@ -28,7 +28,7 @@ class qsr():
         self.relatum_name = ''
         self.referent_pos = [0.0,0.0]
         self.referent_name = ''
-        self.referents_poss = []
+        self.referents_positions = []
         self.referents_names = []
         self.PI = math.pi
         self.pose = Pose()
@@ -36,15 +36,21 @@ class qsr():
         self.models = []
         self.init = True
         self.triples = []
-        self.marker_array_msg = MarkerArray()
-        self.marker_array_orients_msg = MarkerArray()
+        self.marker_array_semantic_labels = MarkerArray()
+        self.marker_array_orientations = MarkerArray()
         self.lime_exp = []
         self.lime_names = []
         self.lime_coeffs = []
         self.I = 0
+        
+        # reasoning variables
         self.original_deviation = -1
         self.comb_table = []
         self.perm_table = []
+        
+        # markers
+        self.marker = Marker()
+        self.marker_orientation = Marker()     
 
     # define QSR calculus
     def defineQsrCalculus(self, qsr_choice):
@@ -151,9 +157,9 @@ class qsr():
                 }
 
                 self.per_table = [
-                    [[0],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11],[12],[13]]
+                    [[0],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11],[12],[13]],
                     [[13],[13],[15],[15],[15],[15,17],[15],[15,17],[14,15,16,17],[16,17,19,21],[14,16],[16,18,20,21,22,23],[12],[0,1]],
-                    [[12],[12],[14,16],[14,16],[14,16,18],[14],[16,18],[14],[16,17,18,20],[14,15,16,17],[17,19,20,21,22,23],[15,17],[0,1],[15]]
+                    [[12],[12],[14,16],[14,16],[14,16,18],[14],[16,18],[14],[16,17,18,20],[14,15,16,17],[17,19,20,21,22,23],[15,17],[0,1],[15]],
                     [[12],[12],[10],[10],[10,11],[8,9,10],[10,11],[8,9,10],[8,9,10,11],[4,6,8,9],[9,11],[2,3,4,5,7,9],[13],[2,3]],
                     [[13],[13],[11],[11],[9,11],[11],[9],[11],[5,7,8,9],[8,9,10,11],[2,3,4,5,6,8],[8,10],[2,3],[0,1]],
                     [[1],[0,1],[22,23],[22,23],[20,21],[20,21,22],[21],[20,21],[16,17,19,21],[16,17,18,20],[14,15,17],[14,15,17],[15],[14,15]]        
@@ -237,268 +243,332 @@ class qsr():
         # do BCD
 
     def printTriples(self, triples):
-        for t in triples:
-            print(t)
+        #print('len(triples) = ', len(triples))
+        for i in range(0, len(triples)):
+            if triples[i] == None:
+                continue
+            print(str(i) + ' --- ' + triples[i])
 
     def model_state_callback(self, states_msg):
-        self.referents_poss = []
+        self.referents_positions = []
         self.referents_names = []
-        self.marker_array_msg.markers = []
-        self.marker_array_orients_msg.markers = []
-        
-        for i in range(0, len(states_msg.name)):
-            # get orientations of the objects/models
-            #print('\nstates_msg.name[i] = ', states_msg.name[i])
-            #print('states_msg.pose[i] = ', states_msg.pose[i])
-            [yaw, pitch, roll] = self.quaternion_to_euler(states_msg.pose[i].orientation.x, states_msg.pose[i].orientation.y, states_msg.pose[i].orientation.z, states_msg.pose[i].orientation.w)
-            #print('[yaw, pitch, roll] = ', [yaw, pitch, roll])
-            if yaw > 2*self.PI:
-                while yaw > 2*self.PI:
-                    yaw -= 2*self.PI
-            elif yaw < -2*self.PI:
-                while yaw < -2*self.PI:
-                    yaw += 2*self.PI
-            #print('[yaw, pitch, roll] = ', [yaw, pitch, roll])
-            #print('YAW in DEG = ', yaw * 180.0 / PI)
-            # Orientation
-            marker = Marker()
-            marker.header.frame_id = 'map'
-            marker.id = i
-            marker.type = marker.ARROW
-            marker.action = marker.ADD
-            marker.pose = Pose()
-            marker.pose.position.x = states_msg.pose[i].position.x
-            marker.pose.position.y = states_msg.pose[i].position.y
-            marker.pose.position.z = 2.0
-            marker.pose.orientation.x = states_msg.pose[i].orientation.x
-            marker.pose.orientation.y = states_msg.pose[i].orientation.y
-            marker.pose.orientation.z = states_msg.pose[i].orientation.z
-            marker.pose.orientation.w = states_msg.pose[i].orientation.w
-            marker.color.r = 0.0
-            marker.color.g = 1.0
-            marker.color.b = 0.0
-            marker.color.a = 1.0
-            marker.scale.x = 0.8
-            marker.scale.y = 0.3
-            marker.scale.z = 0.1
-            #marker.frame_locked = False
-            marker.ns = "my_namespace"
-            if marker not in self.marker_array_orients_msg.markers:
-                self.marker_array_orients_msg.markers.append(marker)
+        self.marker_array_semantic_labels.markers = []
+        self.marker_array_orientations.markers = []
 
+        #'''
+        # go through objects
+        for i in range(0, len(states_msg.name)):
+            
+            # get orientation vectors of the objects/models
+            '''
+            [yaw, pitch, roll] = self.quaternion_to_euler(states_msg.pose[i].orientation.x, states_msg.pose[i].orientation.y, states_msg.pose[i].orientation.z, states_msg.pose[i].orientation.w)
+            #print('\n[yaw, pitch, roll] = ', [yaw, pitch, roll])
+            if yaw > self.PI:
+                while yaw > self.PI:
+                    yaw -= self.PI
+            elif yaw <= -self.PI:
+                while yaw <= -self.PI:
+                    yaw += self.PI
+            #print('[yaw, pitch, roll] = ', [yaw, pitch, roll])
+            #print('YAW in DEG = ', yaw * 180.0 / self.PI)
+            '''
+            
+            #'''
+            # Visualize orientations of the objects as marker arrays
+            self.marker_orientation = Marker()
+            self.marker_orientation.header.frame_id = 'map'
+            self.marker_orientation.id = i
+            self.marker_orientation.type = self.marker_orientation.ARROW
+            self.marker_orientation.action = self.marker_orientation.ADD
+            self.marker_orientation.pose.position.x = states_msg.pose[i].position.x
+            self.marker_orientation.pose.position.y = states_msg.pose[i].position.y
+            self.marker_orientation.pose.position.z = -1.0
+            self.marker_orientation.pose.orientation.x = states_msg.pose[i].orientation.x
+            self.marker_orientation.pose.orientation.y = states_msg.pose[i].orientation.y
+            self.marker_orientation.pose.orientation.z = states_msg.pose[i].orientation.z
+            self.marker_orientation.pose.orientation.w = states_msg.pose[i].orientation.w
+            self.marker_orientation.color.r = 0.0
+            self.marker_orientation.color.g = 1.0
+            self.marker_orientation.color.b = 0.0
+            self.marker_orientation.color.a = 1.0
+            self.marker_orientation.scale.x = 0.8
+            self.marker_orientation.scale.y = 0.3
+            self.marker_orientation.scale.z = 0.1
+            #marker.frame_locked = False
+            self.marker_orientation.ns = "my_namespace"
+            if self.marker_orientation not in self.marker_array_orientations.markers:
+                self.marker_array_orientations.markers.append(self.marker_orientation)
+            #'''
+            
+            #'''
+            # do not visualize ground_plane
             if states_msg.name[i] == 'ground_plane':
                 continue
+            # visualize origin and update ORIGIN_pos
             elif states_msg.name[i] == self.ORIGIN_name:
                 self.ORIGIN_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = 0
-                marker.type = marker.TEXT_VIEW_FACING
-                marker.action = marker.ADD
-                marker.pose = Pose()
-                marker.pose.position.x = states_msg.pose[i].position.x
-                marker.pose.position.y = states_msg.pose[i].position.y
-                marker.pose.position.z = 2.0
-                marker.color.r = 1.0
-                marker.color.g = 0.0
-                marker.color.b = 0.0
-                marker.color.a = 1.0
-                marker.scale.x = 0.5
-                marker.scale.y = 0.5
-                marker.scale.z = 0.5
+                self.marker = Marker()
+                self.marker.header.frame_id = 'map'
+                self.marker.id = 0
+                self.marker.type = self.marker.TEXT_VIEW_FACING
+                self.marker.action = self.marker.ADD
+                self.marker.pose = Pose()
+                self.marker.pose.position.x = states_msg.pose[i].position.x
+                self.marker.pose.position.y = states_msg.pose[i].position.y
+                self.marker.pose.position.z = 2.0
+                self.marker.color.r = 1.0
+                self.marker.color.g = 0.0
+                self.marker.color.b = 0.0
+                self.marker.color.a = 1.0
+                self.marker.scale.x = 0.5
+                self.marker.scale.y = 0.5
+                self.marker.scale.z = 0.5
                 #marker.frame_locked = False
-                marker.text = self.ORIGIN_name + ',ORIGIN'
-                marker.ns = "my_namespace"
-                if marker not in self.marker_array_msg.markers:
-                    self.marker_array_msg.markers.append(marker)
+                self.marker.text = self.ORIGIN_name + ',ORIGIN'
+                self.marker.ns = "my_namespace"
+                if self.marker not in self.marker_array_semantic_labels.markers:
+                    self.marker_array_semantic_labels.markers.append(self.marker)
+            # visualize relatum and update RELATUM_pos
             elif states_msg.name[i] == self.RELATUM_name:
-                RELATUM_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = 1
-                marker.type = marker.TEXT_VIEW_FACING
-                marker.action = marker.ADD
-                marker.pose = Pose()
-                marker.pose.position.x = states_msg.pose[i].position.x
-                marker.pose.position.y = states_msg.pose[i].position.y
-                marker.pose.position.z = 2.0
-                marker.color.r = 1.0
-                marker.color.g = 0.0
-                marker.color.b = 0.0
-                marker.color.a = 1.0
-                marker.scale.x = 0.5
-                marker.scale.y = 0.5
-                marker.scale.z = 0.5
+                self.RELATUM_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
+                self.marker = Marker()
+                self.marker.header.frame_id = 'map'
+                self.marker.id = 1
+                self.marker.type = self.marker.TEXT_VIEW_FACING
+                self.marker.action = self.marker.ADD
+                self.marker.pose = Pose()
+                self.marker.pose.position.x = states_msg.pose[i].position.x
+                self.marker.pose.position.y = states_msg.pose[i].position.y
+                self.marker.pose.position.z = 2.0
+                self.marker.color.r = 1.0
+                self.marker.color.g = 0.0
+                self.marker.color.b = 0.0
+                self.marker.color.a = 1.0
+                self.marker.scale.x = 0.5
+                self.marker.scale.y = 0.5
+                self.marker.scale.z = 0.5
                 #marker.frame_locked = False
-                marker.text = self.RELATUM_name + ',RELATUM'
-                marker.ns = "my_namespace"
-                if marker not in self.marker_array_msg.markers:
-                    self.marker_array_msg.markers.append(marker)
-            elif states_msg.name[i] == self.origin_name:
-                self.origin_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                self.referents_poss.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                self.referents_names.append(states_msg.name[i])
-            elif states_msg.name[i] == self.relatum_name:
-                self.relatum_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                self.referents_poss.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                self.referents_names.append(states_msg.name[i])
-            elif states_msg.name[i] == self.referent_name:
-                self.referent_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                self.referents_poss.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                self.referents_names.append(states_msg.name[i])
+                self.marker.text = self.RELATUM_name + ',RELATUM'
+                self.marker.ns = "my_namespace"
+                if self.marker not in self.marker_array_semantic_labels.markers:
+                    self.marker_array_semantic_labels.markers.append(self.marker)
             else:
-                self.referents_poss.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
+                '''        
+                # update current origin_pos and add referent data to lists
+                if states_msg.name[i] == self.origin_name:
+                    self.origin_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
+                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
+                    self.referents_names.append(states_msg.name[i])
+                # update current relatum_pos and add referent data to lists    
+                elif states_msg.name[i] == self.relatum_name:
+                    self.relatum_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
+                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
+                    self.referents_names.append(states_msg.name[i])
+                # update current referent_pos and add referent data to lists    
+                elif states_msg.name[i] == self.referent_name:
+                    self.referent_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
+                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
+                    self.referents_names.append(states_msg.name[i])
+                # add referent data to lists
+                else:
+                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
+                    self.referents_names.append(states_msg.name[i])
+                '''
+                
+                # add referent data to lists
+                self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
                 self.referents_names.append(states_msg.name[i])
-    
+
+                # visualize referents
+                self.marker = Marker()
+                self.marker.header.frame_id = 'map'
+                self.marker.id = len(self.referents_names) + 1
+                self.marker.type = self.marker.TEXT_VIEW_FACING
+                self.marker.action = self.marker.ADD
+                self.marker.pose = Pose()
+                self.marker.pose.position.x = states_msg.pose[i].position.x
+                self.marker.pose.position.y = states_msg.pose[i].position.y
+                self.marker.pose.position.z = 2.0
+                self.marker.color.r = 1.0
+                self.marker.color.g = 0.0
+                self.marker.color.b = 0.0
+                self.marker.color.a = 1.0
+                self.marker.scale.x = 0.5
+                self.marker.scale.y = 0.5
+                self.marker.scale.z = 0.5
+                #marker.frame_locked = False
+                self.marker.text = states_msg.name[i]
+                self.marker.ns = "my_namespace"
+                if self.marker not in self.marker_array_semantic_labels.markers:
+                    self.marker_array_semantic_labels.markers.append(self.marker)
+            #'''
+        #'''    
+        
+        # publish orientations
+        pub_markers_orientations.publish(self.marker_array_orientations)
+        
+        # publish semantic labels
+        pub_markers_semantic_labels.publish(self.marker_array_semantic_labels)
+
+        # update R and angle_ref
         self.updateRefSys()
 
-        # make triples
-        triples = []
-        for i in range(0, len(self.referents_names)):
-            d_x = self.referents_poss[i][0] - RELATUM_pos[0]
-            d_y = self.referents_poss[i][1] - RELATUM_pos[1]
-            r = math.sqrt(d_x**2+d_y**2)
-            angle = np.arctan2(d_y, d_x)
-            angle -= self.angle_ref
-            if angle > self.PI:
-                angle -= 2*self.PI
-            elif angle < -self.PI:
-                angle += 2*self.PI
-            
-            value = self.getValue(r, angle)
-
-            # code for publish
-            marker = Marker()
-            marker.header.frame_id = 'map'
-            marker.id = 2+i
-            marker.type = marker.TEXT_VIEW_FACING
-            marker.action = marker.ADD
-            marker.pose = Pose()
-            marker.pose.position.x = self.referents_poss[i][0]
-            marker.pose.position.y = self.referents_poss[i][1]
-            marker.pose.position.z = 2.0
-            marker.color.r = 1.0
-            marker.color.g = 0.0
-            marker.color.b = 0.0
-            marker.color.a = 1.0
-            marker.scale.x = 0.5
-            marker.scale.y = 0.5
-            marker.scale.z = 0.5
-            #marker.frame_locked = False
-            marker.text = self.referents_names[i] + ',' + value
-            marker.ns = "my_namespace"
-            #if marker not in marker_array_msg.markers:
-            self.marker_array_msg.markers.append(marker)        
-
-            triples.append(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + self.referents_names[i])
-
-        pub_markers.publish(self.marker_array_msg)
-        pub_markers_orients.publish(self.marker_array_orients_msg)
-
+        #'''
+        # make QSR triples without reasoning included, after we have collected the freshest positions of objects
         self.I += 1
-        # print triples
         if self.I == 100:
-            #print('\n\n')
-            #printTriples(triples)
+            #self.marker_array_semantic_labels.markers = []
+            triples = []
+            for i in range(0, len(self.referents_names)):
+                d_x = self.referents_positions[i][0] - self.RELATUM_pos[0]
+                d_y = self.referents_positions[i][1] - self.RELATUM_pos[1]
+                r = math.sqrt(d_x**2+d_y**2)
+                angle = np.arctan2(d_y, d_x)
+                angle -= self.angle_ref
+                if angle > self.PI:
+                    angle -= 2*self.PI
+                elif angle <= -self.PI:
+                    angle += 2*self.PI
+                
+                value = self.getValue(r, angle)
+                if value != None:
+                    triples.append(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + self.referents_names[i])
+
+                '''
+                # visualize referents with QSR without reasoning
+                self.marker = Marker()
+                self.marker.header.frame_id = 'map'
+                self.marker.id = i + 2
+                self.marker.type = self.marker.TEXT_VIEW_FACING
+                self.marker.action = self.marker.ADD
+                self.marker.pose = Pose()
+                self.marker.pose.position.x = states_msg.pose[i].position.x
+                self.marker.pose.position.y = states_msg.pose[i].position.y
+                self.marker.pose.position.z = 2.0
+                self.marker.color.r = 1.0
+                self.marker.color.g = 0.0
+                self.marker.color.b = 0.0
+                self.marker.color.a = 1.0
+                self.marker.scale.x = 0.5
+                self.marker.scale.y = 0.5
+                self.marker.scale.z = 0.5
+                #marker.frame_locked = False
+                self.marker.text = self.referents_names[i] + ', ' + value
+                self.marker.ns = "my_namespace"
+                if self.marker not in self.marker_array_semantic_labels.markers:
+                    self.marker_array_semantic_labels.markers.append(self.marker)
+                '''
+
+            # publish semantic labels with QSR without reasoning
+            #pub_markers_semantic_labels.publish(self.marker_array_semantic_labels)
+        
+            # print QSR triples every I=100 iterations
+            print('\n\n')
+            print(self.printTriples(triples))
+            
+            # Textual explanations based on LIME
+            #'''
+            # append lime coefficients to the objects
+            lime_names = []
+            lime_coeffs = []
+            # find the closest obstacle to the obstacle with current LIME coefficient
+            for exp in self.lime_exp:
+                mini = math.sqrt( (exp[0] - self.referents_positions[0][0])**2 + (exp[1] - self.referents_positions[0][1])**2 )
+                id = 0
+
+                for j in range(1, len(self.referents_names)):
+                    dist = math.sqrt( (exp[0] - self.referents_positions[j][0])**2 + (exp[1] - self.referents_positions[j][1])**2 )
+                    if dist < mini:
+                        mini = dist
+                        id = j
+
+                if self.referents_names[id] not in lime_names:
+                    lime_names.append(self.referents_names[id])
+                    lime_coeffs.append([exp[2]])
+                else:
+                    index = lime_names.index(self.referents_names[id])
+                    lime_coeffs[index].append(exp[2])    
+            #'''
+
+            #'''
+            # printing out contributing obstacles with all their  weights
+            print('\n\n')
+            for j in range(0, len(lime_names)):
+                if len(lime_coeffs[j]) == 1:
+                    print(lime_names[j] + ' has a weight ' + str(lime_coeffs[j][0]))
+                elif len(lime_coeffs[j]) > 1:
+                    s = ''
+                    for c in lime_coeffs[j]:
+                        s += str(c) + ', '
+                    print(lime_names[j] + ' has weights ' + s)    
+            #'''
+
+            #'''
+            # printing out contributing obstacles with their triples and max absolute weights
+            print('\n\n')
+            for i in range(0, len(lime_names)):
+                name = lime_names[i]
+                idx = self.referents_names.index(name)
+            
+                if len(lime_coeffs[i]) > 1:
+                    coeff = max(lime_coeffs[i], key=abs)
+                else:
+                    coeff = lime_coeffs[i][0]
+
+                d_x = self.referents_positions[idx][0] - self.RELATUM_pos[0]
+                d_y = self.referents_positions[idx][1] - self.RELATUM_pos[1]
+                r = math.sqrt(d_x**2+d_y**2)
+                angle = np.arctan2(d_y, d_x)
+                angle -= self.angle_ref
+                if angle > self.PI:
+                    angle -= 2*self.PI
+                elif angle <= -self.PI:
+                    angle += 2*self.PI
+                value = self.getValue(r, angle)    
+                print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with weight of ' + str(coeff))
+            #'''
+
+            #'''
+            # printing with the sorted obstacles
+            lime_coeffs_max_by_abs = []
+            for i in range(0, len(lime_coeffs)):
+                lime_coeffs_max_by_abs.append(max(lime_coeffs[i], key=abs))
+            lime_coeffs_max_by_abs_sorted = sorted(lime_coeffs_max_by_abs, key=abs, reverse=True)
+            for i in range(0, len(lime_coeffs_max_by_abs_sorted)):
+                idx_ = lime_coeffs_max_by_abs.index(lime_coeffs_max_by_abs_sorted[i])
+                name = lime_names[idx_]
+                idx = self.referents_names.index(name)
+                d_x = self.referents_positions[idx][0] - self.RELATUM_pos[0]
+                d_y = self.referents_positions[idx][1] - self.RELATUM_pos[1]
+                r = math.sqrt(d_x**2+d_y**2)
+                angle = np.arctan2(d_y, d_x)
+                angle -= self.angle_ref
+                if angle > self.PI:
+                    angle -= 2*self.PI
+                elif angle < -self.PI:
+                    angle += 2*self.PI
+                value = self.getValue(r, angle)
+
+                coeff = lime_coeffs_max_by_abs[idx_]
+                if coeff > 0:
+                    print('\n')
+                    print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' is the ' + str(i+1) + '. most important reason for the robot\'s deviation with the weight of ' + str(coeff))
+                    print('Robot must deviate from its initial path because of ' + name)
+                    if i == 0:
+                        print(name + ' is the main reason for the robot’s deviation and it increases it')
+                    print('without that segment, the local plan would deviate less from the global plan')    
+                else:
+                    print('\n')
+                    print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with the weight of ' + str(coeff))
+                    print('If ' + name + ' was not there robot would deviate (more) from its initial path')
+                    print('without that segment, the local plan would deviate more from the global plan')    
+            #'''
+
             self.I = 0
+        #'''
 
+        # do QSR reasoning with 4 points
         #reason(states_msg)
-
-        # append lime coefficients to the objects
-        lime_names = []
-        lime_coeffs = []
-        for exp in self.lime_exp:
-            mini = math.sqrt( (exp[1] - self.referents_poss[0][0])**2 + (exp[2] - self.referents_poss[0][1])**2 )
-            id = 0
-            #print('len(referents_names) = ', len(referents_names))
-            #print('exp = ', exp)
-            #print('len(referents_poss) = ', len(referents_poss))
-            for j in range(1, len(self.referents_names)):
-                dist = math.sqrt( (exp[1] - self.referents_poss[j][0])**2 + (exp[2] - self.referents_poss[j][1])**2 )
-                if dist < mini:
-                    mini = dist
-                    id = j
-            if self.referents_names[id] not in lime_names:
-                lime_names.append(self.referents_names[id])
-                lime_coeffs.append([exp[0]])
-            else:
-                index = lime_names.index(self.referents_names[id])
-                lime_coeffs[index].append(exp[0])    
-        
-
-        '''
-        # printing out contributing obstacles with all their  weights
-        for j in range(0, len(lime_names)):
-            if len(lime_coeffs[j]) == 1:
-                print(lime_names[j] + ' has a weight ' + str(lime_coeffs[j][0]))
-            elif len(lime_coeffs[j]) > 1:
-                s = ''
-                for c in lime_coeffs[j]:
-                    s += str(c) + ', '
-                print(lime_names[j] + ' has weights ' + s)    
-        '''
-
-        '''
-        # printing out contributing obstacles with their triples and max absolute weights
-        #print('len(lime_names) = ', len(lime_names))
-        print('\n\n')
-        for i in range(0, len(lime_names)):
-            name = lime_names[i]
-            idx = self.referents_names.index(name)
-        
-            if len(lime_coeffs[i]) > 1:
-                coeff = max(lime_coeffs[i], key=abs)
-            else:
-                coeff = lime_coeffs[i][0]
-
-            d_x = self.referents_poss[idx][0] - RELATUM_pos[0]
-            d_y = self.referents_poss[idx][1] - RELATUM_pos[1]
-            r = math.sqrt(d_x**2+d_y**2)
-            angle = np.arctan2(d_y, d_x)
-            angle -= self.angle_ref
-            if angle > self.PI:
-                angle -= 2*self.PI
-            elif angle < -self.PI:
-                angle += 2*self.PI
-            value = self.getValue(r, angle)    
-            print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with weight of ' + str(coeff))
-        '''
-
-        # printing with the sorted obstacles
-        lime_coeffs_max_by_abs = []
-        for i in range(0, len(lime_coeffs)):
-            lime_coeffs_max_by_abs.append(max(lime_coeffs[i], key=abs))
-        lime_coeffs_max_by_abs_sorted = sorted(lime_coeffs_max_by_abs, key=abs, reverse=True)
-        for i in range(0, len(lime_coeffs_max_by_abs_sorted)):
-            idx_ = lime_coeffs_max_by_abs.index(lime_coeffs_max_by_abs_sorted[i])
-            name = lime_names[idx_]
-            idx = self.referents_names.index(name)
-            d_x = self.referents_poss[idx][0] - RELATUM_pos[0]
-            d_y = self.referents_poss[idx][1] - RELATUM_pos[1]
-            r = math.sqrt(d_x**2+d_y**2)
-            angle = np.arctan2(d_y, d_x)
-            angle -= self.angle_ref
-            if angle > self.PI:
-                angle -= 2*self.PI
-            elif angle < -self.PI:
-                angle += 2*self.PI
-            value = self.getValue(r, angle)
-
-            '''
-            coeff = lime_coeffs_max_by_abs[idx_]
-            if coeff > 0:
-                print('\n')
-                print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' is the ' + str(i+1) + '. most important reason for the robot\'s deviation with the weight of ' + str(coeff))
-                print('Robot must deviate from its initial path because of ' + name)
-                if i == 0:
-                    print(name + ' is the main reason for the robot’s deviation and it increases it')
-                print('without that segment, the local plan would deviate less from the global plan')    
-            else:
-                print('\n')
-                print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + name + ' with the weight of ' + str(coeff))
-                print('If ' + name + ' was not there robot would deviate (more) from its initial path')
-                print('without that segment, the local plan would deviate more from the global plan')
-            '''
 
     def getValue(self, r, angle):
         value = ''    
@@ -621,8 +691,8 @@ rospy.init_node('qsr', anonymous=True)
 # Initalize a subscriber to the "/gazebo/model_states" topic with the function "model_state_callback" as a callback
 sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, qsr_obj.model_state_callback)
 
-pub_markers = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
-pub_markers_orients = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
+pub_markers_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
+pub_markers_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
 
 sub_ORIGIN = rospy.Subscriber("/ORIGIN", String, qsr_obj.ORIGIN_callback)
 #rostopic pub /ORIGIN std_msgs/String 'cabinet'
@@ -633,6 +703,7 @@ sub_RELATUM = rospy.Subscriber("/RELATUM", String, qsr_obj.RELATUM_callback)
 sub_triple = rospy.Subscriber("/triple", String, qsr_obj.triple_callback)
 #rostopic pub /triple std_msgs/String 'cabinet,tiago,wall_1_model'
 
+#[x,y,coeff]
 sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, qsr_obj.lime_callback)
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
