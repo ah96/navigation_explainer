@@ -1488,7 +1488,7 @@ class LimeImageExplainer(object):
                             enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                             start_label=1, mask=None)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -1499,7 +1499,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments_slic.astype('float64'), aspect='auto')
         fig.savefig('segments_slic.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         segments = np.zeros(img.shape, np.uint8)
 
@@ -1906,7 +1906,7 @@ class LimeImageExplainer(object):
 
         #print("\nsm7 runtime: ", end - start)
 
-        '''
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -1917,7 +1917,7 @@ class LimeImageExplainer(object):
         ax.imshow(segments.astype('float64'), aspect='auto')
         fig.savefig('segments_final.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         # fix labels of segments
         seg_labels = np.unique(segments)

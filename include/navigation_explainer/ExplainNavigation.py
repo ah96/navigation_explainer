@@ -1509,7 +1509,7 @@ class ExplainRobotNavigation:
         #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
         #print('\nmode = ', mode)
 
-        my_dist_fun = False
+        my_dist_fun = True
         if my_dist_fun == True:
             # deviation of local plan from global plan dataframe
             self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
@@ -2258,21 +2258,43 @@ class ExplainRobotNavigation:
     # function for plotting lime image perturbations
     def classifier_fn_image_lime_plot(self):
 
+        print('self.sample_size = ', self.sample_size)
+
         # plot every perturbation
-        for i in range(0, self.sampled_instance.shape[0]):
+        for ctr in range(0, self.sample_size):
 
             # save current perturbation as .csv file
             #pd.DataFrame(self.sampled_instance[i][:, :, 0]).to_csv('perturbation_' + str(i) + '.csv', index=False, header=False)
 
+            gray_shade = 180
+            white_shade = 0
+            image = copy.deepcopy(self.sampled_instance[ctr][:, :])
+            image = gray2rgb(image)
+            #pd.DataFrame(image[:,:,0]).to_csv('IMAGE' + str(ctr) + '.csv')
+            for i in range(0, image.shape[0]):
+                for j in range(0, image.shape[1]):
+                    if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                    elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade
+
             # plot perturbed local costmap
-            plt.imshow(self.sampled_instance[i][:, :])
+            #plt.imshow(self.sampled_instance[i][:, :])
+            fig = plt.figure(frameon=True)
+            w = 1.6
+            h = 1.6
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(image.astype(np.uint8))
 
             # indices of local plan's poses in local costmap
             local_plan_x_list = []
             local_plan_y_list = []
 
             # find if there is local plan
-            self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+            self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == ctr]
             for j in range(0, self.local_plans_local.shape[0]):
                     x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
                     y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
@@ -2281,15 +2303,15 @@ class ExplainRobotNavigation:
                         local_plan_x_list.append(x_temp)
                         local_plan_y_list.append(y_temp)
                         
-                        #'''
+                        '''
                         [yaw, pitch, roll] = self.quaternion_to_euler(0.0, 0.0, self.local_plans_local.iloc[j, 2], self.local_plans_local.iloc[j, 3])
                         yaw_x = math.cos(yaw)
                         yaw_y = math.sin(yaw)
                         plt.quiver(x_temp, y_temp, yaw_y, yaw_x, color='white')
-                        #'''
+                        '''
 
             # plot transformed plan
-            plt.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='x')
+            #plt.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='x')
 
             '''
             # plot footprints for first five points of local plan
@@ -2321,18 +2343,19 @@ class ExplainRobotNavigation:
             '''
 
             # plot local plan
-            plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
+            #plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
 
             # plot robot's location and orientation
-            plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-            plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
+            #plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+            #plt.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
 
             # plot command velocities as text
-            plt.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_perturb.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_perturb.iloc[i, 2], 2)))
+            #plt.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_perturb.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_perturb.iloc[i, 2], 2)))
 
             # save figure
-            plt.savefig('perturbation_' + str(i) + '.png')
-            plt.clf()
+            print('i = ', ctr)
+            fig.savefig('perturbation_' + str(ctr) + '.png')
+            fig.clf()
 
     # plot explanation picture and segments
     def plotExplanation(self):
