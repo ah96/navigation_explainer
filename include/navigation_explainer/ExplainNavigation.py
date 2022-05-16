@@ -124,7 +124,7 @@ class ExplainRobotNavigation:
         self.expID = expID
         self.index = self.expID
 
-        self.manual_instance_loading = True
+        self.manual_instance_loading = False
         
         self.case = 3
         self.eps = False
@@ -155,6 +155,7 @@ class ExplainRobotNavigation:
 
                     # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
                     self.image = self.image * 1.0
+                    print('self.image.size = ', self.image.size)
 
                 elif self.manual_instance_loading == True:
                     # Load costmap
@@ -209,7 +210,12 @@ class ExplainRobotNavigation:
                 print('\nsave_data_for_local_planner_time / before_explain_instance_time (%) = ', 100 * save_data_for_local_planner_time / before_explain_instance_time)
 
                 # get data needed for sm7 segmentation method
-                devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
+                #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
+                devDistance_x = 0 
+                sum_x = 0
+                devDistance_y = 0
+                sum_y = 0
+                devDistance = 0
 
                 if self.manually_make_semantic_map == True:
                     # manually make semantic map
@@ -1455,7 +1461,7 @@ class ExplainRobotNavigation:
         # original_deviation for small_deviation = 69.0
         # original_deviation for rotate_in_place = 307.4962940090125
 
-        plot_perturbations = True
+        plot_perturbations = False
         if plot_perturbations == True:
             # only needed for classifier_fn_image_plot() function
             self.sampled_instance = sampled_instance
@@ -2428,6 +2434,12 @@ class ExplainRobotNavigation:
         #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
         #marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(180, 180, 180)) #color=(255, 255, 0)
         #ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        for i in range(0, self.temp_img.shape[0]):
+            for j in range(0, self.temp_img.shape[1]):
+                if self.image[i, j] == 99 and self.temp_img[i, j, 0] == self.temp_img[i, j, 1] == self.temp_img[i, j, 2] == 180:
+                    self.temp_img[i, j, 0] = 0
+                    self.temp_img[i, j, 1] = 0
+                    self.temp_img[i, j, 2] = 0
         ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
         fig.savefig(path_core + '/explanation.png', transparent=False)
         if self.eps == True:
@@ -2436,7 +2448,7 @@ class ExplainRobotNavigation:
                         
         if self.semantic_seg == False:
             # plot segments with weights
-            #self.segments += 1
+            self.segments += 1
             regions = regionprops(self.segments.astype(int))
             labels = []
             for props in regions:
@@ -2450,13 +2462,14 @@ class ExplainRobotNavigation:
             fig.add_axes(ax)    
             for props in regions:
                 v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v-1:
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='black')  # str(round(self.exp[j][1],4)) #str(v))
-                        break
+                if v > 1:
+                    cx, cy = props.centroid  # centroid coordinates
+                    ax.scatter(cy, cx, c='white', marker='o')   
+                    # printing/plotting explanation weights
+                    for j in range(0, len(self.exp)):
+                        if self.exp[j][0] == v-1:
+                            ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='black')  # str(round(self.exp[j][1],4)) #str(v))
+                            break
             # Save segments with nice numbering as a picture
             ax.imshow(self.segments, aspect='auto')
             fig.savefig(path_core + '/weighted_segments.png')

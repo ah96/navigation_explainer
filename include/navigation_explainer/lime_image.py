@@ -243,8 +243,10 @@ class LimeImageExplainer(object):
                                                     random_seed=random_seed)
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
-            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            segments = self.sm_slic_custom(image_orig, image)
+            #segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
             #segments = self.sm_semantic(image, x_odom, y_odom)
+            
 
             #segments = self.sm1(image)
             #segments = self.sm2(image_orig, image, x_odom, y_odom)
@@ -296,6 +298,9 @@ class LimeImageExplainer(object):
             data[0].reshape(1, -1),
             metric=distance_metric
         ).ravel()
+        #print('distance_metric = ', distance_metric)
+        #print('distances = ', distances)
+        #print('model_regressor = ', model_regressor)
 
         ret_exp = ImageExplanation(image, segments)
         if top_labels:
@@ -351,7 +356,7 @@ class LimeImageExplainer(object):
         #print('data.shape: ', data.shape)
         '''
 
-        test_all_comb = False
+        test_all_comb = True
 
         if test_all_comb == True:
             # My perturbation - test all possible combinations
@@ -368,7 +373,7 @@ class LimeImageExplainer(object):
                 data = data[int(data.shape[0]/2):, :]
                 data[0, 1:] = 1
                 data[-1, 1:] = 0 # only if I use my perturbation    
-            print('data = ', data)
+            #print('data = ', data)
             print('data.shape = ', data.shape)
         else:
             # My perturbation - n_features perturbations - only 1 segment active per perturbation
@@ -378,7 +383,8 @@ class LimeImageExplainer(object):
                 lst.append([1]*n_features)
                 lst[i][n_features-i] = 0    
             data = np.array(lst).reshape((num_samples, n_features))
-            print('data = ', data)
+            #print('data = ', data)
+            print('data.shape = ', data.shape)
             #to_add = np.array([1]*n_features).reshape(1,n_features)
             #data = np.concatenate((to_add,data))
             #print('data = ', data)
@@ -1462,6 +1468,90 @@ class LimeImageExplainer(object):
 
         return data, np.array(labels), classifier_fn_time, planner_time, target_calculation_time, costmap_save_time
 
+    def sm_slic_custom(self, image, img_rgb):
+        # import needed libraries
+        from skimage.segmentation import slic
+        #from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+        import numpy as np
+        #import pandas as pd
+        from skimage.color import gray2rgb
+        import copy
+        import time
+
+        print('\nsm7 started')
+        
+        # show original image
+        img = copy.deepcopy(image)
+
+        #start = time.time()
+
+        # Find segments_2
+        segments_slic = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                            multichannel=True, convert2lab=True,
+                            enforce_connectivity=True, min_size_factor=0.005, max_size_factor=10, slic_zero=False,
+                            start_label=1, mask=None)
+
+        #'''
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments_slic.astype('float64'), aspect='auto')
+        fig.savefig('segments_slic.png', transparent=False)
+        fig.clf()
+        #'''
+
+        segments = np.zeros(img.shape, np.uint8)
+
+        # make one free space segment
+        ctr = 0
+        segments[:, :] = ctr
+        ctr = ctr + 1
+
+        num_of_obstacles = 0
+        # add obstacle segments        
+        for i in np.unique(segments_slic):
+            temp = img[segments_slic == i]
+            count_of_99_s = np.count_nonzero(temp == 99)
+            #print('count: ', count)
+            #print('temp: ', temp)
+            #print('len(temp): ', temp.shape[0])
+            if np.all(img[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
+                #print('obstacle')
+                segments[segments_slic == i] = ctr
+                ctr = ctr + 1
+                num_of_obstacles += 1
+
+        print('num_of_obstacles: ', num_of_obstacles)
+        print('np.unique(segments): ', np.unique(segments))
+
+        #'''
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(segments.astype('float64'), aspect='auto')
+        fig.savefig('segments_final.png', transparent=False)
+        fig.clf()
+        #'''
+
+        '''
+        # fix labels of segments
+        seg_labels = np.unique(segments)
+        for i in range(0, len(seg_labels)):
+            label = seg_labels[i]
+            if label != i:
+                segments[segments == label] = i
+        '''
+
+        return segments
 
 
     def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, devDistance_x, sign_x, devDistance_y, sign_y, devDistance, plan_x_list, plan_y_list):
