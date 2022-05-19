@@ -35,7 +35,7 @@ from std_msgs.msg import Float32MultiArray
 import scipy as sp
 
 
-global br, pub_exp_image, pub_lime, pub_exp_pointcloud
+#global br, pub_exp_image, pub_lime, pub_exp_pointcloud
 
 class LimeBase(object):
     def __init__(self,
@@ -202,26 +202,21 @@ class ImageExplanation(object):
         self.use_maximum_weight = False
         self.all_weights_zero = False
 
+
+        self.val_low = 0.0
+        self.val_high = 255.0
+        self.gray_shade = 180
+
     def get_image_and_mask(self, label):
         #print('get_image_and_mask starting')
 
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
-        segments = self.segments
-        image = self.image
+        #segments = self.segments
+        #image = self.image
         exp = self.local_exp[label]
-        #print('\nself.local_exp = ', self.local_exp)
-        #print('\nexp = ', exp)
 
         temp = np.zeros(self.image.shape)
-
-        #color_free_space = False
-        #use_maximum_weight = False
-        #all_weights_zero = False
-
-        val_low = 0.0
-        val_high = 255.0
-        gray_shade = 180
 
         w_sum = 0.0
         w_s = []
@@ -234,12 +229,15 @@ class ImageExplanation(object):
             max_w = 1
 
         if self.all_weights_zero == True:
-            temp[self.image == 0] = gray_shade
-            temp[self.image != 0] = val_low
-            return temp, exp        
+            temp[self.image == 0] = self.gray_shade
+            temp[self.image != 0] = self.val_low
+            return temp, exp
+
+        print('exp = ', exp)
+        print('np.unique(self.segments) = ', np.unique(self.segments))
 
         for f, w in exp:
-            #print('\n(f, w): ', (f, w))
+            print('\n(f, w): ', (f, w))
 
             if w < -0.01:
                 c = -1
@@ -249,38 +247,41 @@ class ImageExplanation(object):
                 c = 0
             #print('c = ', c)
             
-            x1 = np.bincount(image[segments == f][:,0] > 0.0)
-            x2 = len(image[segments == f][:,0])
-            free_space_percentage = x1[0] / x2
+            x1 = np.bincount(self.image[self.segments == f][:,0] > 0.0)
+            if x1 == []:
+                free_space_percentage = 1.0
+            else:
+                x2 = len(self.image[self.segments == f][:,0])
+                free_space_percentage = x1[0] / x2
             #print('free_space_percentage: ', free_space_percentage)
 
             # free space
             if free_space_percentage > 0.9:
                 if self.color_free_space == False:
-                    temp[segments == f, 0] = gray_shade
-                    temp[segments == f, 1] = gray_shade
-                    temp[segments == f, 2] = gray_shade
+                    temp[self.segments == f, 0] = self.gray_shade
+                    temp[self.segments == f, 1] = self.gray_shade
+                    temp[self.segments == f, 2] = self.gray_shade
             # obstacle
             else:
                 if self.color_free_space == False:
                     if c == 1:
-                        temp[segments == f, 0] = 0.0
+                        temp[self.segments == f, 0] = 0.0
                         if self.use_maximum_weight == True:
-                            temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / max_w
+                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
                         else:
-                            temp[segments == f, 1] = val_low + (val_high - val_low) * abs(w) / w_sum 
-                        temp[segments == f, 2] = 0.0
+                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                        temp[self.segments == f, 2] = 0.0
                     elif c == 0:
-                        temp[segments == f, 0] = 0.0
-                        temp[segments == f, 1] = 0.0
-                        temp[segments == f, 2] = 0.0
+                        temp[self.segments == f, 0] = 0.0
+                        temp[self.segments == f, 1] = 0.0
+                        temp[self.segments == f, 2] = 0.0
                     elif c == -1:
                         if self.use_maximum_weight == True:
-                            temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / max_w
+                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
                         else:
-                            temp[segments == f, 0] = val_low + (val_high - val_low) * abs(w) / w_sum 
-                        temp[segments == f, 1] = 0.0
-                        temp[segments == f, 2] = 0.0
+                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                        temp[self.segments == f, 1] = 0.0
+                        temp[self.segments == f, 2] = 0.0
                                         
         #print('get_image_and_mask ending')
         return temp, exp
@@ -314,6 +315,16 @@ class lime_rt(object):
         self.localCostmapOriginY = 0 
         self.localCostmapResolution = 0
         self.original_deviation = 0
+        self.costmap_size = 160
+
+        self.global_plan_empty = True
+        self.local_costmap_empty = True
+
+        self.data = []
+        self.labels = []
+        self.distances = []
+        self.num_samples = 0
+        self.n_features = 0
 
         self.divide_obstacles = False
 
@@ -385,7 +396,7 @@ class lime_rt(object):
 
     # classifier function for lime image
     def classifier_fn(self, sampled_instance):
-        print('\nclassifier_fn_image_lime started')
+        #print('\nclassifier_fn_image_lime started')
 
         print('\nsampled_instance.shape = ', sampled_instance.shape)
 
@@ -426,8 +437,6 @@ class lime_rt(object):
         # load transformed global plan to /odom frame
         transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
 
-        costmap_size = 160
-
         # fill the list of transformed plan coordinates
         self.transformed_plan_xs = []
         self.transformed_plan_ys = []
@@ -435,30 +444,32 @@ class lime_rt(object):
             x_temp = int((transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-            if 0 <= x_temp < costmap_size and 0 <= y_temp < costmap_size:
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 self.transformed_plan_xs.append(x_temp)
                 self.transformed_plan_ys.append(y_temp)
 
         # calculate original deviation - sum of minimal point-to-point distances
-        original_deviation = -1.0
-        diff_x = 0
-        diff_y = 0
-        devs = []
-        for j in range(0, len(self.local_plan_x_list)):
-            local_diffs = []
-            for k in range(0, len(self.transformed_plan_xs)):
-                diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
-                diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
-                diff = math.sqrt(diff_x + diff_y)
-                local_diffs.append(diff)                        
-            devs.append(min(local_diffs))   
-        self.original_deviation = sum(devs)
-        #print('\noriginal_deviation = ', original_deviation)
-        # original_deviation for big_deviation = 745.5051688094327
-        # original_deviation for big_deviation without wall = 336.53749938826286
-        # original_deviation for no_deviation = 56.05455197218764
-        # original_deviation for small_deviation = 69.0
-        # original_deviation for rotate_in_place = 307.4962940090125
+        calculate_original_deviation = True
+        if calculate_original_deviation == True:
+            original_deviation = -1.0
+            diff_x = 0
+            diff_y = 0
+            devs = []
+            for j in range(0, len(self.local_plan_x_list)):
+                local_diffs = []
+                for k in range(0, len(self.transformed_plan_xs)):
+                    diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
+                    diff = math.sqrt(diff_x + diff_y)
+                    local_diffs.append(diff)                        
+                devs.append(min(local_diffs))   
+            self.original_deviation = sum(devs)
+            #print('\noriginal_deviation = ', original_deviation)
+            # original_deviation for big_deviation = 745.5051688094327
+            # original_deviation for big_deviation without wall = 336.53749938826286
+            # original_deviation for no_deviation = 56.05455197218764
+            # original_deviation for small_deviation = 69.0
+            # original_deviation for rotate_in_place = 307.4962940090125
 
         # DETERMINE THE DEVIATION TYPE
         determine_dev_type = True
@@ -519,12 +530,13 @@ class lime_rt(object):
                     x_temp = int((local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
                     y_temp = int((local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-                    if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+                    if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                         local_plan_xs.append(x_temp)
                         local_plan_ys.append(y_temp)
                         local_plan_found = True
             
             # this happens almost never when only obstacles are segments, but let it stay for now
+            #'''
             if local_plan_found == False:
                 if deviation_type == 'stop':
                     local_plan_deviation.iloc[i, 0] = dev_original
@@ -532,7 +544,8 @@ class lime_rt(object):
                     local_plan_deviation.iloc[i, 0] = 745.5051688094327 #1000
                 elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
                     local_plan_deviation.iloc[i, 0] = 0.0
-                continue             
+                continue
+            #'''             
 
             # find deviation as a sum of minimal point-to-point differences
             diff_x = 0
@@ -552,38 +565,19 @@ class lime_rt(object):
 
             local_plan_deviation.iloc[i, 0] = sum(devs)
 
-        cmd_vel_perturb['deviate'] = local_plan_deviation
         
-        print('\nclassifier_fn_image_lime ended\n')
+        
+        #print('\nclassifier_fn_image_lime ended\n')
 
+        cmd_vel_perturb['deviate'] = local_plan_deviation
         return np.array(cmd_vel_perturb.iloc[:, 3:])
+        #return local_plan_deviation
 
     # segmentation algorithm
-    def sm_only_obstacles(self, image, img_rgb, x_odom, y_odom, plan_x_list, plan_y_list):
+    def segment_local_costmap(self, image, img_rgb):
         print('segmentation algorithm')
         # show original image
-        img = copy.deepcopy(image)
-
-        #start = time.time()
-
-        #regions = regionprops(img.astype(int))
-        #for props in regions:
-            #v = props.label  # value of label
-            #cx, cy = props.centroid  # centroid coordinates
-            #print("(cy, cx, v) = ", (cy, cx, v))   
-            
-        '''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(img_rgb.astype('float64'), aspect='auto')
-        fig.savefig('img_rgb.png', transparent=False)
-        fig.clf()
-        '''
+        #img = copy.deepcopy(image)
 
         # Find segments_slic
         segments_slic = slic(img_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
@@ -604,393 +598,36 @@ class lime_rt(object):
         fig.clf()
         '''
 
-        segments = np.zeros(img.shape, np.uint8)
-
-
-        d_x = plan_x_list[-1] - x_odom
-        if d_x == 0:
-            d_x = 1
-        k = (-plan_y_list[-1] + y_odom) / (d_x)
-        #print('abs(k) = ', abs(k)) 
+        self.segments = np.zeros(image.shape, np.uint8)
 
         # make one free space segment
         ctr = 0
-        segments[:, :] = ctr
+        self.segments[:, :] = ctr
         ctr = ctr + 1
 
         num_of_obstacles = 0
         # add obstacle segments        
         for i in np.unique(segments_slic):
-            temp = img[segments_slic == i]
+            temp = image[segments_slic == i]
             count_of_99_s = np.count_nonzero(temp == 99)
             #print('count: ', count)
             #print('temp: ', temp)
             #print('len(temp): ', temp.shape[0])
-            if np.all(img[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
+            if np.all(image[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
                 #print('obstacle')
-                segments[segments_slic == i] = ctr
+                self.segments[segments_slic == i] = ctr
                 ctr = ctr + 1
                 num_of_obstacles += 1
 
         #print('num_of_obstacles: ', num_of_obstacles)        
 
+        '''
         if self.divide_obstacles == False:
             num_wanted_local_temp = num_of_obstacles
         else:
             num_wanted_local_temp = 8 
-        if num_wanted_local_temp > num_of_obstacles > 0:  #8 > num_of_obstacles > 0:
-            # divide segment obstacles    
-            seg_labels = np.unique(segments)[1:]        
-
-            num_of_seg = len(seg_labels)
-            num_of_wanted_seg = 8
-
-            #print('\nnumber of wanted segments: ', num_of_wanted_seg)
-            #print('number of current segments: ', num_of_seg)
-
-            seg_sizes = []
-
-            if num_of_seg < num_of_wanted_seg:
-                for i in range(0, num_of_seg):
-                    #print(len(segments[segments == seg_labels[i]]))
-                    seg_sizes.append(len(segments[segments == seg_labels[i]]))
-
-            #print('\nsizes of segments original: ', seg_sizes)
-            #print('labels of segments original: ', seg_labels)
-            seg_labels = [x for _, x in sorted(zip(seg_sizes, seg_labels))]
-            seg_labels.reverse()
-            #print('\nsizes of segemnts sorted: ', seg_sizes)
-            #print('labels of segemnts sorted: ', seg_labels)
-
-            seg_missing = num_of_wanted_seg - num_of_seg
-            #print('\nnumber of segments missing: ', seg_missing)
-
-            # if a number of missing segments is smaller or equal than the number of existing segments
-            if seg_missing <= num_of_seg:
-                label_current = len(seg_labels) + 1
-                for i in range(0, seg_missing):
-                    temp = segments[segments == seg_labels[i]]
-                    #print('temp = ', temp)
-
-                    # check obstacle shape
-                    w_min = 161
-                    w_max = -1
-                    h_min = 161
-                    h_max = -1
-                    for j in range(0, segments.shape[0]):
-                        for q in range(0, segments.shape[1]):
-                            if segments[j, q] == seg_labels[i]:
-                                if j > h_max:
-                                    h_max = j
-                                if j < h_min:
-                                    h_min = j
-                                if q > w_max:
-                                    w_max = q
-                                if q < w_min:
-                                    w_min = q           
-
-                    #print('\n(h_min, h_max): ', (h_min, h_max))
-                    #print('(w_min, w_max): ', (w_min, w_max))
-
-                    height = h_max - h_min + 1
-                    #print('\nheight', height)
-                    width = w_max - w_min + 1
-                    #print('width', width)
-            
-
-                    # if upright
-                    if abs(k) >= 1:
-                        if height > width:
-                            for j in range(0, int(len(temp) / 2)):
-                                temp[j] = label_current
-                            segments[segments == seg_labels[i]] = temp
-                        else:
-                            label_original = temp[0]
-                            num_of_pixels = len(temp)
-                            counter = 0
-                            finished = False
-                            for q in range(0, segments.shape[1]):
-                                if finished == True:
-                                    break
-                                for j in range(0, segments.shape[0]):
-                                    if segments[j, q] == label_original:
-                                        segments[j, q] = label_current
-                                        counter += 1
-                                        if counter == int(num_of_pixels / 2 + 0.5):
-                                            label_current += 1
-                                            finished = True
-                                            break        
-
-                    # if to the side
-                    elif abs(k) < 1:
-                        #print('OVAJ SLUCAJ')
-                        if width > height:
-                            #print('width > height')
-                            #print('label_current: ', label_current)
-                            label_current
-                            for j in range(0, int(len(temp) / 2)):
-                                temp[j] = label_current
-                            segments[segments == seg_labels[i]] = temp   
-                        else:
-                            #print('width < height')
-                            #print('label_current: ', label_current)
-                            label_original = temp[0]
-                            #print('label_original = ', label_original)
-                            num_of_pixels = len(temp)
-                            counter = 0
-                            for q in range(0, segments.shape[1]):
-                                for j in range(0, segments.shape[0]):
-                                    if segments[j, q] == label_original:
-                                        #print('IN')
-                                        #print('counter = ', counter)
-                                        if 0 <= counter <= num_of_pixels / 2:
-                                            segments[j, q] = label_current
-                                        counter += 1
-
-                            '''
-                            for j in range(0, height):
-                                for q in range(0, int(width/2)):
-                                    if j * width + q > len(temp) - 1:
-                                        continue
-                                    temp[j * width + q] = label_original
-                                for q in range(int(width/2), width):
-                                    if j * width + q > len(temp) - 1:
-                                        continue
-                                    temp[j * width + q] = label_current
-                            '''
-                    
-                    label_current += 1
-
-            # if a number of missing segments is greater than the number of existing segments
-            else:
-                num_of_new_seg_per_old_seg = int(seg_missing / num_of_seg)
-                
-                # if a number of new segment per old segments is integer and same for all old segments
-                if num_of_new_seg_per_old_seg == seg_missing / num_of_seg:
-                    #print('CIO BROJ')
-                    #print('\nnumber of new segments per existing segment: ', num_of_new_seg_per_old_seg)
-
-                    label_current = len(seg_labels) + 1
-                    
-                    for i in range(0, num_of_seg):
-                        temp = segments[segments == seg_labels[i]]
-
-                        # check obstacle shape
-                        w_min = 161
-                        w_max = -1
-                        h_min = 161
-                        h_max = -1
-                        for j in range(0, segments.shape[0]):
-                            for q in range(0, segments.shape[1]):
-                                if segments[j, q] == seg_labels[i]:
-                                    if j > h_max:
-                                        h_max = j
-                                    if j < h_min:
-                                        h_min = j
-                                    if q > w_max:
-                                        w_max = q
-                                    if q < w_min:
-                                        w_min = q
-
-                        #print('\n(h_min, h_max): ', (h_min, h_max))
-                        #print('(w_min, w_max): ', (w_min, w_max))
-
-                        height = h_max - h_min + 1
-                        #print('\nheight', height)
-                        width = w_max - w_min + 1
-                        #print('width', width)
-
-                        # if upright
-                        if abs(k) >= 1:
-                            #print('UPRIGHT')
-                            if height > width:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if (counter + 1) % step == 0:
-                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg:
-                                                        label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                label_current += 1
-                                                finished = True
-                                                break
-                        # if to the side
-                        else:
-                            #print('UPRIGHT')
-                            if width > height:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg + 1) + 0.5)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if (counter + 1) % step == 0:
-                                                    label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                label_current += 1
-                                                finished = True
-                                                break
-
-                # if a number of new segment per old segments is integer and same for all old segments
-                else:
-                    #print('NON-CIO BROJ')
-
-                    whole_part = int(seg_missing / num_of_seg)
-                    #print('whole part = ', whole_part)
-                    rest = seg_missing % num_of_seg
-                    #print('rest = ', rest)
-
-                    put_rest_to_biggest_segment = False
-
-                    num_of_new_seg_per_old_seg_list = [whole_part] * num_of_seg
-
-                    if put_rest_to_biggest_segment == False:
-                        for i in range(0, rest):
-                            num_of_new_seg_per_old_seg_list[i] += 1
-                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)    
-                    else:
-                        num_of_new_seg_per_old_seg_list[0] += rest
-                        #print('num_of_new_seg_per_old_seg_list: ', num_of_new_seg_per_old_seg_list)
-
-
-                    label_current = len(seg_labels) + 1
-                    #print('\nlabel_current = ', label_current)
-                    
-                    for i in range(0, num_of_seg):
-                        temp = segments[segments == seg_labels[i]]
-
-                        # check obstacle shape
-                        w_min = 161
-                        w_max = -1
-                        h_min = 161
-                        h_max = -1
-                        for j in range(0, segments.shape[0]):
-                            for q in range(0, segments.shape[1]):
-                                if segments[j, q] == seg_labels[i]:
-                                    if j > h_max:
-                                        h_max = j
-                                    if j < h_min:
-                                        h_min = j
-                                    if q > w_max:
-                                        w_max = q
-                                    if q < w_min:
-                                        w_min = q
-
-                        #print('\n(h_min, h_max): ', (h_min, h_max))
-                        #print('(w_min, w_max): ', (w_min, w_max))
-
-                        height = h_max - h_min + 1
-                        #print('\nheight', height)
-                        width = w_max - w_min + 1
-                        #print('width', width)
-
-                        # if upright
-                        if abs(k) >= 1:
-                            #print('UPRIGHT')
-                            if height > width:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
-                                                        label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                label_current += 1
-                                                finished = True
-                                                break
-
-                        # if to the side
-                        else:
-                            #print('SIDE')
-                            if width > height:
-                                #print('WIDTH')
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 1) # or (... + 0.5) with fixing values from behind
-                                for j in range(1, num_of_new_seg_per_old_seg_list[i] + 1):
-                                    temp[j*step:(j+1)*step] = label_current
-                                    #print('label_current: ', label_current)
-                                    label_current += 1
-                                segments[segments == seg_labels[i]] = temp
-                            else:
-                                #print('HEIGHT')
-                                #print('len(temp): ', len(temp))
-                                step = int(len(temp) / (num_of_new_seg_per_old_seg_list[i] + 1) + 0.5)
-                                #print('step: ', step)
-                                label_original = temp[0]
-                                num_of_pixels = len(temp)
-                                counter = 0
-                                finished = False
-                                for q in range(0, segments.shape[1]):
-                                    if finished == True:
-                                        break
-                                    for j in range(0, segments.shape[0]):
-                                        if segments[j, q] == label_original:
-                                            if counter < step:
-                                                segments[j, q] = label_original
-                                            else:
-                                                segments[j, q] = label_current
-                                                if (counter + 1) % step == 0:
-                                                    #print('counter + 1 = ', counter + 1)
-                                                    #print('label_current = ', label_current)
-                                                    if counter + 1 < num_of_pixels - num_of_new_seg_per_old_seg_list[i]:
-                                                        label_current += 1
-                                            counter += 1
-                                            if counter == num_of_pixels:
-                                                #print('counter_end = ', counter)
-                                                label_current += 1
-                                                finished = True
-                                                break
-
-
+        '''
+        
         #end = time.time()
 
         #print("\nsm7 runtime: ", end - start)
@@ -1008,67 +645,30 @@ class lime_rt(object):
         fig.clf()
         '''
 
-        # fix labels of segments
-        seg_labels = np.unique(segments)
-        for i in range(1, len(seg_labels)):
-            label = seg_labels[i]
-            if label != i:
-                segments[segments == label] = i
+        return self.segments
 
-        #print('\nnp.unique(segments): ', np.unique(segments))
-        #print('\nlen(np.unique(segments)): ', len(np.unique(segments)))
-
-        if len(np.unique(segments)) > 9:
-            # make one free space segment
-            ctr = 0
-            segments[:, :] = ctr
-            ctr = ctr + 1
-
-            num_of_obstacles = 0
-            # add obstacle segments        
-            for i in np.unique(segments_slic):
-                if np.all(img[segments_slic == i] == 99):
-                    #print('obstacle')
-                    segments[segments_slic == i] = ctr
-                    ctr = ctr + 1
-                    num_of_obstacles += 1
-            '''
-            fig = plt.figure(frameon=False)
-            w = 1.6 * 3
-            h = 1.6 * 3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            ax.imshow(segments.astype('float64'), aspect='auto')
-            fig.savefig('segments_final_corrected.png', transparent=False)
-            fig.clf()
-            '''
-
-        return segments
+    def create_data(self):
+        # create data
+        self.n_features = np.unique(self.segments).shape[0]
+        self.num_samples = self.n_features
+        lst = [[1]*self.n_features]
+        for i in range(1, self.num_samples):
+            lst.append([1]*self.n_features)
+            lst[i][self.n_features-i] = 0    
+        self.data = np.array(lst).reshape((self.num_samples, self.n_features))
 
     # call teb
-    def data_labels(self, image,
+    def create_labels(self, image,
                     fudged_image,
                     segments,
                     classifier_fn,
-                    num_samples,
                     batch_size=10):
         #print('data_labels starts')
 
-        n_features = np.unique(segments).shape[0]
-
-        num_samples = n_features
-        lst = [[1]*n_features]
-        for i in range(1, num_samples):
-            lst.append([1]*n_features)
-            lst[i][n_features-i] = 0    
-        data = np.array(lst).reshape((num_samples, n_features))
-
-        labels = []
-        
+        # call teb and get labels
+        self.labels = []
         imgs = []
-        rows = data
+        rows = self.data
         for row in rows:
             temp = copy.deepcopy(image)
             zeros = np.where(row == 0)[0]
@@ -1079,15 +679,17 @@ class lime_rt(object):
             imgs.append(temp)
             if len(imgs) == batch_size:
                 preds = classifier_fn(np.array(imgs))
-                labels.extend(preds)
+                self.labels.extend(preds)
                 imgs = []
         if len(imgs) > 0:
             preds = classifier_fn(np.array(imgs))
-            labels.extend(preds)
+            self.labels.extend(preds)
 
         #print('data_labels ends')
 
-        return data, np.array(labels)
+        self.labels = np.array(self.labels)
+
+        #return self.data, np.array(self.labels)
 
     # Define a callback for the local costmap
     def local_costmap_callback(self, msg):
@@ -1104,7 +706,7 @@ class lime_rt(object):
         self.image.resize((msg.info.height,msg.info.width))
 
         # Turn inflated area to free space and 100s to 99s
-        self.image[self.image == 100] = 99
+        #self.image[self.image == 100] = 99
         self.image[self.image <= 98] = 0
 
         # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
@@ -1122,17 +724,23 @@ class lime_rt(object):
         self.y_odom_index = round((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
 
         # find segments
-        self.segments = self.sm_only_obstacles(self.image, self.image_rgb, self.x_odom_index, self.y_odom_index, self.transformed_plan_xs, self.transformed_plan_ys)
+        self.segments = self.segment_local_costmap(self.image, self.image_rgb)
 
+        self.create_data()
+
+        self.local_costmap_empty = False
+
+        #self.explain()
+
+    def explain(self):
         # save data for teb
         self.SaveImageDataForLocalPlanner()
 
         # call teb
         self.labels=(1,)
         self.top = self.labels
-        self.data, self.labels = self.data_labels(self.image, self.fudged_image, self.segments,
-                                        self.classifier_fn, num_samples=1000,
-                                        batch_size=2048)
+        self.create_labels(self.image, self.fudged_image, self.segments,
+                                        self.classifier_fn, batch_size=2048)
 
         # find distances
         # distance_metric = 'jaccard' - alternative distance metric
@@ -1192,8 +800,8 @@ class lime_rt(object):
         self.header.frame_id = 'odom'
         pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
         pc2.header.stamp = rospy.Time.now()
-        transf = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
-        pub_exp_pointcloud.publish(pc2)
+        transf = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+        self.pub_exp_pointcloud.publish(pc2)
         #rospy.sleep(1.0)
 
         # publish explanation image
@@ -1201,8 +809,8 @@ class lime_rt(object):
         output[:,:,1] = np.flip(output[:,:,1], axis=1)
         output[:,:,2] = np.flip(output[:,:,2], axis=1)
         #print('\nBGR time = ', end_bgr - start_bgr)
-        output_cv = br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
-        pub_exp_image.publish(output_cv)
+        output_cv = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
+        self.pub_exp_image.publish(output_cv)
 
         # publish explanation coefficients
         exp_with_centroids = Float32MultiArray()
@@ -1225,7 +833,7 @@ class lime_rt(object):
                     exp_with_centroids.data.append(exp[j][1])
                     break
         exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
-        pub_lime.publish(exp_with_centroids)
+        self.pub_lime.publish(exp_with_centroids)
         #self.segments-1
 
     # Define a callback for the local plan
@@ -1244,12 +852,12 @@ class lime_rt(object):
         self.transformed_plan_ys = []
 
         # catch transform from /map to /odom and vice versa
-        transf = tfBuffer.lookup_transform('map', 'odom', rospy.Time())
-        t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
-        r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
-        r_ = np.asarray(r.as_matrix())
+        transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+        #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+        #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+        #r_ = np.asarray(r.as_matrix())
 
-        transf_ = tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+        transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
 
         self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
         self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
@@ -1259,17 +867,21 @@ class lime_rt(object):
             self.global_plan_ys.append(msg.poses[i].pose.position.y)
             self.global_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
             self.plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+            '''
             p = np.array([self.global_plan_xs[-1], self.global_plan_ys[-1], 0.0])
             pnew = p.dot(r_) + t
             x_temp = round((pnew[0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = round((pnew[1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 self.transformed_plan_xs.append(x_temp)
                 self.transformed_plan_ys.append(y_temp)
+            '''
+
+        self.global_plan_empty = False
 
     # Define a callback for the local plan
     def local_plan_callback(self, msg):
-        print('\nlocal_plan_callback')
+        #print('\nlocal_plan_callback')
         
         self.local_plan_x_list = [] 
         self.local_plan_y_list = [] 
@@ -1280,9 +892,12 @@ class lime_rt(object):
 
             x_temp = int((msg.poses[i].pose.position.x - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((msg.poses[i].pose.position.y - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < 160 and 0 <= y_temp < 160:
+            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 self.local_plan_x_list.append(x_temp)
                 self.local_plan_y_list.append(y_temp)
+
+        if self.data != [] and self.global_plan_empty == False and self.local_costmap_empty == False:
+            self.explain()
                 
     # Define a callback for the footprint
     def footprint_callback(self, msg):
@@ -1294,36 +909,38 @@ class lime_rt(object):
     def amcl_callback(self, msg):
         self.amcl_pose_tmp = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
 
-    
-# Initialize the ROS Node named 'get_model_state', allow multiple nodes to be run with this name
-rospy.init_node('lime_rt', anonymous=True)
+    def main_(self):
+        self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
+
+        self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
+
+        self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
+
+        # Initalize a subscriber to the odometry
+        self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
+
+        self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
+
+        # Initalize a subscriber to the local costmap
+        self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
+
+        self.pub_exp_image = rospy.Publisher('/lime_explanation_image', Image, queue_size=10)
+        self.br = CvBridge()
+
+        self.pub_exp_pointcloud = rospy.Publisher("/local_explanation_layer", PointCloud2)
+
+        self.pub_lime = rospy.Publisher("/lime_exp", Float32MultiArray, queue_size=10)
+
 
 lime_rt_obj = lime_rt()
 
-tfBuffer = tf2_ros.Buffer()
-tf_listener = tf2_ros.TransformListener(tfBuffer)
+lime_rt_obj.main_()
 
-sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, lime_rt_obj.local_plan_callback)
+# Initialize the ROS Node named 'get_model_state', allow multiple nodes to be run with this name
+rospy.init_node('lime_rt', anonymous=True)
 
-sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, lime_rt_obj.global_plan_callback)
-
-sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, lime_rt_obj.footprint_callback)
-
-# Initalize a subscriber to the odometry
-sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, lime_rt_obj.odom_callback)
-
-sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, lime_rt_obj.amcl_callback)
-
-# Initalize a subscriber to the local costmap
-sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, lime_rt_obj.local_costmap_callback)
-
-pub_exp_image = rospy.Publisher('/lime_explanation_image', Image, queue_size=10)
-br = CvBridge()
-
-pub_exp_pointcloud = rospy.Publisher("/local_explanation_layer", PointCloud2)
-
-pub_lime = rospy.Publisher("/lime_exp", Float32MultiArray, queue_size=10)
-
+lime_rt_obj.tfBuffer = tf2_ros.Buffer()
+lime_rt_obj.tf_listener = tf2_ros.TransformListener(lime_rt_obj.tfBuffer)
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
