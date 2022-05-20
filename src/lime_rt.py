@@ -247,16 +247,20 @@ class ImageExplanation(object):
                 c = 0
             #print('c = ', c)
             
+            '''
             x1 = np.bincount(self.image[self.segments == f][:,0] > 0.0)
             if x1 == []:
                 free_space_percentage = 1.0
             else:
+                print('x1 = ', x1)
                 x2 = len(self.image[self.segments == f][:,0])
                 free_space_percentage = x1[0] / x2
             #print('free_space_percentage: ', free_space_percentage)
+            '''
 
             # free space
-            if free_space_percentage > 0.9:
+            if f == 0:
+                print('free_space, (f, w) = ', (f, w))
                 if self.color_free_space == False:
                     temp[self.segments == f, 0] = self.gray_shade
                     temp[self.segments == f, 1] = self.gray_shade
@@ -317,8 +321,13 @@ class lime_rt(object):
         self.original_deviation = 0
         self.costmap_size = 160
 
+        self.local_plan_x_list_fixed = []
+        self.local_plan_x_list_fixed = []
+        self.local_plan_tmp_fixed = []
+
         self.global_plan_empty = True
         self.local_costmap_empty = True
+        self.local_plan_empty = True
 
         self.data = []
         self.labels = []
@@ -327,6 +336,8 @@ class lime_rt(object):
         self.n_features = 0
 
         self.divide_obstacles = False
+
+        self.local_plan_counter = 0
 
         #'''
         kernel_width=.25
@@ -363,8 +374,8 @@ class lime_rt(object):
         self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
         # Save local plan instance to a file
-        self.local_plan_tmp = pd.DataFrame(self.local_plan_tmp)#.transpose()
-        self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+        self.local_plan_tmp_fixed = pd.DataFrame(self.local_plan_tmp_fixed)#.transpose()
+        self.local_plan_tmp_fixed.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
         # Save plan (from global planner) instance to a file
         self.plan_tmp = pd.DataFrame(self.plan_tmp)#.transpose()
@@ -428,6 +439,8 @@ class lime_rt(object):
 
         #print('\nC++ node ended')
 
+        #rospy.sleep(0.4)
+
         # load command velocities - output from local planner
         cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
 
@@ -436,11 +449,18 @@ class lime_rt(object):
 
         # load transformed global plan to /odom frame
         transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
+        print('len(transformed_plan) = ', len(transformed_plan))
+        print('self.localCostmapOriginX = ', self.localCostmapOriginX)
+        print('self.localCostmapOriginY = ', self.localCostmapOriginY)
+        print('self.localCostmapResolution = ', self.localCostmapResolution)
+        print('transformed_plan = ', transformed_plan)
 
         # fill the list of transformed plan coordinates
         self.transformed_plan_xs = []
-        self.transformed_plan_ys = []
+        self.transformed_plan_ys = [] 
         for i in range(0, transformed_plan.shape[0]):
+            if math.isnan(transformed_plan.iloc[i, 0]) == True or math.isnan(transformed_plan.iloc[i, 1]) == True:
+                continue
             x_temp = int((transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
@@ -455,13 +475,15 @@ class lime_rt(object):
             diff_x = 0
             diff_y = 0
             devs = []
-            for j in range(0, len(self.local_plan_x_list)):
+            for j in range(0, len(self.local_plan_x_list_fixed)):
                 local_diffs = []
                 for k in range(0, len(self.transformed_plan_xs)):
-                    diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
-                    diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
+                    diff_x = (self.local_plan_x_list_fixed[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (self.local_plan_y_list_fixed[j] - self.transformed_plan_ys[k]) ** 2
                     diff = math.sqrt(diff_x + diff_y)
-                    local_diffs.append(diff)                        
+                    local_diffs.append(diff)
+                if local_diffs == []:
+                    continue                               
                 devs.append(min(local_diffs))   
             self.original_deviation = sum(devs)
             #print('\noriginal_deviation = ', original_deviation)
@@ -472,7 +494,7 @@ class lime_rt(object):
             # original_deviation for rotate_in_place = 307.4962940090125
 
         # DETERMINE THE DEVIATION TYPE
-        determine_dev_type = True
+        determine_dev_type = False
         if determine_dev_type == True:
             #start_determine_dev = time.time()
             
@@ -485,10 +507,10 @@ class lime_rt(object):
             # test for the original local plan gap
             local_plan_original_gap = False
             local_plan_gaps = []
-            print('LOCAL PLAN LENGTH = ', len(self.local_plan_x_list))
+            print('LOCAL PLAN LENGTH = ', len(self.local_plan_x_list_fixed))
             diff = 0
-            for j in range(0, len(self.local_plan_x_list) - 1):
-                diff = math.sqrt((self.local_plan_x_list[j]-self.local_plan_x_list[j+1])**2 + (self.local_plan_y_list[j]-self.local_plan_y_list[j+1])**2 )
+            for j in range(0, len(self.local_plan_x_list_fixed) - 1):
+                diff = math.sqrt((self.local_plan_x_list_fixed[j]-self.local_plan_x_list_fixed[j+1])**2 + (self.local_plan_y_list_fixed[j]-self.local_plan_y_list_fixed[j+1])**2 )
                 local_plan_gaps.append(diff)
             if max(local_plan_gaps) > local_plan_gap_threshold:
                 local_plan_original_gap = True
@@ -516,13 +538,13 @@ class lime_rt(object):
         local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
         # fill in deviation dataframe
-        dev_original = 0
+        #dev_original = 0
         #for i in range(0, sampled_instance.shape[0]):
         for i in range(0, sample_size):
             #print('\ni = ', i)
             local_plan_xs = []
             local_plan_ys = []
-            local_plan_found = False
+            #local_plan_found = False
             
             # find if there is local plan
             local_plans_local = local_plans.loc[local_plans['ID'] == i]
@@ -533,10 +555,10 @@ class lime_rt(object):
                     if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                         local_plan_xs.append(x_temp)
                         local_plan_ys.append(y_temp)
-                        local_plan_found = True
+                        #local_plan_found = True
             
             # this happens almost never when only obstacles are segments, but let it stay for now
-            #'''
+            '''
             if local_plan_found == False:
                 if deviation_type == 'stop':
                     local_plan_deviation.iloc[i, 0] = dev_original
@@ -545,7 +567,7 @@ class lime_rt(object):
                 elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
                     local_plan_deviation.iloc[i, 0] = 0.0
                 continue
-            #'''             
+            '''             
 
             # find deviation as a sum of minimal point-to-point differences
             diff_x = 0
@@ -560,8 +582,8 @@ class lime_rt(object):
                     local_diffs.append(diff)                        
                 devs.append(min(local_diffs))   
 
-            if i == 0:
-                dev_original = sum(devs)    
+            #if i == 0:
+            #    dev_original = sum(devs)    
 
             local_plan_deviation.iloc[i, 0] = sum(devs)
 
@@ -693,7 +715,7 @@ class lime_rt(object):
 
     # Define a callback for the local costmap
     def local_costmap_callback(self, msg):
-        print('\nlocal_costmap_callback')
+        #print('\nlocal_costmap_callback')
 
         # save costmap in a right image format
         self.localCostmapOriginX = msg.info.origin.position.x
@@ -730,9 +752,25 @@ class lime_rt(object):
 
         self.local_costmap_empty = False
 
-        #self.explain()
+        '''
+        self.local_plan_x_list_fixed = copy.deepcopy(self.local_plan_x_list)
+        self.local_plan_y_list_fixed = copy.deepcopy(self.local_plan_y_list)
+        self.local_plan_tmp_fixed = copy.deepcopy(self.local_plan_tmp)
+        if self.local_plan_empty == False and self.local_plan_empty == False: 
+            self.explain()
+        '''
 
     def explain(self):
+        print('\nexplain!!!')
+
+        if self.local_plan_empty == True or self.global_plan_empty == True or self.local_costmap_empty == True or self.data == []:
+            print('something empty!!!')
+            return
+
+        self.local_plan_x_list_fixed = copy.deepcopy(self.local_plan_x_list)
+        self.local_plan_y_list_fixed = copy.deepcopy(self.local_plan_y_list)
+        self.local_plan_tmp_fixed = copy.deepcopy(self.local_plan_tmp)
+
         # save data for teb
         self.SaveImageDataForLocalPlanner()
 
@@ -844,6 +882,8 @@ class lime_rt(object):
 
     # Define a callback for the global plan
     def global_plan_callback(self, msg):
+        #print('\nglobal_plan_callback!')
+
         self.global_plan_xs = [] 
         self.global_plan_ys = []
         self.global_plan_tmp = []
@@ -878,6 +918,14 @@ class lime_rt(object):
             '''
 
         self.global_plan_empty = False
+        
+        '''
+        self.local_plan_x_list_fixed = copy.deepcopy(self.local_plan_x_list)
+        self.local_plan_y_list_fixed = copy.deepcopy(self.local_plan_y_list)
+        self.local_plan_tmp_fixed = copy.deepcopy(self.local_plan_tmp)
+        if self.local_plan_empty == False and self.local_costmap_empty == False: 
+            self.explain()
+        '''
 
     # Define a callback for the local plan
     def local_plan_callback(self, msg):
@@ -896,8 +944,18 @@ class lime_rt(object):
                 self.local_plan_x_list.append(x_temp)
                 self.local_plan_y_list.append(y_temp)
 
-        if self.data != [] and self.global_plan_empty == False and self.local_costmap_empty == False:
-            self.explain()
+        self.local_plan_empty = False
+        
+        '''        
+        self.local_plan_counter += 1
+        if self.local_plan_counter == 4:
+            self.local_plan_counter = 0 
+            self.local_plan_x_list_fixed = copy.deepcopy(self.local_plan_x_list)
+            self.local_plan_y_list_fixed = copy.deepcopy(self.local_plan_y_list)
+            self.local_plan_tmp_fixed = copy.deepcopy(self.local_plan_tmp)
+            if self.global_plan_empty == False and self.local_costmap_empty == False: 
+                self.explain()
+        '''
                 
     # Define a callback for the footprint
     def footprint_callback(self, msg):
@@ -942,7 +1000,12 @@ rospy.init_node('lime_rt', anonymous=True)
 lime_rt_obj.tfBuffer = tf2_ros.Buffer()
 lime_rt_obj.tf_listener = tf2_ros.TransformListener(lime_rt_obj.tfBuffer)
 
+rate = rospy.Rate(1)
+
+
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
-    #print('spinning')
-    rospy.spin()
+    print('spinning')
+    lime_rt_obj.explain()
+    rate.sleep()
+    #rospy.spin()
