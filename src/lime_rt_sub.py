@@ -16,7 +16,7 @@ import math
 from skimage.measure import regionprops
 
 
-class lime_rt(object):
+class lime_rt_sub(object):
     # Constructor
     def __init__(self):
         self.global_plan_xs = []
@@ -258,7 +258,7 @@ class lime_rt(object):
 
 
 
-lime_rt_obj = lime_rt()
+lime_rt_obj = lime_rt_sub()
 
 lime_rt_obj.main_()
 
@@ -271,5 +271,5 @@ lime_rt_obj.tf_listener = tf2_ros.TransformListener(lime_rt_obj.tfBuffer)
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
-    print('spinning')
+    #print('spinning')
     rospy.spin()
