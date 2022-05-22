@@ -31,8 +31,7 @@ import struct
 from skimage.measure import regionprops
 from std_msgs.msg import Float32MultiArray
 import scipy as sp
-
-from lime_rt_sub import lime_rt_obj
+import tf2_ros
 
 
 #global br, pub_exp_image, pub_lime, pub_exp_pointcloud
@@ -73,10 +72,10 @@ class LimeBase(object):
 
         local_pred = easy_model.predict(neighborhood_data[0, used_features].reshape(1, -1))
 
-        if self.verbose:
-            print('Intercept', easy_model.intercept_)
-            print('Prediction_local', local_pred,)
-            print('Right:', neighborhood_labels[0, label])
+        #if self.verbose:
+        #    print('Intercept', easy_model.intercept_)
+        #    print('Prediction_local', local_pred,)
+        #    print('Right:', neighborhood_labels[0, label])
         return (easy_model.intercept_,
                 sorted(zip(used_features, easy_model.coef_),
                        key=lambda x: np.abs(x[1]), reverse=True),
@@ -233,11 +232,11 @@ class ImageExplanation(object):
             temp[self.image != 0] = self.val_low
             return temp, exp
 
-        print('exp = ', exp)
-        print('np.unique(self.segments) = ', np.unique(self.segments))
+        #print('exp = ', exp)
+        #print('np.unique(self.segments) = ', np.unique(self.segments))
 
         for f, w in exp:
-            print('\n(f, w): ', (f, w))
+            #print('\n(f, w): ', (f, w))
 
             if w < -0.01:
                 c = -1
@@ -260,7 +259,7 @@ class ImageExplanation(object):
 
             # free space
             if f == 0:
-                print('free_space, (f, w) = ', (f, w))
+                #print('free_space, (f, w) = ', (f, w))
                 if self.color_free_space == False:
                     temp[self.segments == f, 0] = self.gray_shade
                     temp[self.segments == f, 1] = self.gray_shade
@@ -293,11 +292,30 @@ class ImageExplanation(object):
 class lime_rt_pub(object):
     # Constructor
     def __init__(self):
+        self.dirCurr = os.getcwd()
+        self.dirName = 'lime_rt_data'
+        self.file_path_1 = self.dirName + '/footprint_tmp.csv'
+        self.file_path_2 = self.dirName + '/plan_tmp.csv'
+        self.file_path_3 = self.dirName + '/global_plan_tmp.csv'
+        self.file_path_4 = self.dirName + '/costmap_info_tmp.csv'
+        self.file_path_5 = self.dirName + '/amcl_pose_tmp.csv' 
+        self.file_path_6 = self.dirName + '/tf_odom_map_tmp.csv'
+        self.file_path_7 = self.dirName + '/tf_map_odom_tmp.csv'
+        self.file_path_8 = self.dirName + '/odom_tmp.csv'
+        self.file_path_9 = self.dirName + '/local_plan_x_list.csv'
+        self.file_path_10 = self.dirName + '/local_plan_y_list.csv'
+        self.file_path_11 = self.dirName + '/local_plan_tmp.csv'
+        self.file_path_12 = self.dirName + '/segments.csv'
+        self.file_path_13 = self.dirName + '/data.csv'
+        self.file_path_14 = self.dirName + '/image.csv'
+        self.file_path_15 = self.dirName + '/fudged_image.csv'
+
         self.transformed_plan_xs = [] 
         self.transformed_plan_ys = []
         self.labels = np.array([]) 
         self.distances = np.array([])
         self.costmap_size = 160
+        self.pd_image_size = (self.costmap_size,self.costmap_size) 
         self.original_deviation = 0
 
         self.local_plan_x_list_fixed = []
@@ -345,46 +363,51 @@ class lime_rt_pub(object):
     def SaveImageDataForLocalPlanner(self):
         # Saving data to .csv files for C++ node - local navigation planner
         # Save footprint instance to a file
-        lime_rt_obj.footprint_tmp = pd.DataFrame(lime_rt_obj.footprint_tmp)#.transpose()
-        lime_rt_obj.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+        #self.footprint_tmp = pd.DataFrame(self.footprint_tmp)#.transpose()
+        self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
         # Save local plan instance to a file
-        lime_rt_obj.local_plan_tmp_fixed = pd.DataFrame(lime_rt_obj.local_plan_tmp_fixed)#.transpose()
-        lime_rt_obj.local_plan_tmp_fixed.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+        #self.local_plan_tmp_fixed = pd.DataFrame(self.local_plan_tmp_fixed)#.transpose()
+        self.local_plan_tmp_fixed.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
         # Save plan (from global planner) instance to a file
-        lime_rt_obj.plan_tmp = pd.DataFrame(lime_rt_obj.plan_tmp)#.transpose()
-        lime_rt_obj.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+        #self.plan_tmp = pd.DataFrame(self.plan_tmp)#.transpose()
+        self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
         # Save global plan instance to a file
-        lime_rt_obj.global_plan_tmp = pd.DataFrame(lime_rt_obj.global_plan_tmp)#.transpose()
-        lime_rt_obj.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
+        #self.global_plan_tmp = pd.DataFrame(self.global_plan_tmp)#.transpose()
+        self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
 
         # Save costmap_info instance to file
-        lime_rt_obj.costmap_info_tmp = pd.DataFrame(lime_rt_obj.costmap_info_tmp).transpose()
-        lime_rt_obj.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
+        #self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
+        self.costmap_info_tmp = self.costmap_info_tmp.transpose()
+        self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
         # Save amcl_pose instance to file
-        lime_rt_obj.amcl_pose_tmp = pd.DataFrame(lime_rt_obj.amcl_pose_tmp).transpose()
-        lime_rt_obj.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+        #self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
+        self.amcl_pose_tmp = self.amcl_pose_tmp.transpose()
+        self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
         # Save tf_odom_map instance to file
-        lime_rt_obj.tf_odom_map_tmp = pd.DataFrame(lime_rt_obj.tf_odom_map_tmp).transpose()
-        lime_rt_obj.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
+        #self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
+        self.tf_odom_map_tmp = self.tf_odom_map_tmp.transpose()
+        self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
 
         # Save tf_map_odom instance to file
-        lime_rt_obj.tf_map_odom_tmp = pd.DataFrame(lime_rt_obj.tf_map_odom_tmp).transpose()
-        lime_rt_obj.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
+        #self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
+        self.tf_map_odom_tmp = self.tf_map_odom_tmp.transpose()
+        self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
 
         # Save odometry instance to file
-        lime_rt_obj.odom_tmp = pd.DataFrame(lime_rt_obj.odom_tmp).transpose()
-        lime_rt_obj.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+        #self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
+        self.odom_tmp = self.odom_tmp.transpose()
+        self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
     # classifier function for lime image
     def classifier_fn(self, sampled_instance):
         #print('\nclassifier_fn_image_lime started')
 
-        print('\nsampled_instance.shape = ', sampled_instance.shape)
+        #print('\nsampled_instance.shape = ', sampled_instance.shape)
 
         sampled_instance_shape_len = len(sampled_instance.shape)
         sample_size = 1 if sampled_instance_shape_len == 2 else sampled_instance.shape[0]
@@ -431,8 +454,8 @@ class lime_rt_pub(object):
         for i in range(0, transformed_plan.shape[0]):
             if math.isnan(transformed_plan.iloc[i, 0]) == True or math.isnan(transformed_plan.iloc[i, 1]) == True:
                 continue
-            x_temp = int((transformed_plan.iloc[i, 0] - lime_rt_obj.localCostmapOriginX) / lime_rt_obj.localCostmapResolution)
-            y_temp = int((transformed_plan.iloc[i, 1] - lime_rt_obj.localCostmapOriginY) / lime_rt_obj.localCostmapResolution)
+            x_temp = int((transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            y_temp = int((transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
             if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 self.transformed_plan_xs.append(x_temp)
@@ -477,7 +500,7 @@ class lime_rt_pub(object):
             # test for the original local plan gap
             local_plan_original_gap = False
             local_plan_gaps = []
-            print('LOCAL PLAN LENGTH = ', len(self.local_plan_x_list_fixed))
+            #print('LOCAL PLAN LENGTH = ', len(self.local_plan_x_list_fixed))
             diff = 0
             for j in range(0, len(self.local_plan_x_list_fixed) - 1):
                 diff = math.sqrt((self.local_plan_x_list_fixed[j]-self.local_plan_x_list_fixed[j+1])**2 + (self.local_plan_y_list_fixed[j]-self.local_plan_y_list_fixed[j+1])**2 )
@@ -503,7 +526,7 @@ class lime_rt_pub(object):
             #print('\ndetermine deviation type runtime = ', determine_dev_time)
 
             # PRINTING RESULTS                                       
-            print('\ndeviation_type: ', deviation_type)
+            #print('\ndeviation_type: ', deviation_type)
 
         local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
@@ -519,8 +542,8 @@ class lime_rt_pub(object):
             # find if there is local plan
             local_plans_local = local_plans.loc[local_plans['ID'] == i]
             for j in range(0, local_plans_local.shape[0]):
-                    x_temp = int((local_plans_local.iloc[j, 0] - lime_rt_obj.localCostmapOriginX) / lime_rt_obj.localCostmapResolution)
-                    y_temp = int((local_plans_local.iloc[j, 1] - lime_rt_obj.localCostmapOriginY) / lime_rt_obj.localCostmapResolution)
+                    x_temp = int((local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                    y_temp = int((local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
                     if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                         local_plan_xs.append(x_temp)
@@ -573,43 +596,176 @@ class lime_rt_pub(object):
                     batch_size=10):
         #print('data_labels starts')
 
-        # call teb and get labels
-        self.labels = []
-        imgs = []
-        rows = self.data
-        for row in rows:
-            temp = copy.deepcopy(image)
-            zeros = np.where(row == 0)[0]
-            mask = np.zeros(segments.shape).astype(bool)
-            for z in zeros:
-                mask[segments == z] = True
-            temp[mask] = fudged_image[mask]
-            imgs.append(temp)
-            if len(imgs) == batch_size:
+        try:
+            # call teb and get labels
+            self.labels = []
+            imgs = []
+            rows = self.data
+            for row in rows:
+                temp = copy.deepcopy(image)
+                zeros = np.where(row == 0)[0]
+                mask = np.zeros(segments.shape).astype(bool)
+                for z in zeros:
+                    mask[segments == z] = True
+                temp[mask] = fudged_image[mask]
+                imgs.append(temp)
+                if len(imgs) == batch_size:
+                    preds = classifier_fn(np.array(imgs))
+                    self.labels.extend(preds)
+                    imgs = []
+            if len(imgs) > 0:
                 preds = classifier_fn(np.array(imgs))
                 self.labels.extend(preds)
-                imgs = []
-        if len(imgs) > 0:
-            preds = classifier_fn(np.array(imgs))
-            self.labels.extend(preds)
 
-        #print('data_labels ends')
+            #print('data_labels ends')
 
-        self.labels = np.array(self.labels)
+            self.labels = np.array(self.labels)
+        
+        except:
+            return False
+
+        return True    
+
+    def load_data(self):
+        print_data = False
+        try:
+            if os.path.getsize(self.file_path_1) == 0 or os.path.exists(self.file_path_1) == False:
+                return False
+            self.footprint_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/footprint_tmp.csv')
+            #self.footprint_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/footprint_tmp.csv'))
+            if print_data == True:
+                print('self.footprint_tmp.shape = ', self.footprint_tmp.shape)
+            
+            if os.path.getsize(self.file_path_2) == 0 or os.path.exists(self.file_path_2) == False:
+                return False
+            self.plan_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/plan_tmp.csv')
+            #self.plan_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/plan_tmp.csv'))
+            if print_data == True:
+                print('self.plan_tmp.shape = ', self.plan_tmp.shape)
+            
+            if os.path.getsize(self.file_path_3) == 0 or os.path.exists(self.file_path_3) == False:
+                return False
+            self.global_plan_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/global_plan_tmp.csv')
+            #self.global_plan_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/global_plan_tmp.csv'))
+            if print_data == True:
+                print('self.global_plan_tmp.shape = ', self.global_plan_tmp.shape)
+            
+            if os.path.getsize(self.file_path_4) == 0 or os.path.exists(self.file_path_4) == False:
+                return False
+            self.costmap_info_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/costmap_info_tmp.csv')
+            #self.costmap_info_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/costmap_info_tmp.csv'))
+            if print_data == True:
+                print('self.costmap_info_tmp.shape = ', self.costmap_info_tmp.shape)
+            
+            if os.path.getsize(self.file_path_5) == 0 or os.path.exists(self.file_path_5) == False:
+                return False
+            self.amcl_pose_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/amcl_pose_tmp.csv')
+            #self.amcl_pose_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/amcl_pose_tmp.csv'))
+            if print_data == True:
+                print('self.amcl_pose_tmp.shape = ', self.amcl_pose_tmp.shape)
+            
+            if os.path.getsize(self.file_path_6) == 0 or os.path.exists(self.file_path_6) == False:
+                return False
+            self.tf_odom_map_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map_tmp.csv')
+            #self.tf_odom_map_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/tf_odom_map_tmp.csv'))
+            if print_data == True:
+                print('self.tf_odom_map_tmp.shape = ', self.tf_odom_map_tmp.shape)
+            
+            if os.path.getsize(self.file_path_7) == 0 or os.path.exists(self.file_path_7) == False:
+                return False
+            self.tf_map_odom_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom_tmp.csv')
+            #self.tf_map_odom_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/tf_map_odom_tmp.csv'))
+            if print_data == True:
+                print('self.tf_map_odom_tmp.shape = ', self.tf_map_odom_tmp.shape)
+            
+            if os.path.getsize(self.file_path_8) == 0 or os.path.exists(self.file_path_8) == False:
+                return False
+            self.odom_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/odom_tmp.csv')
+            #self.odom_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/odom_tmp.csv'))
+            if print_data == True:
+                print('self.odom_tmp.shape = ', self.odom_tmp.shape)
+
+            if os.path.getsize(self.file_path_9) == 0 or os.path.exists(self.file_path_9) == False:
+                return False
+            self.local_plan_x_list_fixed = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_x_list.csv'))
+            if print_data == True:
+                print('self.local_plan_x_list_fixed.shape = ', self.local_plan_x_list_fixed.shape)
+            
+            if os.path.getsize(self.file_path_10) == 0 or os.path.exists(self.file_path_10) == False:
+                return False         
+            self.local_plan_y_list_fixed = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_y_list.csv'))
+            if print_data == True:
+                print('self.local_plan_y_list_fixed.shape = ', self.local_plan_y_list_fixed.shape)
+            
+            if os.path.getsize(self.file_path_11) == 0 or os.path.exists(self.file_path_11) == False:
+                return False        
+            self.local_plan_tmp_fixed = pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_tmp.csv')
+            #self.local_plan_tmp_fixed = np.array(pd.read_csv('~/amar_ws/lime_rt_data/local_plan_tmp.csv'))
+            if print_data == True:
+                print('self.local_plan_tmp_fixed.shape = ', self.local_plan_tmp_fixed.shape)
+            
+            if os.path.getsize(self.file_path_12) == 0 or os.path.exists(self.file_path_12) == False:
+                return False       
+            self.segments = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/segments.csv'))
+            if print_data == True:
+                print('self.segments.shape = ', self.segments.shape)
+            
+            if os.path.getsize(self.file_path_13) == 0 or os.path.exists(self.file_path_13) == False:
+                return False       
+            self.data = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/data.csv'))
+            if print_data == True:
+                print('self.data.shape = ', self.data.shape)
+            
+            if os.path.getsize(self.file_path_14) == 0 or os.path.exists(self.file_path_14) == False:
+                return False        
+            self.image = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/image.csv'))
+            if print_data == True:
+                print('self.image.shape = ', self.image.shape)
+            
+            if os.path.getsize(self.file_path_15) == 0 or os.path.exists(self.file_path_15) == False:
+                return False        
+            self.fudged_image = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/fudged_image.csv'))
+            if print_data == True:
+                print('self.fudged_image.shape = ', self.fudged_image.shape)
+
+            # if anything is empty do not explain
+            if self.footprint_tmp.empty or self.plan_tmp.empty or self.global_plan_tmp.empty or self.costmap_info_tmp.empty or self.amcl_pose_tmp.empty or self.tf_odom_map_tmp.empty or self.tf_map_odom_tmp.empty or self.odom_tmp.empty or self.local_plan_tmp_fixed.empty:
+                return False
+
+            if self.local_plan_x_list_fixed.size == 0 or self.local_plan_y_list_fixed.size == 0 or self.segments.size == 0 or self.data.size == 0 or self.image.size == 0 or self.fudged_image.size == 0:
+                return False
+
+            if self.local_plan_x_list_fixed.shape != self.local_plan_y_list_fixed.shape:
+                return False      
+
+            if self.segments.shape != self.pd_image_size or self.image.shape != self.pd_image_size or self.fudged_image.shape != self.pd_image_size:
+                return False
+
+            if self.footprint_tmp.shape != (16, 4) or self.costmap_info_tmp.shape != (7, 1) or self.amcl_pose_tmp.shape != (4, 1) or self.tf_map_odom_tmp.shape != (7, 1) or self.tf_odom_map_tmp.shape != (7, 1) or self.odom_tmp.shape != (6, 1):
+                return False
+
+            if self.data.shape[0] != len(np.unique(self.segments)):
+                return False
+        except:
+            return False
+
+        return True
 
     # explain
     def explain(self):
-        print('\nexplain!!!')
+        #print('\nexplain!!!')
 
-        if lime_rt_obj.local_plan_empty == True or lime_rt_obj.global_plan_empty == True or lime_rt_obj.local_costmap_empty == True or lime_rt_obj.data == []:
-            print('something empty!!!')
+        if self.load_data() == False:
+            #print('\nData not loaded!')
             return
+        else:
+            #print('\nData loaded!')
+            pass    
 
-        self.local_plan_x_list_fixed = copy.deepcopy(lime_rt_obj.local_plan_x_list)
-        self.local_plan_y_list_fixed = copy.deepcopy(lime_rt_obj.local_plan_y_list)
-        self.local_plan_tmp_fixed = copy.deepcopy(lime_rt_obj.local_plan_tmp)
-        self.segments = copy.deepcopy(lime_rt_obj.segments)
-        self.data = copy.deepcopy(lime_rt_obj.data)
+        self.image_rgb = gray2rgb(self.image * 1.0)
+        self.localCostmapOriginX = self.costmap_info_tmp.iloc[3]
+        self.localCostmapOriginY = self.costmap_info_tmp.iloc[4]
+        self.localCostmapResolution = self.costmap_info_tmp.iloc[0]
 
         # save data for teb
         self.SaveImageDataForLocalPlanner()
@@ -617,8 +773,8 @@ class lime_rt_pub(object):
         # call teb
         self.labels=(1,)
         self.top = self.labels
-        self.create_labels(lime_rt_obj.image, lime_rt_obj.fudged_image, self.segments,
-                                        self.classifier_fn, batch_size=2048)
+        if self.create_labels(self.image, self.fudged_image, self.segments, self.classifier_fn, batch_size=2048) == False:
+            return
 
         # find distances
         # distance_metric = 'jaccard' - alternative distance metric
@@ -635,83 +791,94 @@ class lime_rt_pub(object):
         num_features=100000
         feature_selection='auto'
 
-        # find explanation
-        ret_exp = ImageExplanation(lime_rt_obj.image_rgb, self.segments)
-        if top_labels:
-            #print('top_labels usao')
-            top = np.argsort(self.labels[0])[-top_labels:]
-            ret_exp.top_labels = list(top)
-            ret_exp.top_labels.reverse()
-        #print('labels =', self.labels)
-        for label in top:
-            #print('label = ', label)
-            (ret_exp.intercept[label],
-                ret_exp.local_exp[label],
-                ret_exp.score[label],
-                ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
-                self.data, self.labels, self.distances, label, num_features,
-                model_regressor=model_regressor,
-                feature_selection=feature_selection)
+        try:
+            # find explanation
+            ret_exp = ImageExplanation(self.image_rgb, self.segments)
+            if top_labels:
+                #print('top_labels usao')
+                top = np.argsort(self.labels[0])[-top_labels:]
+                ret_exp.top_labels = list(top)
+                ret_exp.top_labels.reverse()
+            #print('labels =', self.labels)
+            for label in top:
+                #print('label = ', label)
+                (ret_exp.intercept[label],
+                    ret_exp.local_exp[label],
+                    ret_exp.score[label],
+                    ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
+                    self.data, self.labels, self.distances, label, num_features,
+                    model_regressor=model_regressor,
+                    feature_selection=feature_selection)
 
-        # get explanation image
-        output, exp = ret_exp.get_image_and_mask(label=0)
-        print('\nexp = ', exp)
+            # get explanation image
+            output, exp = ret_exp.get_image_and_mask(label=0)
+            output = output[:, :, [2, 1, 0]].astype(np.uint8)
+            #print('\nexp = ', exp)
 
-        output = output[:, :, [2, 1, 0]].astype(np.uint8)
-        # publish explanation layer
-        #points_start = time.time()
-        z = 0.0
-        a = 255                    
-        points = []
-        for i in range(0, 160):
-            for j in range(0, 160):
-                x = lime_rt_obj.localCostmapOriginX + i * lime_rt_obj.localCostmapResolution
-                y = lime_rt_obj.localCostmapOriginY + j * lime_rt_obj.localCostmapResolution
-                r = int(output[j, i, 2])
-                g = int(output[j, i, 1])
-                b = int(output[j, i, 0])
-                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
-                pt = [x, y, z, rgb]
-                points.append(pt)
-        #points_end = time.time()
-        #print('\npoints_time = ', points_end - points_start)
-        self.header.frame_id = 'odom'
-        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
-        pc2.header.stamp = rospy.Time.now()
-        transf = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
-        self.pub_exp_pointcloud.publish(pc2)
-        #rospy.sleep(1.0)
+            publish_explanation_image = True
+            if publish_explanation_image:
+                # publish explanation image
+                output[:,:,0] = np.flip(output[:,:,0], axis=1)
+                output[:,:,1] = np.flip(output[:,:,1], axis=1)
+                output[:,:,2] = np.flip(output[:,:,2], axis=1)
+                #print('\nBGR time = ', end_bgr - start_bgr)
+                output_cv = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
+                self.pub_exp_image.publish(output_cv)
 
-        # publish explanation image
-        output[:,:,0] = np.flip(output[:,:,0], axis=1)
-        output[:,:,1] = np.flip(output[:,:,1], axis=1)
-        output[:,:,2] = np.flip(output[:,:,2], axis=1)
-        #print('\nBGR time = ', end_bgr - start_bgr)
-        output_cv = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
-        self.pub_exp_image.publish(output_cv)
+            publish_explanation_coeffs = True
+            if publish_explanation_coeffs:
+                # publish explanation coefficients
+                exp_with_centroids = Float32MultiArray()
+                self.segments += 1
+                regions = regionprops(self.segments.astype(int))
+                self.tf_odom_map_tmp = self.tf_odom_map_tmp.transpose()
+                #t = np.asarray([self.tf_odom_map_tmp.iloc[0],self.tf_odom_map_tmp.iloc[1],self.tf_odom_map_tmp.iloc[2]])
+                #r = R.from_quat([self.tf_odom_map_tmp.iloc[3],self.tf_odom_map_tmp.iloc[4],self.tf_odom_map_tmp.iloc[5],self.tf_odom_map_tmp.iloc[6]])
+                #r_ = np.asarray(r.as_matrix())
+                for props in regions:
+                    v = props.label  # value of label
+                    cx, cy = props.centroid  # centroid coordinates
+                    for j in range(0, len(exp)):
+                        if exp[j][0] == v - 1:
+                            px = cy*self.localCostmapResolution + self.localCostmapOriginX
+                            py = cx*self.localCostmapResolution + self.localCostmapOriginY
+                            #p = np.array([px, py, 0.0])
+                            #pnew = p.dot(r_) + t
+                            exp_with_centroids.data.append(px) #(pnew[0])
+                            exp_with_centroids.data.append(py) #(pnew[1])
+                            exp_with_centroids.data.append(exp[j][1])
+                            break
+                exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
+                self.pub_lime.publish(exp_with_centroids)
 
-        # publish explanation coefficients
-        exp_with_centroids = Float32MultiArray()
-        self.segments += 1
-        regions = regionprops(self.segments.astype(int))
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            for j in range(0, len(exp)):
-                if exp[j][0] == v - 1:
-                    px = cy*lime_rt_obj.localCostmapResolution + lime_rt_obj.localCostmapOriginX
-                    py = cx*lime_rt_obj.localCostmapResolution + lime_rt_obj.localCostmapOriginY
-                    p = np.array([px, py, 0.0])
-                    t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
-                    r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
-                    r_ = np.asarray(r.as_matrix())
-                    pnew = p.dot(r_) + t
-                    exp_with_centroids.data.append(px) #(pnew[0])
-                    exp_with_centroids.data.append(py) #(pnew[1])
-                    exp_with_centroids.data.append(exp[j][1])
-                    break
-        exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
-        self.pub_lime.publish(exp_with_centroids)
+            publish_pointcloud = False
+            if publish_pointcloud:
+                # publish explanation layer
+                #points_start = time.time()
+                z = 0.0
+                a = 255                    
+                points = []
+                for i in range(0, self.costmap_size):
+                    for j in range(0, self.costmap_size):
+                        x = self.localCostmapOriginX + i * self.localCostmapResolution
+                        y = self.localCostmapOriginY + j * self.localCostmapResolution
+                        r = int(output[j, i, 2])
+                        g = int(output[j, i, 1])
+                        b = int(output[j, i, 0])
+                        rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                        pt = [x, y, z, rgb]
+                        points.append(pt)
+                #points_end = time.time()
+                #print('\npoints_time = ', points_end - points_start)
+                self.header.frame_id = 'odom'
+                pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+                pc2.header.stamp = rospy.Time.now()
+                #transf = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+                self.pub_exp_pointcloud.publish(pc2)
+                #rospy.sleep(1.0)
+        except:
+            return
+        #print('\nKRAJ!!!')
     
     # initialize publishers
     def main_(self):        
@@ -730,12 +897,15 @@ lime_rt_pub_obj.main_()
 # Initialize the ROS Node named 'get_model_state', allow multiple nodes to be run with this name
 rospy.init_node('lime_rt_pub', anonymous=True)
 
-rate = rospy.Rate(1)
+lime_rt_pub_obj.tfBuffer = tf2_ros.Buffer()
+lime_rt_pub_obj.tf_listener = tf2_ros.TransformListener(lime_rt_pub_obj.tfBuffer)
+
+#rate = rospy.Rate(5)
 
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
-    print('spinning lime_rt_pub')
+    #print('spinning lime_rt_pub')
     lime_rt_pub_obj.explain()
-    rate.sleep()
+    #rate.sleep()
     #rospy.spin()

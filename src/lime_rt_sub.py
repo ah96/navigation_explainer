@@ -14,6 +14,7 @@ import copy
 import tf2_ros
 import math
 from skimage.measure import regionprops
+import os
 
 
 class lime_rt_sub(object):
@@ -50,12 +51,20 @@ class lime_rt_sub(object):
         self.local_plan_empty = True
         self.num_samples = 0
         self.n_features = 0
-        self.start = time.time()
-        self.end = time.time()
+        #self.start = time.time()
+        #self.end = time.time()
+
+        self.dirCurr = os.getcwd()
+
+        self.dirName = 'lime_rt_data'
+        try:
+            os.mkdir(self.dirName)
+        except FileExistsError:
+            pass
 
     # Segmentation algorithm
     def segment_local_costmap(self, image, img_rgb):
-        print('segmentation algorithm')
+        #print('segmentation algorithm')
         # show original image
         #img = copy.deepcopy(image)
 
@@ -128,14 +137,14 @@ class lime_rt_sub(object):
 
     # Define a callback for the local costmap
     def local_costmap_callback(self, msg):
-        print('\nlocal_costmap_callback')
+        #print('\nlocal_costmap_callback')
 
         # save costmap in a right image format
         self.localCostmapOriginX = msg.info.origin.position.x
         self.localCostmapOriginY = msg.info.origin.position.y
         self.localCostmapResolution = msg.info.resolution
-
         self.costmap_info_tmp = [self.localCostmapResolution, msg.info.width, msg.info.height, self.localCostmapOriginX, self.localCostmapOriginY, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
+
 
         self.image = np.asarray(msg.data)
         self.image.resize((msg.info.height,msg.info.width))
@@ -166,15 +175,23 @@ class lime_rt_sub(object):
 
         self.local_costmap_empty = False
 
+        pd.DataFrame(self.costmap_info_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/costmap_info_tmp.csv', index=False)#, header=False)
+        pd.DataFrame(self.image).to_csv(self.dirCurr + '/' + self.dirName + '/image.csv', index=False) #, header=False)
+        pd.DataFrame(self.fudged_image).to_csv(self.dirCurr + '/' + self.dirName + '/fudged_image.csv', index=False)#, header=False)
+        pd.DataFrame(self.segments).to_csv(self.dirCurr + '/' + self.dirName + '/segments.csv', index=False)#, header=False)
+        pd.DataFrame(self.data).to_csv(self.dirCurr + '/' + self.dirName + '/data.csv', index=False)#, header=False)
+
     # Define a callback for the local plan
     def odom_callback(self, msg):
+        #print('odom_callback!!!')
         self.odom_x = msg.pose.pose.position.x
         self.odom_y = msg.pose.pose.position.y
         self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
-
+        #pd.DataFrame(self.odom_tmp).to_csv('~/amar_ws/lime_rt_data/odom_tmp.csv', index=False)#, header=False)
+        
     # Define a callback for the global plan
     def global_plan_callback(self, msg):
-        print('\nglobal_plan_callback!')
+        #print('\nglobal_plan_callback!')
 
         self.global_plan_xs = [] 
         self.global_plan_ys = []
@@ -183,16 +200,19 @@ class lime_rt_sub(object):
         self.transformed_plan_xs = []
         self.transformed_plan_ys = []
 
-        # catch transform from /map to /odom and vice versa
-        transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
-        #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
-        #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
-        #r_ = np.asarray(r.as_matrix())
+        try:
+            # catch transform from /map to /odom and vice versa
+            transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+            #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+            #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+            #r_ = np.asarray(r.as_matrix())
 
-        transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+            transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
 
-        self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
-        self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
+            self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
+            self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
+        except:
+            pass    
 
         for i in range(0,len(msg.poses)):
             self.global_plan_xs.append(msg.poses[i].pose.position.x) 
@@ -210,10 +230,15 @@ class lime_rt_sub(object):
             '''
 
         self.global_plan_empty = False
+
+        pd.DataFrame(self.tf_odom_map_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map_tmp.csv', index=False)#, header=False)
+        pd.DataFrame(self.tf_map_odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom_tmp.csv', index=False)#, header=False)
+        pd.DataFrame(self.global_plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/global_plan_tmp.csv', index=False)#, header=False)
+        pd.DataFrame(self.plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/plan_tmp.csv', index=False)#, header=False)
         
     # Define a callback for the local plan
     def local_plan_callback(self, msg):
-        print('\nlocal_plan_callback')
+        #print('\nlocal_plan_callback')
         
         self.local_plan_x_list = [] 
         self.local_plan_y_list = [] 
@@ -229,16 +254,23 @@ class lime_rt_sub(object):
                 self.local_plan_y_list.append(y_temp)
 
         self.local_plan_empty = False
-                     
+
+        pd.DataFrame(self.local_plan_x_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_x_list.csv', index=False)#, header=False)
+        pd.DataFrame(self.local_plan_y_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_y_list.csv', index=False)#, header=False)
+        pd.DataFrame(self.local_plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_tmp.csv', index=False)#, header=False)
+        pd.DataFrame(self.odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/odom_tmp.csv', index=False)#, header=False)
+
     # Define a callback for the footprint
     def footprint_callback(self, msg):
         self.footprint_tmp = []
         for i in range(0,len(msg.polygon.points)):
             self.footprint_tmp.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
-            
+        pd.DataFrame(self.footprint_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/footprint_tmp.csv', index=False)#, header=False)
+
     # Define a callback for the amcl pose
     def amcl_callback(self, msg):
         self.amcl_pose_tmp = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
+        pd.DataFrame(self.amcl_pose_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/amcl_pose_tmp.csv', index=False)#, header=False)
 
     # Declare subscribers
     def main_(self):
