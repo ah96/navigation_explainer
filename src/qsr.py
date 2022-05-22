@@ -11,6 +11,30 @@ import copy
 from std_msgs.msg import Float32MultiArray
 #import tf2_ros
 
+static_objects_names =  ['wall_1_model', 'wall_2_model', 'wall_3_model', 'wall_4_model', 'wall_5_model', 'wall_6_model', 'cabinet', 'cabinet_0', 'bookshelf', 'bookshelf_0', 'bookshelf_1', 'table', 'cabinet_1', 'cabinet_2', 'bookshelf_2', 'table_0', 'table_1', 'cabinet_3', 'bookshelf_3', 'bookshelf_4', 'bookshelf_5', 'bookshelf_6', 'cabinet_4']
+static_objects_positions =  [[0.0, -13.0], [0.0, 2.0], [-5.0, -5.5], [5.0, -5.5], [-2.25, -3.0], [3.75, -3.0], [1.9999972750523136, 0.9999981824307168], [2.5157272750523094, -5.439491817569297], [2.0000000000223603, -9.554009999984622], [-2.4965699999655233, -1.5789399999919034], [-2.4981599999655115, 1.4678500000081662], [-0.999999988537484, -8.999995949889628], [-3.0000027249476746, -4.400051817569272], [-1.4918327249476864, -4.456221817569286], [-3.4184899999585867, -6.999999999993267], [-0.999999988537484, -6.999995949889617], [-0.999999988537484, -10.999995949889628], [2.999997275052314, -1.00000181756929], [2.4505500000293674, -11.999999999998144], [2.5131600000353247, -7.999999999973149], [-3.5392899999776337, -10.422219999984502], [-3.9999999999824314, -5.474649999994948], [-0.5370257249476821, -2.0000018175692804]]
+static_objects_orientations = [0,0,0,1]
+
+class Object():
+    def __init__(self,name,position_map):
+        self.name = name
+        self.position_map = position_map
+        self.position_map.append(0.0)
+        self.orientation_map = [0.0,0.0,0.0,1.0]
+        self.position_map = [0.0,0.0,0.0]
+        self.orientation_map = [0.0,0.0,0.0,1.0]
+        self.transform_object_to_map = [self.position_map[0], self.position_map[1], self.position_map[2], 0.0, 0.0, 0.0, 1.0]
+        self.transform_map_to_object = [-self.position_map[0], -self.position_map[1], -self.position_map[2], 0.0, 0.0, 0.0, 1.0]
+        self.intrinsic_qsr = False
+
+        # define intrinsic_qsr for cabinets and bookshelfs
+        if 'cabinet' in self.name or 'bookshelf' in self.name:
+            self.intrinsic_qsr = True
+
+static_objects = []
+for i in range(0, len(static_objects_names)):
+    static_objects.append(Object(static_objects_names[i], static_objects_positions[i]))        
+
 
 class qsr():
     # initialization
@@ -575,6 +599,9 @@ class qsr():
             #'''
         #'''    
         
+        print('self.referents_names = ', self.referents_names)
+        print('self.referents_positions = ', self.referents_positions)
+
         # publish orientations
         pub_markers_orientations.publish(self.marker_array_orientations)
         
