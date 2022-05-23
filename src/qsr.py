@@ -879,7 +879,7 @@ def lime_callback(msg):
     #marker.frame_locked = False
     marker.text = robot.name
     marker.ns = "my_namespace"
-    marker_array_semantic_labels.markers[-2] = marker 
+    marker_array_semantic_labels.markers[-2] = copy.deepcopy(marker) 
 
     marker = Marker()
     marker.header.frame_id = 'map'
@@ -902,7 +902,7 @@ def lime_callback(msg):
     marker.scale.y = 0.3
     marker.scale.z = 0.1
     marker.ns = "my_namespace"
-    marker_array_orientations.markers[-2] = marker
+    marker_array_orientations.markers[-2] = copy.deepcopy(marker)
 
     # visualize robot
     marker = Marker()
@@ -924,7 +924,7 @@ def lime_callback(msg):
     #marker.frame_locked = False
     marker.text = human.name
     marker.ns = "my_namespace"
-    marker_array_semantic_labels.markers[-1] = marker 
+    marker_array_semantic_labels.markers[-1] = copy.deepcopy(marker) 
 
     marker = Marker()
     marker.header.frame_id = 'map'
@@ -947,7 +947,7 @@ def lime_callback(msg):
     marker.scale.y = 0.3
     marker.scale.z = 0.1
     marker.ns = "my_namespace"
-    marker_array_orientations.markers[-1] = marker
+    marker_array_orientations.markers[-1] = copy.deepcopy(marker)
 
     # publish orientations
     pub_markers_orientations.publish(marker_array_orientations)
@@ -987,6 +987,23 @@ def lime_callback(msg):
         R_ = math.sqrt(d_x**2+d_y**2)
         qsr_value = robot.getRelativeQsrValue(r,angle,R_)
         print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name + ' as seen from the ' + human.name)
+
+    # find objects in human POV
+    print('\nObjects in human POV:')
+    objects_in_human_POV = []
+    objects_in_human_POV_distances = []
+    for i in range(0, N_static_objects):
+        d_x = static_objects[i].position_map.x - human.position_map.x 
+        d_y = static_objects[i].position_map.y - human.position_map.y
+        angle = np.arctan2(d_y, d_x)
+        [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
+        angle = angle - angle_ref
+        if abs(angle) <= PI/3:
+            objects_in_human_POV.append(static_objects[i])
+            print(static_objects[i].name)
+            r = math.sqrt(d_x**2+d_y**2) 
+            objects_in_human_POV_distances.append(r)
+
 
              
 
@@ -1029,8 +1046,8 @@ def model_state_callback(states_msg):
         human_idx = states_msg.name.index('citizen_extras_female_02')
     elif 'citizen_extras_female_03' in states_msg.name:
         human_idx = states_msg.name.index('citizen_extras_female_03')
-    elif 'citizen_extras_male_02' in states_msg.name:
-        human_idx = states_msg.name.index('citizen_extras_male_02')    
+    elif 'citizen_extras_male_03' in states_msg.name:
+        human_idx = states_msg.name.index('citizen_extras_male_03')    
     if human_idx != -1:
         human.position_map = states_msg.pose[human_idx].position
 

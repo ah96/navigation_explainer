@@ -815,6 +815,10 @@ class lime_rt_pub(object):
             output = output[:, :, [2, 1, 0]].astype(np.uint8)
             #print('\nexp = ', exp)
 
+            pd.DataFrame(output[:,:,0]).to_csv(self.dirCurr + '/' + self.dirName + '/output_B.csv', index=False) #, header=False)
+            pd.DataFrame(output[:,:,1]).to_csv(self.dirCurr + '/' + self.dirName + '/output_G.csv', index=False) #, header=False)
+            pd.DataFrame(output[:,:,2]).to_csv(self.dirCurr + '/' + self.dirName + '/output_R.csv', index=False) #, header=False)
+
             publish_explanation_image = True
             if publish_explanation_image:
                 # publish explanation image
