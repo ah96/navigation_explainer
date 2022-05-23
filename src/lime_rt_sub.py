@@ -139,6 +139,24 @@ class lime_rt_sub(object):
     def local_costmap_callback(self, msg):
         #print('\nlocal_costmap_callback')
 
+        try:
+            # catch transform from /map to /odom and vice versa
+            transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
+            #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
+            #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
+            #r_ = np.asarray(r.as_matrix())
+
+            transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
+
+            self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
+            self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
+        except:
+            pass    
+
+        pd.DataFrame(self.tf_odom_map_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map_tmp.csv', index=False)#, header=False)
+        pd.DataFrame(self.tf_map_odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom_tmp.csv', index=False)#, header=False)
+        
+
         # save costmap in a right image format
         self.localCostmapOriginX = msg.info.origin.position.x
         self.localCostmapOriginY = msg.info.origin.position.y
@@ -200,20 +218,6 @@ class lime_rt_sub(object):
         self.transformed_plan_xs = []
         self.transformed_plan_ys = []
 
-        try:
-            # catch transform from /map to /odom and vice versa
-            transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
-            #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
-            #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
-            #r_ = np.asarray(r.as_matrix())
-
-            transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
-
-            self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
-            self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
-        except:
-            pass    
-
         for i in range(0,len(msg.poses)):
             self.global_plan_xs.append(msg.poses[i].pose.position.x) 
             self.global_plan_ys.append(msg.poses[i].pose.position.y)
@@ -231,8 +235,6 @@ class lime_rt_sub(object):
 
         self.global_plan_empty = False
 
-        pd.DataFrame(self.tf_odom_map_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map_tmp.csv', index=False)#, header=False)
-        pd.DataFrame(self.tf_map_odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom_tmp.csv', index=False)#, header=False)
         pd.DataFrame(self.global_plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/global_plan_tmp.csv', index=False)#, header=False)
         pd.DataFrame(self.plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/plan_tmp.csv', index=False)#, header=False)
         

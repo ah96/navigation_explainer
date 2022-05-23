@@ -2,112 +2,297 @@
 
 from gazebo_msgs.msg import ModelStates, ModelState
 import rospy
-from geometry_msgs.msg import Pose, Twist
+from geometry_msgs.msg import Pose, Twist, Point, Quaternion
 import numpy as np
 import math
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String
 import copy
 from std_msgs.msg import Float32MultiArray
+import pandas as pd
 #import tf2_ros
+import os
+from scipy.spatial.transform import Rotation as R
 
+PI = math.pi
+
+
+# Initialize the ROS Node named 'qsr', allow multiple nodes to be run with this name
+rospy.init_node('qsr_live', anonymous=True)
+
+# convert orientation quaternion to euler angles
+def quaternion_to_euler(x, y, z, w):
+    # roll (x-axis rotation)
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    # pitch (y-axis rotation)
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+
+    # yaw (z-axis rotation)
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return [yaw, pitch, roll]
+
+def euler_to_quaternion(roll, pitch, yaw):
+  qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+  qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+  qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  return Quaternion(qx, qy, qz, qw)
+
+# objects data for or small_office
 static_objects_names =  ['wall_1_model', 'wall_2_model', 'wall_3_model', 'wall_4_model', 'wall_5_model', 'wall_6_model', 'cabinet', 'cabinet_0', 'bookshelf', 'bookshelf_0', 'bookshelf_1', 'table', 'cabinet_1', 'cabinet_2', 'bookshelf_2', 'table_0', 'table_1', 'cabinet_3', 'bookshelf_3', 'bookshelf_4', 'bookshelf_5', 'bookshelf_6', 'cabinet_4']
 static_objects_positions =  [[0.0, -13.0], [0.0, 2.0], [-5.0, -5.5], [5.0, -5.5], [-2.25, -3.0], [3.75, -3.0], [1.9999972750523136, 0.9999981824307168], [2.5157272750523094, -5.439491817569297], [2.0000000000223603, -9.554009999984622], [-2.4965699999655233, -1.5789399999919034], [-2.4981599999655115, 1.4678500000081662], [-0.999999988537484, -8.999995949889628], [-3.0000027249476746, -4.400051817569272], [-1.4918327249476864, -4.456221817569286], [-3.4184899999585867, -6.999999999993267], [-0.999999988537484, -6.999995949889617], [-0.999999988537484, -10.999995949889628], [2.999997275052314, -1.00000181756929], [2.4505500000293674, -11.999999999998144], [2.5131600000353247, -7.999999999973149], [-3.5392899999776337, -10.422219999984502], [-3.9999999999824314, -5.474649999994948], [-0.5370257249476821, -2.0000018175692804]]
-static_objects_orientations = [0,0,0,1]
+N_static_objects = len(static_objects_names)
 
+# objects class
 class Object():
+    # constructor
     def __init__(self,name,position_map):
         self.name = name
-        self.position_map = position_map
-        self.position_map.append(0.0)
-        self.orientation_map = [0.0,0.0,0.0,1.0]
-        self.position_map = [0.0,0.0,0.0]
-        self.orientation_map = [0.0,0.0,0.0,1.0]
-        self.transform_object_to_map = [self.position_map[0], self.position_map[1], self.position_map[2], 0.0, 0.0, 0.0, 1.0]
-        self.transform_map_to_object = [-self.position_map[0], -self.position_map[1], -self.position_map[2], 0.0, 0.0, 0.0, 1.0]
-        self.intrinsic_qsr = False
+        
+        self.position_map = Point(position_map[0],position_map[1],0.0)
+        if 'cabinet' in self.name:
+            self.orientation_map = euler_to_quaternion(0.0,0.0,-PI)
+        elif 'bookshelf' in self.name:
+            self.orientation_map = euler_to_quaternion(0.0,0.0,-PI/2)
+        else:
+            self.orientation_map = Quaternion(0.0,0.0,0.0,1.0)
+        [self.yaw_map,self.pitch_map,self.roll_map] = quaternion_to_euler(self.orientation_map.x,self.orientation_map.y,self.orientation_map.z,self.orientation_map.w)
+        
+        self.position_obj = Point(0.0,0.0,0.0)
+        self.orientation_obj = Quaternion(0.0,0.0,0.0,1.0)
 
+        self.position_odom = Point(0.0,0.0,0.0)
+        self.orientation_odom = Quaternion(0.0,0.0,0.0,1.0)
+        
+        self.transform_object_to_map = [self.position_map.x, self.position_map.y, self.position_map.z, 0.0, 0.0, 0.0, 1.0]
+        self.transform_map_to_object = [-self.position_map.x, -self.position_map.y, -self.position_map.z, 0.0, 0.0, 0.0, 1.0]
+        
         # define intrinsic_qsr for cabinets and bookshelfs
+        self.intrinsic_qsr = False
         if 'cabinet' in self.name or 'bookshelf' in self.name:
             self.intrinsic_qsr = True
+            self.qsr_choice = 1
+            self.defineIntrinsicQsrCalculus()
 
-static_objects = []
-for i in range(0, len(static_objects_names)):
-    static_objects.append(Object(static_objects_names[i], static_objects_positions[i]))        
+        self.lime_coefficients = []
 
+        self.PI = PI
 
-class qsr():
-    # initialization
-    def __init__(self):
-        self.tpcc_dict = dict()
-        self.tpcc_dict_inv = dict()
-        self.angle_ref = dict()
-        self.R = -1
-        self.ORIGIN_pos = [0.0,0.0]
-        self.ORIGIN_name = 'citizen_extras_female_02' #'citizen_extras_female_02','citizen_extras_female_03','citizen_extras_male_03'
-        self.RELATUM_pos = [0.0,0.0]
-        self.RELATUM_name = 'tiago'
-        self.origin_pos = [0.0,0.0]
-        self.origin_name = '' #'citizen_extras_female_02','citizen_extras_female_03','citizen_extras_male_03'
-        self.relatum_pos = [0.0,0.0]
-        self.relatum_name = ''
-        self.referent_pos = [0.0,0.0]
-        self.referent_name = ''
-        self.referents_positions = []
-        self.referents_names = []
-        self.PI = math.pi
-        self.pose = Pose()
-        self.twist = Twist()
-        self.models = []
-        self.init = True
-        self.triples = []
-        self.marker_array_semantic_labels = MarkerArray()
-        self.marker_array_orientations = MarkerArray()
-        self.lime_exp = []
-        self.lime_names = []
-        self.lime_coeffs = []
-        self.I = 0
-        
-        # reasoning variables
-        self.original_deviation = -1
-        self.comb_table = []
-        self.perm_table = []
-        
-        # markers
-        self.marker = Marker()
-        self.marker_orientation = Marker()
-
-        # objects in local costmap
-        self.objects_in_lc_positions = []
-        self.objects_in_lc_names = []     
-
-    # define QSR calculus
-    def defineQsrCalculus(self, qsr_choice):
-        if qsr_choice == 0:
+    # define intrinsic QSR calculus
+    def defineIntrinsicQsrCalculus(self):
+        if self.qsr_choice == 0:
             # left -- right dichotomy in a relative refence system
             # from 'moratz2008qualitative'
             # used for getting semantic costmap
-            self.tpcc_dict = {
+            self.qsr_dict = {
                 'left': 0,
                 'right': 1
             }
 
-        elif qsr_choice == 1:
+        elif self.qsr_choice == 1:
             # single cross calculus from 'moratz2008qualitative'
             # used for getting semantic costmap
-            self.tpcc_dict = {
+            self.qsr_dict = {
                 'left/front': 0,
                 'right/front': 1,
                 'left/back': 2,
                 'right/back': 3
             }
 
-        elif qsr_choice == 2:
+        # used for deriving NLP annotations
+        self.qsr_dict_inv = {v: k for k, v in self.qsr_dict.items()}
+
+    # get QSR value
+    def getIntrinsicQsrValue(self, angle):
+        value = ''    
+
+        if self.qsr_choice == 0:
+            if -self.PI/2 <= angle < self.PI/2:
+                value += 'right'
+            elif self.PI/2 <= angle < self.PI or -self.PI <= angle < -self.PI/2:
+                value += 'left'
+
+        elif self.qsr_choice == 1:
+            if 0 <= angle < self.PI/2:
+                value += 'left/front'
+            elif self.PI/2 <= angle <= self.PI:
+                value += 'left/back'
+            elif -self.PI/2 <= angle < 0:
+                value += 'right/front'
+            elif -self.PI <= angle < -self.PI/2:
+                value += 'right/back'
+
+        return value
+
+# intialize static objects
+static_objects = []
+marker_array_semantic_labels = MarkerArray()
+marker_array_orientations = MarkerArray()
+marker_array_robot_human_orientations = MarkerArray()
+marker_array_robot_human_semantic_labels = MarkerArray()
+
+for i in range(0, len(static_objects_names)):
+    static_objects.append(Object(static_objects_names[i], static_objects_positions[i]))
+
+    # visualize referents
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = i
+    marker.type = marker.TEXT_VIEW_FACING
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = static_objects[i].position_map.x
+    marker.pose.position.y = static_objects[i].position_map.y
+    marker.pose.position.z = 2.0
+    marker.color.r = 1.0
+    marker.color.g = 0.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.5
+    marker.scale.y = 0.5
+    marker.scale.z = 0.5
+    #marker.frame_locked = False
+    marker.text = static_objects[i].name
+    marker.ns = "my_namespace"
+    marker_array_semantic_labels.markers.append(marker) 
+
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = i
+    marker.type = marker.ARROW
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = static_objects[i].position_map.x
+    marker.pose.position.y = static_objects[i].position_map.y
+    marker.pose.position.z = -1.0
+    marker.pose.orientation.x = static_objects[i].orientation_map.x
+    marker.pose.orientation.y = static_objects[i].orientation_map.y
+    marker.pose.orientation.z = static_objects[i].orientation_map.z
+    marker.pose.orientation.w = static_objects[i].orientation_map.w
+    marker.color.r = 0.0
+    marker.color.g = 1.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.8
+    marker.scale.y = 0.3
+    marker.scale.z = 0.1
+    marker.ns = "my_namespace"
+    marker_array_orientations.markers.append(marker)
+#print('\nlen(static_objects) = ', len(static_objects))
+
+
+pub_markers_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
+pub_markers_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
+
+# Robot class
+class Robot():
+    # constructor
+    def __init__(self,name):
+        self.name = name
+        
+        self.position_map = Point(0.0,0.0,0.0)        
+        self.orientation_map = Quaternion(0.0,0.0,0.0,1.0)
+
+        self.position_odom = Point(0.0,0.0,0.0)        
+        self.orientation_odom = Quaternion(0.0,0.0,0.0,1.0)
+
+        self.velocity_vector = [0.0,0.0]
+
+        self.intrinsic_qsr_choice = 1
+        self.relative_qsr_choice = 2
+
+        self.PI = PI
+        
+    # print attributes    
+    def printAttributes(self):
+        print('\nname = ', self.name)
+        print('position_map = ', self.position_map)
+        print('orientation_map = ', self.orientation_map)
+        print('position_odom = ', self.position_map)
+        print('orientation_odom = ', self.orientation_map)
+        print('velocity_vector = ', self.velocity_vector)
+
+    # define intrinsic QSR calculus
+    def defineIntrinsicQsrCalculus(self):
+        if self.intrinsic_qsr_choice == 0:
+            # left -- right dichotomy in a relative refence system
+            # from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            self.intrinsic_qsr_dict = {
+                'left': 0,
+                'right': 1
+            }
+
+        elif self.intrinsic_qsr_choice == 1:
+            # single cross calculus from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            self.intrinsic_qsr_dict = {
+                'left/front': 0,
+                'right/front': 1,
+                'left/back': 2,
+                'right/back': 3
+            }
+
+        # used for deriving NLP annotations
+        self.qsr_dict_inv = {v: k for k, v in self.qsr_dict.items()}
+
+    def getIntrinsicQsrValue(self, angle):
+        value = ''    
+
+        if self.intrinsic_qsr_choice == 0:
+            if -self.PI <= angle < 0:
+                value += 'right'
+            else:
+                value += 'left'
+
+        elif self.intrinsic_qsr_choice == 1:
+            if 0 <= angle < self.PI/2:
+                value += 'left/front'
+            elif self.PI/2 <= angle <= self.PI:
+                value += 'left/back'
+            elif -self.PI/2 <= angle < 0:
+                value += 'right/front'
+            elif -self.PI <= angle < -self.PI/2:
+                value += 'right/back'
+
+        return value
+
+        # define QSR calculus
+    def defineRelativeQsrCalculus(self, qsr_choice):
+        if self.relative_qsr_choice == 0:
+            # left -- right dichotomy in a relative refence system
+            # from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            self.relative_qsr_dict = {
+                'left': 0,
+                'right': 1
+            }
+
+        elif self.relative_qsr_choice == 1:
+            # single cross calculus from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            self.relative_qsr_dict = {
+                'left/front': 0,
+                'right/front': 1,
+                'left/back': 2,
+                'right/back': 3
+            }
+
+        elif self.relative_qsr_choice == 2:
             # TPCC reference system
             # my modified version from 'moratz2008qualitative'
             # used for getting semantic costmap
             if self.R == 0:
-                self.tpcc_dict = {
+                self.relative_qsr_dict = {
                     'sb': 0,
                     'lb': 1,
                     'bl': 2,
@@ -122,7 +307,7 @@ class qsr():
                     'rb': 11
                 }
             else:
-                self.tpcc_dict = {
+                self.relative_qsr_dict = {
                     'csb': 0,
                     'dsb': 1,
                     'clb': 2,
@@ -194,20 +379,20 @@ class qsr():
                     [[1],[0,1],[22,23],[22,23],[20,21],[20,21,22],[21],[20,21],[16,17,19,21],[16,17,18,20],[14,15,17],[14,15,17],[15],[14,15]]        
                 ]
 
-        elif qsr_choice == 3:
+        elif self.relative_qsr_choice == 3:
             # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
             # used for getting semantic costmap
-            self.tpcc_dict = {
+            self.relative_qsr_dict = {
                 'front': 0,
                 'left': 1,
                 'back': 2,
                 'right': 3
             }
 
-        elif qsr_choice == 4:
+        elif self.relative_qsr_choice == 4:
             # Model for combined expressions from 'moratz2002spatial'
             # used for getting semantic costmap
-            self.tpcc_dict = {
+            self.relative_qsr_dict = {
                 'left-front': 0,
                 'left-back': 1,
                 'right-front': 2,
@@ -219,541 +404,18 @@ class qsr():
             }    
 
         # used for deriving NLP annotations
-        self.tpcc_dict_inv = {v: k for k, v in self.tpcc_dict.items()}
+        self.relative_qsr_inv = {v: k for k, v in self.relative_qsr_dict.items()}
 
-    # define QSR calculus
-    def defineRobotQsrCalculus(self, qsr_choice):
-        if qsr_choice == 0:
-            # left -- right dichotomy in a relative refence system
-            # from 'moratz2008qualitative'
-            # used for getting semantic costmap
-            self.tpcc_dict_robot = {
-                'left': 0,
-                'right': 1
-            }
-
-        elif qsr_choice == 1:
-            # single cross calculus from 'moratz2008qualitative'
-            # used for getting semantic costmap
-            self.tpcc_dict_robot = {
-                'left/front': 0,
-                'right/front': 1,
-                'left/back': 2,
-                'right/back': 3
-            }
-
-        elif qsr_choice == 2:
-            # TPCC reference system
-            # my modified version from 'moratz2008qualitative'
-            # used for getting semantic costmap
-            if self.R == 0:
-                self.tpcc_dict_robot = {
-                    'sb': 0,
-                    'lb': 1,
-                    'bl': 2,
-                    'sl': 3,
-                    'fl': 4,
-                    'lf': 5,
-                    'sf': 6,
-                    'rf': 7,
-                    'fr': 8,
-                    'sr': 9,
-                    'br': 10,
-                    'rb': 11
-                }
-            else:
-                self.tpcc_dict_robot = {
-                    'csb': 0,
-                    'dsb': 1,
-                    'clb': 2,
-                    'dlb': 3,
-                    'cbl': 4,
-                    'dbl': 5,
-                    'csl': 6,
-                    'dsl': 7,
-                    'cfl': 8,
-                    'dfl': 9,
-                    'clf': 10,
-                    'dlf': 11,
-                    'csf': 12,
-                    'dsf': 13,
-                    'crf': 14,
-                    'drf': 15,
-                    'cfr': 16,
-                    'dfr': 17,
-                    'csr': 18,
-                    'dsr': 19,
-                    'cbr': 20,
-                    'dbr': 21,
-                    'crb': 22,                    
-                    'drb': 23
-                }
-
-                self.comb_table_robot = [
-                    [[0,1],[0,1],[2,3],[2,3],[2,3],[2,3,4,5],[2,3],[2,3,4,5],[2,3,4,5],[4,5,6,7,8,9],[2,4],[6,8,9,10,11],[0],[12,13]],
-                    [[1],[1],[3],[3],[3],[3,5],[3],[3,5],[2,3,4,5],[4,5,7,9],[2,3,4,5],[4,5,6,7,8,9,10,11],[0,1],[12,13]],
-                    [[2,3],[2,3],[2,3,4,5],[2,3,4,5],[2,3,4,5],[2,3,4,5,6,7,8,9],[2,3,4,5],[4,5,6,7,8,9],[2,3,4,5,6,7,8,9],[4,5,6,7,8,9,10,11],[2,4,6,8],[4,6,8,9,10,11,12,13,14,15],[2],[14,15]],
-                    [[3],[3],[3,5],[3,5],[3,5],[3,5,7,9],[3,5],[5,7,9],[2,3,4,5,6,7,8,9],[4,5,6,7,8,9,11],[2,3,4,5,6,7,8,9],[4,5,6,7,8,9,10,11,12,13,14,15],[2,3],[14,15]],
-                    [[4,5],[4,5],[4,5,6,7,8,9],[4,5,6,7,8,9],[4,5,6,7,8,9],[4,5,6,7,8,9,10,11],[4,5,6,7,8,9],[8,9,10,11],[4,5,6,7,8,9,10,11],[8,9,10,11,12,13,14,15],[4,6,8,10],[8,10,11,12,13,14,15,17],[4],[16,17]],
-                    [[5],[5],[5,7,9],[5,7,9],[5,7,9],[5,7,9,11],[5,7,9],[9,11],[4,5,6,7,8,9,10,11],[8,9,10,11,13,15],[4,5,6,7,8,9,10,11],[9,10,11,12,13,14,15,16,17],[4,5],[16,17]],
-                    [[6,7],[6,7],[8,9],[8,9],[8,9],[8,9,10,11],[8,9],[10,11],[8,9,10,11],[10,11,12,13,14,15],[8,10],[10,12,14,15,16,17],[6],[18,19]],
-                    [[7],[7],[9],[9],[9],[9,11],[9],[11],[8,9,10,11],[10,11,13,15],[8,9,10,11],[10,11,12,13,14,15,18],[6,7],[18,19]],
-                    [[8,9],[8,9],[8,9,10,11],[8,9,10,11],[8,9,10,11],[8,9,10,11,12,13,14,15],[8,9,10,11],[10,11,12,13,14,15],[8,9,10,11,12,13,14,15],[10,11,12,13,14,15,16,17],[8,10,12,14],[10,12,14,15,16,17,18,19,20,21],[8],[20,21]],
-                    [[9],[9],[9,11],[9,11],[9,11],[9,11,13,15],[9,11],[11,13,15],[8,9,10,11,12,13,14,15],[10,11,12,13,14,15,17],[8,9,10,11,12,13,14,15],[10,11,12,13,14,15,16,17,18,19,20,21],[8,9],[20,21]],
-                    [[10,11],[10,11],[10,11,12,13,14,15],[10,11,12,13,14,15],[10,11,12,13,14,15],[10,11,12,13,14,15,16,17],[10,11,12,13,14,15],[12,13,14,15,16,17],[10,11,12,13,14,15,16,17],[15,16,17,18,19,20,21],[10,12,14,16],[14,16,17,18,19,20,21,22,23],[10],[22,23]],
-                    [[11],[11],[11,13,15],[11,13,15],[11,13,15],[11,13,15,17],[11,13,15],[13,15,17],[10,11,12,13,14,15,16,17],[14,15,16,17,19,21],[10,11,12,13,14,15,16,17],[14,15,16,17,18,19,20,21,22,23],[10,11],[22,23]],
-                    [[12,13],[12,13],[14,15],[14,15],[14,15],[14,15,16,17],[14,15],[14,15,16,17],[14,15,16,17],[16,17,18,19,20,21],[14,16],[16,18,20,21,22,23],[12],[0,1]],
-                    [[13],[13],[15],[15],[15],[15,17],[15],[15,17],[14,15,16,17],[16,17,19,21],[14,15,16,17],[16,17,18,19,20,21,22,23],[12,13],[0,1]],
-                    [[14,15],[14,15],[14,15,16,17],[14,15,16,17],[14,15,16,17],[15,16,17,18,19,20,21],[14,15,16,17],[16,17,18,19,20,21],[14,15,16,17,18,19,20,21],[16,17,18,19,20,21,22,23],[14,16,18,20],[0,1,2,3,16,18,20,21,22,23],[14],[2,3]],
-                    [[15],[15],[15,17],[15,17],[15,17],[15,17,19,21],[15,17],[17,19,21],[14,15,16,17,18,19,20,21],[16,17,18,19,20,21,23],[14,15,16,17,18,19,20,21],[0,1,2,3,16,17,18,19,20,21,22,23],[14,15],[2,3]],
-                    [[16,17],[16,17],[16,17,18,19,20,21],[16,17,18,19,20,21],[16,17,18,19,20,21],[16,17,18,19,20,21,22,23],[16,17,18,19,20,21],[20,21,22,23],[16,17,18,19,20,21,22,23],[0,1,2,3,20,21,22,23],[16,18,20,22],[0,1,2,3,4,5,20,22,23],[16],[4,5]],
-                    [[17],[17],[17,19,21],[17,19,21],[17,19,21],[17,19,21,23],[17,19,21],[21,23],[16,17,18,19,20,21,22,23],[1,3,20,21,22,23],[16,17,18,19,20,21,22,23],[0,1,2,3,4,5,20,21,22,23],[16,17],[4,5]],
-                    [[18,19],[18,19],[20,21],[20,21],[20,21],[20,21,22,23],[20,21],[22,23],[20,21,22,23],[0,1,2,3,22,23],[20,22],[0,2,3,4,5,22],[18],[6,7]],
-                    [[19],[19],[21],[21],[21],[21,23],[21],[23],[20,21,22,23],[1,3,22,23],[20,21,22,23],[0,1,2,3,4,5,22,23],[18,19],[6,7]],
-                    [[20,21],[20,21],[20,21,22,23],[20,21,22,23],[20,21,22,23],[0,1,2,3,20,21,22,23],[20,21,22,23],[0,1,2,3,22,23],[0,1,2,3,20,21,22,23],[0,1,2,3,4,5,22,23],[0,2,20,22],[0,2,3,4,5,6,7,8,9,22],[20],[8,9]],
-                    [[21],[21],[21,23],[21,23],[21,23],[1,3,21,23],[21,23],[1,3,23],[0,1,2,3,20,21,22,23],[0,1,2,3,5,22],[0,1,2,3,20,21,22,23],[0,1,2,3,4,5,6,7,8,9,23],[20,21],[8,9]],
-                    [[22,23],[22,23],[0,1,2,3,22,23],[0,1,2,3,22,23],[0,1,2,3,22,23],[0,1,2,3,4,5,22,23],[0,1,2,3,22,23],[0,1,2,3,4,5],[0,1,2,3,4,5,22,23],[2,3,4,5,6,7,8,9],[0,2,4,22],[2,4,5,6,7,8,9,10,11],[22],[10,11]],
-                    [[23],[23],[1,3,23],[1,3,23],[1,3,23],[1,3,5,23],[1,3,23],[1,3,5],[0,1,2,3,4,5,22,23],[2,3,4,5,7,9],[0,1,2,3,4,5,22,23],[3,4,5,6,7,8,9,10,11],[22,23],[10,11]]
-                    ]
-
-                self.perm_dict_robot = {
-                    'ID':0,
-                    'INV':1,
-                    'SC':2,
-                    'SCI':3,
-                    'HM':4,
-                    'HMI':5
-                }
-
-                self.per_table_robot = [
-                    [[0],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11],[12],[13]],
-                    [[13],[13],[15],[15],[15],[15,17],[15],[15,17],[14,15,16,17],[16,17,19,21],[14,16],[16,18,20,21,22,23],[12],[0,1]],
-                    [[12],[12],[14,16],[14,16],[14,16,18],[14],[16,18],[14],[16,17,18,20],[14,15,16,17],[17,19,20,21,22,23],[15,17],[0,1],[15]],
-                    [[12],[12],[10],[10],[10,11],[8,9,10],[10,11],[8,9,10],[8,9,10,11],[4,6,8,9],[9,11],[2,3,4,5,7,9],[13],[2,3]],
-                    [[13],[13],[11],[11],[9,11],[11],[9],[11],[5,7,8,9],[8,9,10,11],[2,3,4,5,6,8],[8,10],[2,3],[0,1]],
-                    [[1],[0,1],[22,23],[22,23],[20,21],[20,21,22],[21],[20,21],[16,17,19,21],[16,17,18,20],[14,15,17],[14,15,17],[15],[14,15]]        
-                ]
-
-        elif qsr_choice == 3:
-            # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
-            # used for getting semantic costmap
-            self.tpcc_dict_robot = {
-                'front': 0,
-                'left': 1,
-                'back': 2,
-                'right': 3
-            }
-
-        elif qsr_choice == 4:
-            # Model for combined expressions from 'moratz2002spatial'
-            # used for getting semantic costmap
-            self.tpcc_dict_robot = {
-                'left-front': 0,
-                'left-back': 1,
-                'right-front': 2,
-                'right-back': 3,
-                'straight-front': 4,
-                'exactly-left': 5,
-                'straight-back': 6,
-                'exactly-right': 7
-            }    
-
-        # used for deriving NLP annotations
-        self.tpcc_dict_inv_robot = {v: k for k, v in self.tpcc_dict.items()}
-    
-    def getRobotValue(self, angle):
+    def getRelativeQsrValue(self, r, angle, R):
         value = ''    
 
-        if qsr_choice_ == 1:
-            if 0 <= angle < self.PI/2:
-                value += 'right/back'
-            elif self.PI/2 <= angle <= self.PI:
-                value += 'right/front'
-            elif -self.PI/2 <= angle < 0:
-                value += 'left/back'
-            elif -self.PI <= angle < -self.PI/2:
-                value += 'left/front'
-
-        return value
-
-    # convert orientation quaternion to euler angles
-    def quaternion_to_euler(self, x, y, z, w):
-        # roll (x-axis rotation)
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll = math.atan2(t0, t1)
-
-        # pitch (y-axis rotation)
-        t2 = +2.0 * (w * y - z * x)
-        t2 = +1.0 if t2 > +1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        pitch = math.asin(t2)
-
-        # yaw (z-axis rotation)
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw = math.atan2(t3, t4)
-
-        return [yaw, pitch, roll]
-
-    def updateRefSys(self):
-        # reference direction == direction between RELATUM and ORIGIN
-        d_x = self.RELATUM_pos[0] - self.ORIGIN_pos[0]
-        d_y = self.RELATUM_pos[1] - self.ORIGIN_pos[1]
-        
-        self.R = math.sqrt((d_x)**2+(d_y)**2)
-        self.angle_ref = np.arctan2(d_y, d_x)
-        #print('angle_ref = ', angle_ref)
-        #print('angle_ref (in deg) = ', angle_ref * 180 / PI)
-    
-    def reason(self, states_msg):
-        # ABC and ABD -> BCD, we must choose C
-        A_name = self.ORIGIN_name
-        B_name = self.RELATUM_name
-        #C_name = 
-        D_name = self.referent_name
-        
-        # choose C first one that is different from A, B and D
-        for i in range(0, len(states_msg.name)):
-            if states_msg.name[i] != A_name and states_msg.name[i] != B_name and states_msg.name[i] != D_name:
-                C_name = states_msg.name[i]
-                break
-
-        if C_name == '':
-            return 0
-
-        # do ABC
-
-        # do BCD
-
-    def printTriples(self, triples):
-        #print('len(triples) = ', len(triples))
-        for i in range(0, len(triples)):
-            if triples[i] == None:
-                continue
-            print(str(i) + ' --- ' + triples[i])
-
-    def model_state_callback(self, states_msg):
-        self.referents_positions = []
-        self.referents_names = []
-        self.marker_array_semantic_labels.markers = []
-        self.marker_array_orientations.markers = []
-        self.objects_in_lc_names = []
-        self.objects_in_lc_positions = []
-
-        #'''
-        # go through objects
-        for i in range(0, len(states_msg.name)):
-            
-            # get orientation vectors of the objects/models
-            '''
-            [yaw, pitch, roll] = self.quaternion_to_euler(states_msg.pose[i].orientation.x, states_msg.pose[i].orientation.y, states_msg.pose[i].orientation.z, states_msg.pose[i].orientation.w)
-            #print('\n[yaw, pitch, roll] = ', [yaw, pitch, roll])
-            if yaw > self.PI:
-                while yaw > self.PI:
-                    yaw -= self.PI
-            elif yaw <= -self.PI:
-                while yaw <= -self.PI:
-                    yaw += self.PI
-            #print('[yaw, pitch, roll] = ', [yaw, pitch, roll])
-            #print('YAW in DEG = ', yaw * 180.0 / self.PI)
-            '''
-            
-            #'''
-            # Visualize orientations of the objects as marker arrays
-            self.marker_orientation = Marker()
-            self.marker_orientation.header.frame_id = 'map'
-            self.marker_orientation.id = i
-            self.marker_orientation.type = self.marker_orientation.ARROW
-            self.marker_orientation.action = self.marker_orientation.ADD
-            self.marker_orientation.pose.position.x = states_msg.pose[i].position.x
-            self.marker_orientation.pose.position.y = states_msg.pose[i].position.y
-            self.marker_orientation.pose.position.z = -1.0
-            self.marker_orientation.pose.orientation.x = states_msg.pose[i].orientation.x
-            self.marker_orientation.pose.orientation.y = states_msg.pose[i].orientation.y
-            self.marker_orientation.pose.orientation.z = states_msg.pose[i].orientation.z
-            self.marker_orientation.pose.orientation.w = states_msg.pose[i].orientation.w
-            self.marker_orientation.color.r = 0.0
-            self.marker_orientation.color.g = 1.0
-            self.marker_orientation.color.b = 0.0
-            self.marker_orientation.color.a = 1.0
-            self.marker_orientation.scale.x = 0.8
-            self.marker_orientation.scale.y = 0.3
-            self.marker_orientation.scale.z = 0.1
-            #marker.frame_locked = False
-            self.marker_orientation.ns = "my_namespace"
-            if self.marker_orientation not in self.marker_array_orientations.markers:
-                self.marker_array_orientations.markers.append(self.marker_orientation)
-            #'''
-            
-            #'''
-            # do not visualize ground_plane
-            if states_msg.name[i] == 'ground_plane':
-                continue
-            # visualize origin and update ORIGIN_pos
-            elif states_msg.name[i] == self.ORIGIN_name:
-                self.ORIGIN_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                self.marker = Marker()
-                self.marker.header.frame_id = 'map'
-                self.marker.id = 0
-                self.marker.type = self.marker.TEXT_VIEW_FACING
-                self.marker.action = self.marker.ADD
-                self.marker.pose = Pose()
-                self.marker.pose.position.x = states_msg.pose[i].position.x
-                self.marker.pose.position.y = states_msg.pose[i].position.y
-                self.marker.pose.position.z = 2.0
-                self.marker.color.r = 1.0
-                self.marker.color.g = 0.0
-                self.marker.color.b = 0.0
-                self.marker.color.a = 1.0
-                self.marker.scale.x = 0.5
-                self.marker.scale.y = 0.5
-                self.marker.scale.z = 0.5
-                #marker.frame_locked = False
-                self.marker.text = self.ORIGIN_name + ',ORIGIN'
-                self.marker.ns = "my_namespace"
-                if self.marker not in self.marker_array_semantic_labels.markers:
-                    self.marker_array_semantic_labels.markers.append(self.marker)
-            # visualize relatum and update RELATUM_pos
-            elif states_msg.name[i] == self.RELATUM_name:
-                self.RELATUM_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                self.marker = Marker()
-                self.marker.header.frame_id = 'map'
-                self.marker.id = 1
-                self.marker.type = self.marker.TEXT_VIEW_FACING
-                self.marker.action = self.marker.ADD
-                self.marker.pose = Pose()
-                self.marker.pose.position.x = states_msg.pose[i].position.x
-                self.marker.pose.position.y = states_msg.pose[i].position.y
-                self.marker.pose.position.z = 2.0
-                self.marker.color.r = 1.0
-                self.marker.color.g = 0.0
-                self.marker.color.b = 0.0
-                self.marker.color.a = 1.0
-                self.marker.scale.x = 0.5
-                self.marker.scale.y = 0.5
-                self.marker.scale.z = 0.5
-                #marker.frame_locked = False
-                self.marker.text = self.RELATUM_name + ',RELATUM'
-                self.marker.ns = "my_namespace"
-                if self.marker not in self.marker_array_semantic_labels.markers:
-                    self.marker_array_semantic_labels.markers.append(self.marker)
-            else:
-                '''        
-                # update current origin_pos and add referent data to lists
-                if states_msg.name[i] == self.origin_name:
-                    self.origin_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                    self.referents_names.append(states_msg.name[i])
-                # update current relatum_pos and add referent data to lists    
-                elif states_msg.name[i] == self.relatum_name:
-                    self.relatum_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                    self.referents_names.append(states_msg.name[i])
-                # update current referent_pos and add referent data to lists    
-                elif states_msg.name[i] == self.referent_name:
-                    self.referent_pos = [states_msg.pose[i].position.x, states_msg.pose[i].position.y]
-                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                    self.referents_names.append(states_msg.name[i])
-                # add referent data to lists
-                else:
-                    self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                    self.referents_names.append(states_msg.name[i])
-                '''
-                
-                # add referent data to lists
-                self.referents_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                self.referents_names.append(states_msg.name[i])
-
-                # visualize referents
-                self.marker = Marker()
-                self.marker.header.frame_id = 'map'
-                self.marker.id = len(self.referents_names) + 1
-                self.marker.type = self.marker.TEXT_VIEW_FACING
-                self.marker.action = self.marker.ADD
-                self.marker.pose = Pose()
-                self.marker.pose.position.x = states_msg.pose[i].position.x
-                self.marker.pose.position.y = states_msg.pose[i].position.y
-                self.marker.pose.position.z = 2.0
-                self.marker.color.r = 1.0
-                self.marker.color.g = 0.0
-                self.marker.color.b = 0.0
-                self.marker.color.a = 1.0
-                self.marker.scale.x = 0.5
-                self.marker.scale.y = 0.5
-                self.marker.scale.z = 0.5
-                #marker.frame_locked = False
-                self.marker.text = states_msg.name[i]
-                self.marker.ns = "my_namespace"
-                if self.marker not in self.marker_array_semantic_labels.markers:
-                    self.marker_array_semantic_labels.markers.append(self.marker)
-
-                # test if an object is in a local costmap
-                d_x = states_msg.pose[i].position.x - self.RELATUM_pos[0] # should be robot, not relatum
-                d_y = states_msg.pose[i].position.y - self.RELATUM_pos[1] # should be robot, not relatum
-                r = math.sqrt((d_x)**2+(d_y)**2)
-                if r <= 4:
-                    self.objects_in_lc_names.append(states_msg.name[i])
-                    self.objects_in_lc_positions.append([states_msg.pose[i].position.x, states_msg.pose[i].position.y])
-                    
-            #'''
-        #'''    
-        
-        print('self.referents_names = ', self.referents_names)
-        print('self.referents_positions = ', self.referents_positions)
-
-        # publish orientations
-        pub_markers_orientations.publish(self.marker_array_orientations)
-        
-        # publish semantic labels
-        pub_markers_semantic_labels.publish(self.marker_array_semantic_labels)
-
-        # update R and angle_ref
-        self.updateRefSys()
-        
-        # print obstacles in local costmap
-        #print('\n\nThere are ' + str(len(self.objects_in_lc_names)) + " obstacles in the local costmap")
-        #print('These obstacles are: ')
-        #self.printTriples(self.objects_in_lc_names)
-
-        
-        #'''
-        # Do something every 100 iterations, so things are not printed too fast
-        self.I += 1
-        if self.I == 100:
-            self.I = 0
-
-            # make QSR triples without reasoning included, after we have collected the freshest positions of objects
-            #self.marker_array_semantic_labels.markers = []
-            triples = []
-            for i in range(0, len(self.referents_names)):
-                d_x = self.referents_positions[i][0] - self.RELATUM_pos[0]
-                d_y = self.referents_positions[i][1] - self.RELATUM_pos[1]
-                r = math.sqrt(d_x**2+d_y**2)
-                angle = np.arctan2(d_y, d_x)
-                angle -= self.angle_ref
-                if angle > self.PI:
-                    angle -= 2*self.PI
-                elif angle <= -self.PI:
-                    angle += 2*self.PI
-                
-                value = self.getValue(r, angle)
-                if value != None:
-                    triples.append(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + self.referents_names[i])
-
-                '''
-                # visualize referents with QSR without reasoning
-                self.marker = Marker()
-                self.marker.header.frame_id = 'map'
-                self.marker.id = i + 2
-                self.marker.type = self.marker.TEXT_VIEW_FACING
-                self.marker.action = self.marker.ADD
-                self.marker.pose = Pose()
-                self.marker.pose.position.x = states_msg.pose[i].position.x
-                self.marker.pose.position.y = states_msg.pose[i].position.y
-                self.marker.pose.position.z = 2.0
-                self.marker.color.r = 1.0
-                self.marker.color.g = 0.0
-                self.marker.color.b = 0.0
-                self.marker.color.a = 1.0
-                self.marker.scale.x = 0.5
-                self.marker.scale.y = 0.5
-                self.marker.scale.z = 0.5
-                #marker.frame_locked = False
-                self.marker.text = self.referents_names[i] + ', ' + value
-                self.marker.ns = "my_namespace"
-                if self.marker not in self.marker_array_semantic_labels.markers:
-                    self.marker_array_semantic_labels.markers.append(self.marker)
-                '''
-
-            # publish semantic labels with QSR without reasoning
-            # visualize referents with QSR without reasoning
-            #pub_markers_semantic_labels.publish(self.marker_array_semantic_labels)
-        
-            # print QSR triples every I=100 iterations
-            #print('\n\n')
-            #print(self.printTriples(triples))
-
-            # Textual explanations based on LIME
-            N_segments = len(self.lime_exp)
-            if N_segments > 0:
-                N_objects_in_lc = len(self.objects_in_lc_names)
-                print('\n\n')
-                #print('self.lime_exp = ', self.lime_exp)
-                #print('N_segments = ', N_segments)
-                #print('N_objects_in_lc = ', N_objects_in_lc)
-                #print('self.objects_in_lc_names = ', self.objects_in_lc_names)
-
-                #distances = [[0.0]*N_objects_in_lc]*N_segments # N_segments x N_objects_in_lc
-                distances = []
-                objects_min_dist = []
-                segments_min_dist = []
-
-                for i in range(0, N_segments):
-                    distances.append([])
-                    for j in range(0, N_objects_in_lc):
-                        d_x = self.objects_in_lc_positions[j][0] - self.lime_exp[i][0]
-                        d_y = self.objects_in_lc_positions[j][1] - self.lime_exp[i][1]
-                        dist = math.sqrt((d_x)**2+(d_y)**2)
-                        distances[i].append(dist)
-                    segments_min_dist.append(min(distances[i]))
-                    #print('distances[' + str(i) + '] = ', distances[i])
-                    #print('min(distances[' + str(i) + ']) = ', min(distances[i]))    
-                    
-                #objects_min_dist = [min(distances[:][j]) for j in range(0, N_objects_in_lc)]    
-
-                #print('\ndistances = ', distances)
-                #print('\nobjects_min_dist = ', objects_min_dist)
-                #print('\nsegments_min_dist = ', segments_min_dist)
-
-                #sorted_indices_of_obj_min_dist = sorted(range(N_objects_in_lc), key = lambda k: objects_min_dist[k])
-                sorted_indices_of_seg_min_dist = sorted(range(N_segments), key = lambda k: segments_min_dist[k])
-                #print('sorted_indices_of_seg_min_dist = ', sorted_indices_of_seg_min_dist)
-
-                # match objects and lime coefficients
-                objects_coeff_pairs = dict()
-                used_names = [] 
-                for i in range(0, N_segments):
-                    idx = sorted_indices_of_seg_min_dist[i]
-                    obj_name_ = self.objects_in_lc_names[distances[idx].index(segments_min_dist[idx])]
-                    if obj_name_ in used_names:
-                        continue
-                    used_names.append(obj_name_)
-                    lime_coeff_ = self.lime_exp[idx][2]
-                    #print(obj_name_ + ' has weight ' + str(lime_coeff_))
-                    objects_coeff_pairs[obj_name_] = lime_coeff_
-
-                    # find triple
-                    name_idx = self.referents_names.index(obj_name_)
-                    d_x = self.referents_positions[name_idx][0] - self.RELATUM_pos[0]
-                    d_y = self.referents_positions[name_idx][1] - self.RELATUM_pos[1]
-                    r = math.sqrt(d_x**2+d_y**2)
-                    angle_ = np.arctan2(d_y, d_x)
-                    angle = angle_ - self.angle_ref
-                    if angle > self.PI:
-                        angle -= 2*self.PI
-                    elif angle <= -self.PI:
-                        angle += 2*self.PI
-                    value = self.getValue(r, angle)    
-                    print(self.ORIGIN_name + ',' + self.RELATUM_name + ' ' + value + ' ' + obj_name_ + ' with lime coefficient of ' + str(lime_coeff_))
-
-                    value = self.getRobotValue(angle)
-                    print(obj_name_ + ' is ' + value + ' from the ' + self.RELATUM_name + ' with lime coefficient of ' + str(lime_coeff_))
-        #'''
-
-        # do QSR reasoning with 4 points
-        #reason(states_msg)
-
-    def getValue(self, r, angle):
-        value = ''    
-
-        if qsr_choice == 0:
+        if self.relative_qsr_choice == 0:
             if -self.PI <= angle < 0:
                 value += 'right'
             else:
                 value += 'left'
 
-        elif qsr_choice == 1:
+        elif self.relative_qsr_choice == 1:
             if 0 <= angle < self.PI/2:
                 value += 'left/front'
             elif self.PI/2 <= angle <= self.PI:
@@ -763,8 +425,8 @@ class qsr():
             elif -self.PI <= angle < -self.PI/2:
                 value += 'right/back'
 
-        elif qsr_choice == 2:
-            if r <= self.R:
+        elif self.relative_qsr_choice == 2:
+            if r <= R:
                 value += 'c'
             else: 
                 value += 'd'    
@@ -794,7 +456,7 @@ class qsr():
             elif -self.PI/4 <= angle < 0:
                 value += 'rb'
 
-        elif qsr_choice == 3:
+        elif self.relative_qsr_choice == 3:
             if -self.PI/4 <= angle <= self.PI/4:
                 value += 'front'
             elif self.PI/4 < angle < 3*self.PI/4:
@@ -804,7 +466,7 @@ class qsr():
             elif -3*self.PI/4 < angle < -self.PI/4:
                 value += 'right'  
 
-        elif qsr_choice == 4:
+        elif self.relative_qsr_choice == 4:
             if angle == 0:
                 value += 'straight-front'
             elif 0 < angle < self.PI/2:
@@ -824,67 +486,571 @@ class qsr():
 
         return value
 
-    def ORIGIN_callback(self, msg):
-        print('\nreceived ORIGIN string:' + msg.data)
-        self.ORIGIN_name = copy.deepcopy(msg.data)
-    
-    def RELATUM_callback(self, msg):
-        print('\nreceived RELATUM string: ' + msg.data)
-        self.RELATUM_name = copy.deepcopy(msg.data)
-    
-    def triple_callback(self, msg):
-        #print('\nreceived triple string: ' + msg.data)
-        strings = msg.data.split(',', -1)
-        self.origin_name = strings[0]
-        #print('origin_name = ', self.origin_name)
-        self.relatum_name = strings[1]
-        #print('relatum_name = ', self.relatum_name)
-        self.referent_name = strings[2]
-        #print('referent_name = ', self.referent_name)
+# Human class
+class Human():
+    # constructor
+    def __init__(self,name):
+        self.name = name
+        
+        self.position_map = Point(0.0,0.0,0.0)        
+        self.orientation_map = Quaternion(0.0,0.0,0.0,1.0)
 
-    def lime_callback(self, msg):
-        # [x, y, exp]*N_FEATURES + ORIGINAL_DEVIATION
-        self.lime_exp = []
-        for i in range(1, int((len(msg.data)-1)/3)): # not taking free-space weight, which is always 0
-            self.lime_exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
-        self.original_deviation = msg.data[-1]
-        #print("\nLIME message received = ", msg.data)
-        #print("\nLIME message received processed = ", self.lime_exp)
-        #print('\nLIME original deviation = ', self.original_deviation)
+        self.intrinsic_qsr_choice = 1
+
+        self.PI = PI
+
+    # print attributes    
+    def printAttributes(self):
+        print('\nname = ', self.name)
+        print('position_map = ', self.position_map)
+        print('orientation_map = ', self.orientation_map)
+
+        # define intrinsic QSR calculus
+    def defineIntrinsicQsrCalculus(self):
+        if self.intrinsic_qsr_choice == 0:
+            # left -- right dichotomy in a relative refence system
+            # from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            self.intrinsic_qsr_dict = {
+                'left': 0,
+                'right': 1
+            }
+
+        elif self.intrinsic_qsr_choice == 1:
+            # single cross calculus from 'moratz2008qualitative'
+            # used for getting semantic costmap
+            self.intrinsic_qsr_dict = {
+                'left/front': 0,
+                'right/front': 1,
+                'left/back': 2,
+                'right/back': 3
+            }
+
+        # used for deriving NLP annotations
+        self.qsr_dict_inv = {v: k for k, v in self.qsr_dict.items()}
+
+    def getIntrinsicQsrValue(self, angle):
+        value = ''    
+
+        if self.intrinsic_qsr_choice == 0:
+            if -self.PI <= angle < 0:
+                value += 'right'
+            else:
+                value += 'left'
+
+        elif self.intrinsic_qsr_choice == 1:
+            if 0 <= angle < self.PI/2:
+                value += 'left/front'
+            elif self.PI/2 <= angle <= self.PI:
+                value += 'left/back'
+            elif -self.PI/2 <= angle < 0:
+                value += 'right/front'
+            elif -self.PI <= angle < -self.PI/2:
+                value += 'right/back'
+
+        return value
+
+# human and robot variables
+robot = Robot('tiago')
+human = Human('human')
 
 
-# choose qsr calculus [0,4]
-qsr_obj = qsr()
+# visualize robot
+marker = Marker()
+marker.header.frame_id = 'map'
+marker.id = N_static_objects
+marker.type = marker.TEXT_VIEW_FACING
+marker.action = marker.ADD
+marker.pose = Pose()
+marker.pose.position.x = robot.position_map.x
+marker.pose.position.y = robot.position_map.y
+marker.pose.position.z = 2.0
+marker.color.r = 1.0
+marker.color.g = 0.0
+marker.color.b = 0.0
+marker.color.a = 1.0
+marker.scale.x = 0.5
+marker.scale.y = 0.5
+marker.scale.z = 0.5
+#marker.frame_locked = False
+marker.text = robot.name
+marker.ns = "my_namespace"
+marker_array_semantic_labels.markers.append(marker) 
 
-qsr_choice = 2 
-qsr_obj.defineQsrCalculus(qsr_choice)
+marker = Marker()
+marker.header.frame_id = 'map'
+marker.id = N_static_objects
+marker.type = marker.ARROW
+marker.action = marker.ADD
+marker.pose = Pose()
+marker.pose.position.x = robot.position_map.x
+marker.pose.position.y = robot.position_map.y
+marker.pose.position.z = -1.0
+marker.pose.orientation.x = robot.orientation_map.x
+marker.pose.orientation.y = robot.orientation_map.y
+marker.pose.orientation.z = robot.orientation_map.z
+marker.pose.orientation.w = robot.orientation_map.w
+marker.color.r = 0.0
+marker.color.g = 1.0
+marker.color.b = 0.0
+marker.color.a = 1.0
+marker.scale.x = 0.8
+marker.scale.y = 0.3
+marker.scale.z = 0.1
+marker.ns = "my_namespace"
+marker_array_orientations.markers.append(marker)
 
-qsr_choice_ = 1 
-qsr_obj.defineRobotQsrCalculus(qsr_choice_)
+    # visualize robot
+marker = Marker()
+marker.header.frame_id = 'map'
+marker.id = N_static_objects + 1
+marker.type = marker.TEXT_VIEW_FACING
+marker.action = marker.ADD
+marker.pose = Pose()
+marker.pose.position.x = human.position_map.x
+marker.pose.position.y = human.position_map.y
+marker.pose.position.z = 2.0
+marker.color.r = 1.0
+marker.color.g = 0.0
+marker.color.b = 0.0
+marker.color.a = 1.0
+marker.scale.x = 0.5
+marker.scale.y = 0.5
+marker.scale.z = 0.5
+#marker.frame_locked = False
+marker.text = human.name
+marker.ns = "my_namespace"
+marker_array_semantic_labels.markers.append(marker) 
 
-#tfBuffer = tf2_ros.Buffer()
+marker = Marker()
+marker.header.frame_id = 'map'
+marker.id = N_static_objects + 1
+marker.type = marker.ARROW
+marker.action = marker.ADD
+marker.pose = Pose()
+marker.pose.position.x = human.position_map.x
+marker.pose.position.y = human.position_map.y
+marker.pose.position.z = -1.0
+marker.pose.orientation.x = human.orientation_map.x
+marker.pose.orientation.y = human.orientation_map.y
+marker.pose.orientation.z = human.orientation_map.z
+marker.pose.orientation.w = human.orientation_map.w
+marker.color.r = 0.0
+marker.color.g = 1.0
+marker.color.b = 0.0
+marker.color.a = 1.0
+marker.scale.x = 0.8
+marker.scale.y = 0.3
+marker.scale.z = 0.1
+marker.ns = "my_namespace"
+marker_array_orientations.markers.append(marker)
 
-# Initialize the ROS Node named 'qsr', allow multiple nodes to be run with this name
-rospy.init_node('qsr', anonymous=True)
+
+dirCurr = os.getcwd()
+dirName = 'lime_rt_data'
+file_path_odom = dirName + '/odom_tmp.csv'
+file_path_amcl = dirName + '/amcl_pose_tmp.csv'
+
+class LocalCostmap():
+    def __init__(self):
+        self.resolution = 0.025
+        self.width = 160
+        self.height = 160
+        self.origin_x_odom = 0.0
+        self.origin_y_odom = 0.0
+
+    def printAttributes(self):
+        print('\nlocal_costmap')
+        print('resolution = ', self.resolution)
+        print('width = ', self.width)
+        print('height = ', self.height)
+        print('origin_x_odom = ', self.origin_x_odom)
+        print('origin_y_odom = ', self.origin_y_odom)
+
+local_costmap = LocalCostmap()
+file_path_lc = dirName + '/costmap_info_tmp.csv'
+
+file_path_tf_map_odom = dirName + '/tf_map_odom_tmp.csv'
+
+class TF():
+    def __init__(self):
+        self.translation = Point(0.0,0.0,0.0)
+        self.rotation = Quaternion(0.0,0.0,0.0,1.0)
+    def printAttributes(self):
+        print("\ntranslation = ", self.translation)
+        print('rotation = ', self.rotation)
+
+tf_map_odom = TF() 
+
+
+class LimeExplanation():
+    def __init__(self):
+        self.exp = []
+        self.original_deviation = 0.0
+
+    def printAttributes(self):
+        print("\nLIME explanation = ", self.exp)
+        print('LIME original deviation = ', self.original_deviation)
+     
+lime_explanation = LimeExplanation()
+
+# lime explanation callback
+def lime_callback(msg):
+    print('\n\n\n\n\nlime_callback\n')
+    # [x, y, exp]*N_FEATURES + ORIGINAL_DEVIATION
+    lime_explanation.exp = []
+    for i in range(1, int((len(msg.data)-1)/3)): # not taking free-space weight, which is always 0
+        lime_explanation.exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
+    lime_explanation.original_deviation = msg.data[-1]
+    #lime_explanation.printAttributes()
+
+
+    # update local costmap
+    if os.path.getsize(file_path_lc) == 0 or os.path.exists(file_path_lc) == False:
+        return
+    lc_tmp = pd.read_csv(dirCurr + '/' + file_path_lc)
+    local_costmap.resolution = lc_tmp.iloc[0][0]
+    local_costmap.height = lc_tmp.iloc[1][0]
+    local_costmap.width = lc_tmp.iloc[2][0]
+    local_costmap.origin_x_odom = lc_tmp.iloc[3][0]
+    local_costmap.origin_y_odom = lc_tmp.iloc[4][0] 
+    #local_costmap.printAttributes()
+
+
+    # update tf_map_odom
+    if os.path.getsize(file_path_tf_map_odom) == 0 or os.path.exists(file_path_tf_map_odom) == False:
+        return
+    tf_msg = pd.read_csv(dirCurr + '/' + file_path_tf_map_odom)
+    tf_map_odom.translation = Point(tf_msg.iloc[0][0],tf_msg.iloc[1][0],tf_msg.iloc[2][0])
+    tf_map_odom.rotation = Quaternion(tf_msg.iloc[3][0],tf_msg.iloc[4][0],tf_msg.iloc[5][0],tf_msg.iloc[6][0])
+    #tf_map_odom.printAttributes()
+    t = np.asarray([tf_map_odom.translation.x,tf_map_odom.translation.y,tf_map_odom.translation.z])
+    r = R.from_quat([tf_map_odom.rotation.x,tf_map_odom.rotation.y,tf_map_odom.rotation.z,tf_map_odom.rotation.w])
+    r_ = np.asarray(r.as_matrix())
+
+    # find objects in the current local costmap
+    #print('\nObjects in the current local costmap:')
+    objects_in_lc = []
+    for i in range(0, len(static_objects_names)):
+        p = np.array([static_objects_positions[i][0], static_objects_positions[i][1], 0.0])
+        pnew = p.dot(r_) + t
+        x_temp = int(pnew[0] - local_costmap.origin_x_odom) / local_costmap.resolution
+        y_temp = int(pnew[1] - local_costmap.origin_y_odom) / local_costmap.resolution
+        if 0 <= x_temp <= local_costmap.width and 0 <= y_temp <= local_costmap.height:
+            objects_in_lc.append(static_objects[i])
+            objects_in_lc[-1].lime_coefficients = []
+            objects_in_lc[-1].lime_coefficients_distances = []
+            # printing object that is in the current local costmap
+            #print(static_objects[i].name)
+            # update odom position of the object
+            static_objects[i].position_odom = Point(pnew[0],pnew[1],pnew[2])
+
+    N_objects_in_lc = len(objects_in_lc)        
+
+    # append LIME coefficients to the objects in the current local costmap
+    N_coefficients = len(lime_explanation.exp)
+    #print('\nN of LIME coeficients = ', N_coefficients)
+    indices_of_closest_objects_from_objects_in_lc = [0] * N_coefficients
+    for i in range(0, N_coefficients):
+        #[x,y,coeff]
+        local_distances_of_segment_centroid_from_objects = []
+        for j in range(0, N_objects_in_lc):
+            dist = math.sqrt( (lime_explanation.exp[i][0] - objects_in_lc[j].position_odom.x)**2 + (lime_explanation.exp[i][1] - objects_in_lc[j].position_odom.y)**2)
+            local_distances_of_segment_centroid_from_objects.append(dist)
+        dist_min = min(local_distances_of_segment_centroid_from_objects)
+        index_min = local_distances_of_segment_centroid_from_objects.index(dist_min)
+        indices_of_closest_objects_from_objects_in_lc[i] = index_min
+        objects_in_lc[index_min].lime_coefficients.append(lime_explanation.exp[i][2])
+        objects_in_lc[index_min].lime_coefficients_distances.append(dist_min)
+    #print('\nindices_of_closest_objects_from_objects_in_lc = ', indices_of_closest_objects_from_objects_in_lc)
+    # print objects from the local costmap with their lime coefficients
+    #print('\n')
+    used_coefficients = []
+    used_objects = []
+    for i in range(0, N_objects_in_lc):
+        lime_coeff_str = ''
+        if len(objects_in_lc[i].lime_coefficients) > 1:
+            dist_min = min(objects_in_lc[i].lime_coefficients_distances)
+            index_min = objects_in_lc[i].lime_coefficients_distances.index(dist_min)
+            lime_coeff_str = str(objects_in_lc[i].lime_coefficients[index_min])
+            print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
+            used_coefficients.append(objects_in_lc[i].lime_coefficients[index_min])
+            used_objects.append(i)
+        elif len(objects_in_lc[i].lime_coefficients) == 1:
+            lime_coeff_str = str(objects_in_lc[i].lime_coefficients[0])
+            print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
+            used_coefficients.append(objects_in_lc[i].lime_coefficients[0])
+            used_objects.append(i)
+        else:
+            pass
+
+    if len(used_objects) < N_objects_in_lc:
+        for i in range(0, N_objects_in_lc):
+            if i in used_objects:
+                continue
+            local_distances = []
+            local_distances_indices = []
+            for j in range(0, N_coefficients):
+                if lime_explanation.exp[j][2] in used_coefficients:
+                    continue
+                dist = math.sqrt( (lime_explanation.exp[j][0] - objects_in_lc[i].position_odom.x)**2 + (lime_explanation.exp[j][1] - objects_in_lc[i].position_odom.y)**2)
+                local_distances.append(dist)
+                local_distances_indices.append(j)
+            if len(local_distances) == 0:
+                continue    
+            dist_min = min(local_distances)
+            index_min = local_distances.index(dist_min)
+            coeff = lime_explanation.exp[local_distances_indices[index_min]][2]
+            print(objects_in_lc[i].name + ' has a LIME coefficient ' + str(coeff))
+            used_coefficients.append(coeff)
+            used_objects.append(i)
+
+    # how a robot passes relative to the objects in the local costmap
+    print('')
+    for i in range(0, N_objects_in_lc):
+        if objects_in_lc[i].intrinsic_qsr == False or i not in used_objects:
+            continue
+        d_x = robot.position_map.x - objects_in_lc[i].position_map.x
+        d_y = robot.position_map.y - objects_in_lc[i].position_map.y
+        #r = math.sqrt(d_x**2+d_y**2)
+        angle = np.arctan2(d_y, d_x)
+        angle_ref = objects_in_lc[i].yaw_map
+        angle = angle - angle_ref
+        if angle >= PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        qsr_value = objects_in_lc[i].getIntrinsicQsrValue(angle)
+        print(robot.name + ' passes ' + qsr_value + ' of the ' + objects_in_lc[i].name)
+
+    # where are objects in the local costmap relative to the robot
+    print('')
+    for i in range(0, N_objects_in_lc):
+        if i not in used_objects:
+            continue
+        d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
+        d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
+        #r = math.sqrt(d_x**2+d_y**2)
+        angle = np.arctan2(d_y, d_x)
+        [angle_ref,pitch,roll] = quaternion_to_euler(robot.orientation_map.x,robot.orientation_map.y,robot.orientation_map.z,robot.orientation_map.w)
+        angle = angle - angle_ref
+        if angle >= PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        qsr_value = robot.getIntrinsicQsrValue(angle)
+        print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name)
+
+    # where are objects in the local costmap relative to the human
+    print('')
+    for i in range(0, N_objects_in_lc):
+        if i not in used_objects:
+            continue
+        d_x = objects_in_lc[i].position_map.x - human.position_map.x 
+        d_y = objects_in_lc[i].position_map.y - human.position_map.y 
+        #r = math.sqrt(d_x**2+d_y**2)
+        angle = np.arctan2(d_y, d_x)
+        [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
+        angle = angle - angle_ref
+        if angle >= PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        qsr_value = human.getIntrinsicQsrValue(angle)
+        print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + human.name)
+
+    # visualize robot
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_static_objects
+    marker.type = marker.TEXT_VIEW_FACING
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = robot.position_map.x
+    marker.pose.position.y = robot.position_map.y
+    marker.pose.position.z = 2.0
+    marker.color.r = 1.0
+    marker.color.g = 0.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.5
+    marker.scale.y = 0.5
+    marker.scale.z = 0.5
+    #marker.frame_locked = False
+    marker.text = robot.name
+    marker.ns = "my_namespace"
+    marker_array_semantic_labels.markers[-2] = marker 
+
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_static_objects
+    marker.type = marker.ARROW
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = robot.position_map.x
+    marker.pose.position.y = robot.position_map.y
+    marker.pose.position.z = 3.0
+    marker.pose.orientation.x = robot.orientation_map.x
+    marker.pose.orientation.y = robot.orientation_map.y
+    marker.pose.orientation.z = robot.orientation_map.z
+    marker.pose.orientation.w = robot.orientation_map.w
+    marker.color.r = 0.0
+    marker.color.g = 1.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.8
+    marker.scale.y = 0.3
+    marker.scale.z = 0.1
+    marker.ns = "my_namespace"
+    marker_array_orientations.markers[-2] = marker
+
+    # visualize robot
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_static_objects + 1
+    marker.type = marker.TEXT_VIEW_FACING
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = human.position_map.x
+    marker.pose.position.y = human.position_map.y
+    marker.pose.position.z = 2.0
+    marker.color.r = 1.0
+    marker.color.g = 0.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.5
+    marker.scale.y = 0.5
+    marker.scale.z = 0.5
+    #marker.frame_locked = False
+    marker.text = human.name
+    marker.ns = "my_namespace"
+    marker_array_semantic_labels.markers[-1] = marker 
+
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_static_objects + 1
+    marker.type = marker.ARROW
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = human.position_map.x
+    marker.pose.position.y = human.position_map.y
+    marker.pose.position.z = -1.0
+    marker.pose.orientation.x = human.orientation_map.x
+    marker.pose.orientation.y = human.orientation_map.y
+    marker.pose.orientation.z = human.orientation_map.z
+    marker.pose.orientation.w = human.orientation_map.w
+    marker.color.r = 0.0
+    marker.color.g = 1.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.8
+    marker.scale.y = 0.3
+    marker.scale.z = 0.1
+    marker.ns = "my_namespace"
+    marker_array_orientations.markers[-1] = marker
+
+    # publish orientations
+    pub_markers_orientations.publish(marker_array_orientations)
+    # publish semantic labels
+    pub_markers_semantic_labels.publish(marker_array_semantic_labels)
+
+    '''
+    nula = euler_to_quaternion(0.0,0.0,0.0)
+    print('nula = ', nula)
+    pi_2 = euler_to_quaternion(0.0,0.0,PI/2)
+    print('pi_2 = ', pi_2)
+    minus_pi_2 = euler_to_quaternion(0.0,0.0,-PI/2)
+    print('minus_pi_2 = ', minus_pi_2)
+    pi_ = euler_to_quaternion(0.0,0.0,PI)
+    print('pi_ = ', pi_)
+    minus_pi_ = euler_to_quaternion(0.0,0.0,-PI)
+    print('minus_pi_ = ', minus_pi_)
+    '''
+
+    # where are objects in the local costmap relative to the human
+    print('')
+    for i in range(0, N_objects_in_lc):
+        if i not in used_objects:
+            continue
+        d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
+        d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
+        r = math.sqrt(d_x**2+d_y**2) 
+        angle = np.arctan2(d_y, d_x)
+        [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
+        angle = angle - angle_ref
+        if angle >= PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        d_x = human.position_map.x - robot.position_map.x 
+        d_y = human.position_map.x - robot.position_map.y 
+        R_ = math.sqrt(d_x**2+d_y**2)
+        qsr_value = robot.getRelativeQsrValue(r,angle,R_)
+        print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name + ' as seen from the ' + human.name)
+
+             
+
+update_robot_from_gazebo = False
+# update human and robot variables
+def model_state_callback(states_msg):
+    # update robot map pose from amcl_pose
+    if update_robot_from_gazebo == True:
+        robot_idx = states_msg.name.index('tiago')
+        robot.position_map = states_msg.pose[robot_idx].position
+        robot.orientation_map = states_msg.pose[robot_idx].orientation
+    # update robot map pose from amcl_pose
+    else:
+        try:
+            if os.path.getsize(file_path_amcl) == 0 or os.path.exists(file_path_amcl) == False:
+                pass
+            else:
+                amcl_tmp = pd.read_csv(dirCurr + '/' + file_path_amcl)
+                robot.position_map = Point(amcl_tmp.iloc[0][0],amcl_tmp.iloc[1][0],0.0)
+                robot.orientation_map = Quaternion(0.0,0.0,amcl_tmp.iloc[2][0],amcl_tmp.iloc[3][0])
+        except:
+            pass
+        
+    # update robot odom pose from odom
+    try:
+        if os.path.getsize(file_path_odom) == 0 or os.path.exists(file_path_odom) == False:
+            pass
+        else:
+            odom_tmp = pd.read_csv(dirCurr + '/' + file_path_odom)
+            robot.position_odom = Point(odom_tmp.iloc[0][0],odom_tmp.iloc[1][0],0.0)
+            robot.orientation_odom = Quaternion(0.0,0.0,odom_tmp.iloc[2][0],odom_tmp.iloc[3][0])
+            robot.velocities = [odom_tmp.iloc[4][0],odom_tmp.iloc[5][0]]
+            #robot.printAttributes()
+    except:
+        pass
+
+    # update human
+    human_idx = -1
+    if 'citizen_extras_female_02' in states_msg.name:
+        human_idx = states_msg.name.index('citizen_extras_female_02')
+    elif 'citizen_extras_female_03' in states_msg.name:
+        human_idx = states_msg.name.index('citizen_extras_female_03')
+    elif 'citizen_extras_male_02' in states_msg.name:
+        human_idx = states_msg.name.index('citizen_extras_male_02')    
+    if human_idx != -1:
+        human.position_map = states_msg.pose[human_idx].position
+
+        d_x = robot.position_map.x - human.position_map.x 
+        d_y = robot.position_map.y - human.position_map.y 
+        angle_yaw = np.arctan2(d_y, d_x)
+        human.orientation_map = euler_to_quaternion(0.0,0.0,angle_yaw)
+        #human.orientation_map = states_msg.pose[human_idx].orientation
+        #human.printAttributes()
+
+
+# ----------main-----------
 
 # Initalize a subscriber to the "/gazebo/model_states" topic with the function "model_state_callback" as a callback
-sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, qsr_obj.model_state_callback)
-
-pub_markers_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
-pub_markers_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
-
-sub_ORIGIN = rospy.Subscriber("/ORIGIN", String, qsr_obj.ORIGIN_callback)
-#rostopic pub /ORIGIN std_msgs/String 'cabinet'
-
-sub_RELATUM = rospy.Subscriber("/RELATUM", String, qsr_obj.RELATUM_callback)
-#rostopic pub /RELATUM std_msgs/String 'tiago'
-
-sub_triple = rospy.Subscriber("/triple", String, qsr_obj.triple_callback)
-#rostopic pub /triple std_msgs/String 'cabinet,tiago,wall_1_model'
+sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, model_state_callback)
 
 #[x,y,coeff]
-sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, qsr_obj.lime_callback)
+sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, lime_callback)
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
     rospy.spin()
+    
