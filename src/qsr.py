@@ -143,7 +143,7 @@ marker_array_robot_human_semantic_labels = MarkerArray()
 for i in range(0, len(static_objects_names)):
     static_objects.append(Object(static_objects_names[i], static_objects_positions[i]))
 
-    # visualize referents
+    # visualize oriented static objects
     marker = Marker()
     marker.header.frame_id = 'map'
     marker.id = i
@@ -152,7 +152,7 @@ for i in range(0, len(static_objects_names)):
     marker.pose = Pose()
     marker.pose.position.x = static_objects[i].position_map.x
     marker.pose.position.y = static_objects[i].position_map.y
-    marker.pose.position.z = 2.0
+    marker.pose.position.z = 0.5
     marker.color.r = 1.0
     marker.color.g = 0.0
     marker.color.b = 0.0
@@ -165,28 +165,29 @@ for i in range(0, len(static_objects_names)):
     marker.ns = "my_namespace"
     marker_array_semantic_labels.markers.append(marker) 
 
-    marker = Marker()
-    marker.header.frame_id = 'map'
-    marker.id = i
-    marker.type = marker.ARROW
-    marker.action = marker.ADD
-    marker.pose = Pose()
-    marker.pose.position.x = static_objects[i].position_map.x
-    marker.pose.position.y = static_objects[i].position_map.y
-    marker.pose.position.z = -1.0
-    marker.pose.orientation.x = static_objects[i].orientation_map.x
-    marker.pose.orientation.y = static_objects[i].orientation_map.y
-    marker.pose.orientation.z = static_objects[i].orientation_map.z
-    marker.pose.orientation.w = static_objects[i].orientation_map.w
-    marker.color.r = 0.0
-    marker.color.g = 1.0
-    marker.color.b = 0.0
-    marker.color.a = 1.0
-    marker.scale.x = 0.8
-    marker.scale.y = 0.3
-    marker.scale.z = 0.1
-    marker.ns = "my_namespace"
-    marker_array_orientations.markers.append(marker)
+    if 'cabinet' in static_objects[i].name or 'bookshelf' in static_objects[i].name:
+        marker = Marker()
+        marker.header.frame_id = 'map'
+        marker.id = i
+        marker.type = marker.ARROW
+        marker.action = marker.ADD
+        marker.pose = Pose()
+        marker.pose.position.x = static_objects[i].position_map.x
+        marker.pose.position.y = static_objects[i].position_map.y
+        marker.pose.position.z = 0.0
+        marker.pose.orientation.x = static_objects[i].orientation_map.x
+        marker.pose.orientation.y = static_objects[i].orientation_map.y
+        marker.pose.orientation.z = static_objects[i].orientation_map.z
+        marker.pose.orientation.w = static_objects[i].orientation_map.w
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+        marker.scale.x = 0.8
+        marker.scale.y = 0.3
+        marker.scale.z = 0.1
+        marker.ns = "my_namespace"
+        marker_array_orientations.markers.append(marker)
 #print('\nlen(static_objects) = ', len(static_objects))
 
 
@@ -696,7 +697,8 @@ lime_explanation = LimeExplanation()
 
 # lime explanation callback
 def lime_callback(msg):
-    print('\n\n\n\n\nlime_callback\n')
+    #print('\n\n\n\n\nlime_callback\n')
+    print('\n\n\n\n\n')
     # [x, y, exp]*N_FEATURES + ORIGINAL_DEVIATION
     lime_explanation.exp = []
     for i in range(1, int((len(msg.data)-1)/3)): # not taking free-space weight, which is always 0
@@ -750,6 +752,7 @@ def lime_callback(msg):
     # append LIME coefficients to the objects in the current local costmap
     N_coefficients = len(lime_explanation.exp)
     #print('\nN of LIME coeficients = ', N_coefficients)
+    lime_coeffs_string = ''
     indices_of_closest_objects_from_objects_in_lc = [0] * N_coefficients
     for i in range(0, N_coefficients):
         #[x,y,coeff]
@@ -773,12 +776,14 @@ def lime_callback(msg):
             dist_min = min(objects_in_lc[i].lime_coefficients_distances)
             index_min = objects_in_lc[i].lime_coefficients_distances.index(dist_min)
             lime_coeff_str = str(objects_in_lc[i].lime_coefficients[index_min])
-            print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
+            #print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
+            lime_coeffs_string += objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str + '\n'
             used_coefficients.append(objects_in_lc[i].lime_coefficients[index_min])
             used_objects.append(i)
         elif len(objects_in_lc[i].lime_coefficients) == 1:
             lime_coeff_str = str(objects_in_lc[i].lime_coefficients[0])
-            print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
+            #print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
+            lime_coeffs_string += objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str + '\n'
             used_coefficients.append(objects_in_lc[i].lime_coefficients[0])
             used_objects.append(i)
         else:
@@ -801,12 +806,17 @@ def lime_callback(msg):
             dist_min = min(local_distances)
             index_min = local_distances.index(dist_min)
             coeff = lime_explanation.exp[local_distances_indices[index_min]][2]
-            print(objects_in_lc[i].name + ' has a LIME coefficient ' + str(coeff))
+            #print(objects_in_lc[i].name + ' has a LIME coefficient ' + str(coeff))
+            lime_coeffs_string += objects_in_lc[i].name + ' has a LIME coefficient ' + str(coeff) + '\n'
             used_coefficients.append(coeff)
             used_objects.append(i)
 
+    print('\nLIME coefficients:')
+    print(lime_coeffs_string)
+
     # how a robot passes relative to the objects in the local costmap
-    print('')
+    #print('')
+    objects_intrinsic_string = ''
     for i in range(0, N_objects_in_lc):
         if objects_in_lc[i].intrinsic_qsr == False or i not in used_objects:
             continue
@@ -821,10 +831,15 @@ def lime_callback(msg):
         elif angle < -PI:
             angle += 2*PI
         qsr_value = objects_in_lc[i].getIntrinsicQsrValue(angle)
-        print(robot.name + ' passes ' + qsr_value + ' of the ' + objects_in_lc[i].name)
+        #print(robot.name + ' passes ' + qsr_value + ' of the ' + objects_in_lc[i].name)
+        objects_intrinsic_string += robot.name + ' is to the ' + qsr_value + ' of the ' + objects_in_lc[i].name + '\n'
+
+    print('\nRobot relative to the immediate objects:')
+    print(objects_intrinsic_string)
 
     # where are objects in the local costmap relative to the robot
-    print('')
+    #print('')
+    robot_string = ''
     for i in range(0, N_objects_in_lc):
         if i not in used_objects:
             continue
@@ -839,25 +854,10 @@ def lime_callback(msg):
         elif angle < -PI:
             angle += 2*PI
         qsr_value = robot.getIntrinsicQsrValue(angle)
-        print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name)
-
-    # where are objects in the local costmap relative to the human
-    print('')
-    for i in range(0, N_objects_in_lc):
-        if i not in used_objects:
-            continue
-        d_x = objects_in_lc[i].position_map.x - human.position_map.x 
-        d_y = objects_in_lc[i].position_map.y - human.position_map.y 
-        #r = math.sqrt(d_x**2+d_y**2)
-        angle = np.arctan2(d_y, d_x)
-        [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
-        angle = angle - angle_ref
-        if angle >= PI:
-            angle -= 2*PI
-        elif angle < -PI:
-            angle += 2*PI
-        qsr_value = human.getIntrinsicQsrValue(angle)
-        print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + human.name)
+        #print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name)
+        robot_string += objects_in_lc[i].name + ' is to my ' + qsr_value + '\n'
+    print('\n' + robot.name + ':')
+    print(robot_string)
 
     # visualize robot
     marker = Marker()
@@ -967,31 +967,16 @@ def lime_callback(msg):
     print('minus_pi_ = ', minus_pi_)
     '''
 
-    # where are objects in the local costmap relative to the human
-    print('')
-    for i in range(0, N_objects_in_lc):
-        if i not in used_objects:
-            continue
-        d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
-        d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
-        r = math.sqrt(d_x**2+d_y**2) 
-        angle = np.arctan2(d_y, d_x)
-        [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
-        angle = angle - angle_ref
-        if angle >= PI:
-            angle -= 2*PI
-        elif angle < -PI:
-            angle += 2*PI
-        d_x = human.position_map.x - robot.position_map.x 
-        d_y = human.position_map.x - robot.position_map.y 
-        R_ = math.sqrt(d_x**2+d_y**2)
-        qsr_value = robot.getRelativeQsrValue(r,angle,R_)
-        print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name + ' as seen from the ' + human.name)
-
+    d_x = human.position_map.x - robot.position_map.x 
+    d_y = human.position_map.x - robot.position_map.y 
+    R_ = math.sqrt(d_x**2+d_y**2)
+    
     # find objects in human POV
-    print('\nObjects in human POV:')
+    #print('\nObjects in human POV:')
     objects_in_human_POV = []
     objects_in_human_POV_distances = []
+    wall_blocking = False
+    wall_blocking_name = ''
     for i in range(0, N_static_objects):
         d_x = static_objects[i].position_map.x - human.position_map.x 
         d_y = static_objects[i].position_map.y - human.position_map.y
@@ -1000,9 +985,60 @@ def lime_callback(msg):
         angle = angle - angle_ref
         if abs(angle) <= PI/3:
             objects_in_human_POV.append(static_objects[i])
-            print(static_objects[i].name)
+            #print(static_objects[i].name)
             r = math.sqrt(d_x**2+d_y**2) 
             objects_in_human_POV_distances.append(r)
+            if 'wall' in static_objects[i].name and r < R_ and abs(angle) <= PI/5:
+                wall_blocking = True
+                wall_blocking_name = static_objects[i].name
+                break  
+    if wall_blocking:
+        print('\n' + human.name + ' cannot see ' + robot.name + ' because of ' + wall_blocking_name)
+    else:
+        # where are objects in the local costmap relative to the human
+        tpcc_string = ''
+        #human_string = ''
+        for i in range(0, N_objects_in_lc):
+            if i not in used_objects:
+                continue
+            
+            # TPCC part
+            d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
+            d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
+            r = math.sqrt(d_x**2+d_y**2) 
+            angle = np.arctan2(d_y, d_x)
+            [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = robot.getRelativeQsrValue(r,angle,R_)
+            #print(objects_in_lc[i].name + ' is to the ' + qsr_value + ' of the ' + robot.name + ' seen by ' + human.name)
+            #tpcc_string += objects_in_lc[i].name + ' is to the ' + qsr_value + ' of the ' + robot.name + ' seen by ' + human.name + '\n'
+            tpcc_string += human.name + ',' + robot.name + ' ' + qsr_value + ' ' + objects_in_lc[i].name + '\n'
+
+            '''
+            # Human intrinsic part
+            d_x = objects_in_lc[i].position_map.x - human.position_map.x 
+            d_y = objects_in_lc[i].position_map.y - human.position_map.y 
+            angle = np.arctan2(d_y, d_x)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = human.getIntrinsicQsrValue(angle)
+            #print(objects_in_lc[i].name + ' is to my ' + qsr_value)
+            human_string += objects_in_lc[i].name + ' is to my ' + qsr_value + '\n'
+            '''
+        
+        print('\nTPCC:')
+        print(tpcc_string)    
+
+        #print('\n' + human.name + ':')
+        #print(human_string)
+
 
 
              
