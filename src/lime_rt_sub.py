@@ -117,7 +117,7 @@ class lime_rt_sub(object):
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
-        ax.imshow(segments.astype('float64'), aspect='auto')
+        ax.imshow(self.segments.astype('float64'), aspect='auto')
         fig.savefig('segments_final.png', transparent=False)
         fig.clf()
         '''
