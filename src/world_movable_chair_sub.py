@@ -65,6 +65,8 @@ class lime_rt_sub(object):
         self.semantic_tags = []
         self.semantic_global_map = []
 
+        self.plot_data = False
+
     # Segmentation algorithm
     def segment_local_costmap(self, image, img_rgb):
         #print('segmentation algorithm')
@@ -133,18 +135,20 @@ class lime_rt_sub(object):
        
         #self.segments = np.zeros(self.image.shape, np.uint8)
         self.segments = copy.deepcopy(self.image_99s_100s)
-        segs = copy.deepcopy(self.segments)
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segs.astype('float64'), aspect='auto')
-        fig.savefig('segments_beginning.png', transparent=False)
-        fig.clf()
-        pd.DataFrame(segs).to_csv('SEGMENTS_BEGINNING.csv')
+
+        if self.plot_data == True:
+            segs = copy.deepcopy(self.segments)
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segs.astype('float64'), aspect='auto')
+            fig.savefig('segments_beginning.png', transparent=False)
+            fig.clf()
+            pd.DataFrame(segs).to_csv('SEGMENTS_BEGINNING.csv')
 
         tiago_inscribed_radius = 11
 
@@ -163,11 +167,11 @@ class lime_rt_sub(object):
             cx_odom = int((p_odom[0] - self.localCostmapOriginX) / self.localCostmapResolution)
             cy_odom = int((p_odom[1] - self.localCostmapOriginY) / self.localCostmapResolution)
             if 0 <= cx_odom < self.costmap_size and 0 <= cy_odom < self.costmap_size:
-                #print('Found ' + self.semantic_tags.iloc[i][1] + ' in LC')
+                print('Found ' + self.semantic_tags.iloc[i][1] + ' in LC')
                 dx_map = self.semantic_tags.iloc[i][5]
                 dy_map = self.semantic_tags.iloc[i][4]
                 v = self.semantic_tags.iloc[i][0]
-                #print('(cx, cy, dx_map, dy_map, v) = ', (cx, cy, dx_map, dy_map, v))
+                print('(cx, cy, dx_map, dy_map, v) = ', (cx, cy, dx_map, dy_map, v))
                 for row in range(int(cy-dy_map-1), int(cy+dy_map+1)):
                     for column in range(int(cx-dx_map-1), int(cx+dx_map+1)):
                         px = column*self.semantic_global_map_resolution + self.semantic_global_map_origin_x
@@ -180,19 +184,20 @@ class lime_rt_sub(object):
                             if self.segments[cx_odom,cx_odom] >= 99:
                                 self.segments[cy_odom,cx_odom] = v
 
-        segs = copy.deepcopy(self.segments)
-        segs[segs >= 99] = 0
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segs.astype('float64'), aspect='auto')
-        fig.savefig('segments_mid.png', transparent=False)
-        fig.clf()
-        pd.DataFrame(segs).to_csv('SEGMENTS_MID.csv')
+        if self.plot_data == True:
+            segs = copy.deepcopy(self.segments)
+            segs[segs >= 99] = 0
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segs.astype('float64'), aspect='auto')
+            fig.savefig('segments_mid.png', transparent=False)
+            fig.clf()
+            pd.DataFrame(segs).to_csv('SEGMENTS_MID.csv')
 
         self.segments[self.segments > 99] = 99
         # from odom to map
@@ -212,19 +217,20 @@ class lime_rt_sub(object):
                         if self.semantic_global_map[cy, cx] > 0:
                             self.segments[i, j] = self.semantic_global_map[cy, cx]
 
-        segs = copy.deepcopy(self.segments)
-        segs[segs >= 99] = 0
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segs.astype('float64'), aspect='auto')
-        fig.savefig('segments_mid_2.png', transparent=False)
-        fig.clf()
-        pd.DataFrame(segs).to_csv('SEGMENTS_MID_2.csv')
+        if self.plot_data == True:
+            segs = copy.deepcopy(self.segments)
+            segs[segs >= 99] = 0
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segs.astype('float64'), aspect='auto')
+            fig.savefig('segments_mid_2.png', transparent=False)
+            fig.clf()
+            pd.DataFrame(segs).to_csv('SEGMENTS_MID_2.csv')
        
         for ctr in range(1, tiago_inscribed_radius):
             for row in range(0, self.segments.shape[0]):
@@ -275,18 +281,19 @@ class lime_rt_sub(object):
                                 self.segments[row, column] = self.segments[i, j]
         '''
 
-        self.segments[self.segments == 99] = 0
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.segments.astype('float64'), aspect='auto')
-        fig.savefig('segments_final.png', transparent=False)
-        fig.clf()
-        pd.DataFrame(self.segments).to_csv('SEGMENTS_FINAL.csv')
+        if self.plot_data:
+            self.segments[self.segments == 99] = 0
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_final.png', transparent=False)
+            fig.clf()
+            #pd.DataFrame(self.segments).to_csv('SEGMENTS_FINAL.csv')
 
 
         # from map to odom
@@ -381,6 +388,300 @@ class lime_rt_sub(object):
 
         return self.segments
 
+    # Segmentation algorithm
+    def segment_local_costmap_semantic_new(self):
+        # transformacija iz map u odom
+        t = np.asarray([self.tf_map_odom_tmp[0],self.tf_map_odom_tmp[1],self.tf_map_odom_tmp[2]])
+        r = R.from_quat([self.tf_map_odom_tmp[3],self.tf_map_odom_tmp[4],self.tf_map_odom_tmp[5],self.tf_map_odom_tmp[6]])
+        r_ = np.asarray(r.as_matrix())
+
+        centroids_in_lc = []
+        edges_in_lc = []
+        values_in_lc = []
+        labels_in_lc = []
+        
+        # preslikavanje centroida iz map u odom
+        for i in range(0, self.semantic_tags.shape[0]):
+            # centroidi u map
+            cx = float(self.semantic_tags.iloc[i][3])
+            cy = float(self.semantic_tags.iloc[i][2])
+            px = cx*self.semantic_global_map_resolution + self.semantic_global_map_origin_x
+            py = cy*self.semantic_global_map_resolution + self.semantic_global_map_origin_y
+            # preslikavanje iz map u odom
+            p_map = np.array([px, py, 0.0])
+            p_odom = p_map.dot(r_) + t
+            # centroidi u odom
+            cx_odom = int((p_odom[0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            cy_odom = int((p_odom[1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            # da li je centroid u lc?
+            if 0 <= cx_odom < self.costmap_size and 0 <= cy_odom < self.costmap_size:
+                label = self.semantic_tags.iloc[i][1]
+                dx = self.semantic_tags.iloc[i][5]
+                dy = self.semantic_tags.iloc[i][4]
+                v = self.semantic_tags.iloc[i][0]
+
+                centroids_in_lc.append([cx_odom, cy_odom])
+                edges_in_lc.append([[max(cx_odom-dx,0),max(cy_odom-dy,0)],[min(cx_odom+dx,159),max(cy_odom-dy,0)],
+                [max(cx_odom-dx,0),min(cy_odom+dy,159)],[min(cx_odom+dx,159),min(cy_odom+dy,159)]])
+                values_in_lc.append(v)
+                labels_in_lc.append(label)
+
+        N_centroids = len(centroids_in_lc)
+
+        if N_centroids > 1:
+            print('\ncentroids in lc')
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.image_99s_100s.astype('float64'), aspect='auto')
+
+            for i in range(0, N_centroids):
+                ax.scatter(centroids_in_lc[i][0], centroids_in_lc[i][1], c='white', marker='o')   
+                ax.text(centroids_in_lc[i][0], centroids_in_lc[i][1], labels_in_lc[i], c='white')
+                for j in range(0, 4):
+                    ax.scatter(edges_in_lc[i][j][0], edges_in_lc[i][j][1], c='black', marker='o')
+
+            fig.savefig('costmap_new.png', transparent=False)
+            fig.clf()
+
+            start = time.time()
+            self.segments = copy.deepcopy(self.image_99s_100s)
+            for i in range(0, self.segments.shape[0]):
+                for j in range(0, self.segments.shape[1]):
+                    if self.segments[i, j] == 99 or self.segments[i, j] == 100:
+                        distances_to_centroids = []
+                        for k in range(0, N_centroids):
+                            dx = abs(j - centroids_in_lc[k][0])
+                            dy = abs(i - centroids_in_lc[k][1])
+                            distances_to_centroids.append(dx + dy)
+                        idx = distances_to_centroids.index(min(distances_to_centroids))
+                        self.segments[i, j] = values_in_lc[idx]
+            #'''
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.segments.astype('float64'), aspect='auto')
+
+            for i in range(0, N_centroids):
+                ax.scatter(centroids_in_lc[i][0], centroids_in_lc[i][1], c='white', marker='o')   
+                ax.text(centroids_in_lc[i][0], centroids_in_lc[i][1], labels_in_lc[i], c='white')
+
+            fig.savefig('segments.png', transparent=False)
+            fig.clf()
+            #'''
+            end = time.time()
+            print('\ntime = ', end-start)
+
+            i = 0
+            for s in np.unique(self.segments):
+                self.segments[self.segments == s] = i
+                i += 1
+
+        # if there are no centroids in the lc
+        else:
+            print('\nno centroids in lc')
+            # Find segments_slic
+            segments_slic = slic(self.image_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                                    multichannel=True, convert2lab=True,
+                                    enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
+                                    start_label=1, mask=None)
+
+
+
+            self.segments = np.zeros(self.image.shape, np.uint8)
+
+            # make one free space segment
+            ctr = 0
+            self.segments[:, :] = ctr
+            ctr = ctr + 1
+
+            # add obstacle segments
+            num_of_obstacles = 0        
+            for i in np.unique(segments_slic):
+                temp = self.image[segments_slic == i]
+                count_of_99_s = np.count_nonzero(temp == 99)
+                #print('count: ', count)
+                #print('temp: ', temp)
+                #print('len(temp): ', temp.shape[0])
+                if np.all(self.image[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
+                    #print('obstacle')
+                    self.segments[segments_slic == i] = ctr
+                    ctr = ctr + 1
+                    num_of_obstacles += 1
+            #print('num_of_obstacles: ', num_of_obstacles)
+
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.segments.astype('float64'), aspect='auto')
+
+            for i in range(0, N_centroids):
+                ax.scatter(centroids_in_lc[i][0], centroids_in_lc[i][1], c='white', marker='o')   
+                ax.text(centroids_in_lc[i][0], centroids_in_lc[i][1], labels_in_lc[i], c='white')
+                for j in range(0, 4):
+                    ax.scatter(edges_in_lc[i][j][0], edges_in_lc[i][j][1], c='black', marker='o')
+
+            fig.savefig('segments.png', transparent=False)
+            fig.clf()
+
+
+        '''
+        start = time.time()
+        self.segments_ = copy.deepcopy(self.image_99s_100s)
+        for i in range(0, self.segments_.shape[0]):
+            for j in range(0, self.segments_.shape[1]):
+                if self.segments_[i, j] == 99 or self.segments_[i, j] == 100:
+                    distances_to_centroids = []
+                    for k in range(0, N_centroids):
+                        dx = abs(j - centroids_in_lc[k][0])
+                        dy = abs(i - centroids_in_lc[k][1])
+                        distances_to_centroids.append(dx + dy)
+                        for q in range(0, 4):
+                            dx = abs(j - edges_in_lc[k][q][0])
+                            dy = abs(i - edges_in_lc[k][q][1])
+                            distances_to_centroids.append(dx + dy)
+                    idx = int(distances_to_centroids.index(min(distances_to_centroids)) / 5)
+                    self.segments_[i, j] = values_in_lc[idx]
+
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.segments_.astype('float64'), aspect='auto')
+
+        for i in range(0, N_centroids):
+            ax.scatter(centroids_in_lc[i][0], centroids_in_lc[i][1], c='white', marker='o')   
+            ax.text(centroids_in_lc[i][0], centroids_in_lc[i][1], labels_in_lc[i], c='white')
+            for j in range(0, 4):
+                ax.scatter(edges_in_lc[i][j][0], edges_in_lc[i][j][1], c='black', marker='o')
+
+        fig.savefig('segments_new_edges.png', transparent=False)
+        fig.clf()
+        end = time.time()
+        print('time = ', end-start)
+        '''
+
+        return self.segments
+
+    # Segmentation algorithm
+    def segment_local_costmap_semantic_new_2(self):
+        # transformacija iz map u odom
+        t = np.asarray([self.tf_map_odom_tmp[0],self.tf_map_odom_tmp[1],self.tf_map_odom_tmp[2]])
+        r = R.from_quat([self.tf_map_odom_tmp[3],self.tf_map_odom_tmp[4],self.tf_map_odom_tmp[5],self.tf_map_odom_tmp[6]])
+        r_ = np.asarray(r.as_matrix())
+
+        centroids_in_lc = []
+        edges_in_lc = []
+        values_in_lc = []
+        labels_in_lc = []
+
+        centroids_all = []
+        values_all = []
+        labels_all = []
+        
+        # preslikavanje centroida iz map u odom
+        for i in range(0, self.semantic_tags.shape[0]):
+            # centroidi u map
+            cx = float(self.semantic_tags.iloc[i][3])
+            cy = float(self.semantic_tags.iloc[i][2])
+            px = cx*self.semantic_global_map_resolution + self.semantic_global_map_origin_x
+            py = cy*self.semantic_global_map_resolution + self.semantic_global_map_origin_y
+            # preslikavanje iz map u odom
+            p_map = np.array([px, py, 0.0])
+            p_odom = p_map.dot(r_) + t
+            # centroidi u odom
+            cx_odom = int((p_odom[0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            cy_odom = int((p_odom[1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            # da li je centroid u lc?
+            '''
+            if 0 <= cx_odom < self.costmap_size and 0 <= cy_odom < self.costmap_size:
+                label = self.semantic_tags.iloc[i][1]
+                dx = self.semantic_tags.iloc[i][5]
+                dy = self.semantic_tags.iloc[i][4]
+                v = self.semantic_tags.iloc[i][0]
+
+                centroids_in_lc.append([cx_odom, cy_odom])
+                edges_in_lc.append([[max(cx_odom-dx,0),max(cy_odom-dy,0)],[min(cx_odom+dx,159),max(cy_odom-dy,0)],
+                [max(cx_odom-dx,0),min(cy_odom+dy,159)],[min(cx_odom+dx,159),min(cy_odom+dy,159)]])
+                values_in_lc.append(v)
+                labels_in_lc.append(label)
+            '''
+
+            centroids_all.append([cx_odom, cy_odom])
+            values_all.append(self.semantic_tags.iloc[i][0])
+            labels_all.append(self.semantic_tags.iloc[i][1])
+
+        N_centroids = len(centroids_in_lc)
+        N_centroids_all = len(centroids_all)
+
+        start = time.time()
+        self.segments = copy.deepcopy(self.image_99s_100s)
+        for i in range(0, self.segments.shape[0]):
+            for j in range(0, self.segments.shape[1]):
+                if self.segments[i, j] == 99 or self.segments[i, j] == 100:
+                    distances_to_centroids = []
+                    for k in range(0, N_centroids_all):
+                        dx = abs(j - centroids_all[k][0])
+                        dy = abs(i - centroids_all[k][1])
+                        distances_to_centroids.append(dx + dy)
+                    idx = distances_to_centroids.index(min(distances_to_centroids))
+                    self.segments[i, j] = values_all[idx]
+        '''
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.segments.astype('float64'), aspect='auto')
+
+        for i in range(0, N_centroids):
+            ax.scatter(centroids_in_lc[i][0], centroids_in_lc[i][1], c='white', marker='o')   
+            ax.text(centroids_in_lc[i][0], centroids_in_lc[i][1], labels_in_lc[i], c='white')
+
+        fig.savefig('segments.png', transparent=False)
+        fig.clf()
+        '''
+
+        '''
+        i = 0
+        for s in np.unique(self.segments):
+            self.segments[self.segments == s] = i
+            i += 1
+        '''    
+        end = time.time()
+        print('\ntime = ', end-start)
+
+        '''
+        # Find segments_slic
+        start = time.time()
+        segments_slic = slic(self.image_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+                                multichannel=True, convert2lab=True,
+                                enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
+                                start_label=1, mask=None)
+        end = time.time()
+        print('\nslic_time = ', end-start)
+        '''
+
+        return self.segments    
+
+
     # Create data based on segments
     def create_data(self):
         # create data
@@ -391,6 +692,8 @@ class lime_rt_sub(object):
             lst.append([1]*self.n_features)
             lst[i][self.n_features-i] = 0    
         self.data = np.array(lst).reshape((self.num_samples, self.n_features))
+        #print(self.data)
+        #print(np.unique(self.segments))
 
     # Define a callback for the local costmap
     def local_costmap_callback(self, msg):
@@ -427,79 +730,82 @@ class lime_rt_sub(object):
         self.image = np.asarray(msg.data)
         self.image.resize((msg.info.height,msg.info.width))
         
-        self.image_original = copy.deepcopy(self.image)
-        #'''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.image_original.astype('float64'), aspect='auto')
-        fig.savefig('local_costmap_original.png', transparent=False)
-        fig.clf()
-        #'''
+        if self.plot_data == True:
+            self.image_original = copy.deepcopy(self.image)
+            #'''
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.image_original.astype('float64'), aspect='auto')
+            fig.savefig('local_costmap_original.png', transparent=False)
+            fig.clf()
+            #'''
 
-        self.image_100s = copy.deepcopy(self.image)
-        self.image_100s[self.image_100s != 100] = 0
-        #'''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.image_100s.astype('float64'), aspect='auto')
-        fig.savefig('local_costmap_100s.png', transparent=False)
-        fig.clf()
-        #'''
+            self.image_100s = copy.deepcopy(self.image)
+            self.image_100s[self.image_100s != 100] = 0
+            #'''
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.image_100s.astype('float64'), aspect='auto')
+            fig.savefig('local_costmap_100s.png', transparent=False)
+            fig.clf()
+            #'''
 
-        self.image_99s = copy.deepcopy(self.image)
-        self.image_99s[self.image_99s != 99] = 0
-        #'''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.image_99s.astype('float64'), aspect='auto')
-        fig.savefig('local_costmap_99s.png', transparent=False)
-        fig.clf()
-        #'''
+            self.image_99s = copy.deepcopy(self.image)
+            self.image_99s[self.image_99s != 99] = 0
+            #'''
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.image_99s.astype('float64'), aspect='auto')
+            fig.savefig('local_costmap_99s.png', transparent=False)
+            fig.clf()
+            #'''
 
         self.image_99s_100s = copy.deepcopy(self.image)
         self.image_99s_100s[self.image_99s_100s < 99] = 0
-        #'''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.image_99s_100s.astype('float64'), aspect='auto')
-        fig.savefig('local_costmap_99s_100s.png', transparent=False)
-        fig.clf()
-        #'''
+        if self.plot_data == True:
+            #'''
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.image_99s_100s.astype('float64'), aspect='auto')
+            fig.savefig('local_costmap_99s_100s.png', transparent=False)
+            fig.clf()
+            #'''
 
-        self.image_less_than_99 = copy.deepcopy(self.image)
-        self.image_less_than_99[self.image_less_than_99 >= 99] = 0
-        #'''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.image_less_than_99.astype('float64'), aspect='auto')
-        fig.savefig('local_costmap_less_than_99.png', transparent=False)
-        fig.clf()
-        #'''
+        if self.plot_data == True:
+            self.image_less_than_99 = copy.deepcopy(self.image)
+            self.image_less_than_99[self.image_less_than_99 >= 99] = 0
+            #'''
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.image_less_than_99.astype('float64'), aspect='auto')
+            fig.savefig('local_costmap_less_than_99.png', transparent=False)
+            fig.clf()
+            #'''
 
         # Turn inflated area to free space and 100s to 99s
         self.image[self.image == 100] = 99
@@ -509,7 +815,7 @@ class lime_rt_sub(object):
         self.image = self.image * 1.0
 
         # find image_rgb
-        self.image_rgb = gray2rgb(self.image)
+        #self.image_rgb = gray2rgb(self.image)
         #image = np.stack(3 * (image,), axis=-1)
 
         # my change - to return grayscale to classifier_fn
@@ -522,7 +828,9 @@ class lime_rt_sub(object):
 
         # find segments
         #self.segments = self.segment_local_costmap(self.image, self.image_rgb)
-        self.segments = self.segment_local_costmap_semantic()
+        #self.segments = self.segment_local_costmap_semantic()
+        #self.segments = self.segment_local_costmap_semantic_new()
+        self.segments = self.segment_local_costmap_semantic_new_2()
 
         self.create_data()
 
@@ -611,14 +919,14 @@ class lime_rt_sub(object):
 
     # Declare subscribers
     def main_(self):
-        #self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
+        self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
 
-        #self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
+        self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
 
-        #self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
+        self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
 
         # Initalize a subscriber to the odometry
-        #self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
+        self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
 
         #self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
 

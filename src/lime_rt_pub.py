@@ -232,11 +232,15 @@ class ImageExplanation(object):
             temp[self.image != 0] = self.val_low
             return temp, exp
 
-        #print('exp = ', exp)
+        print('\nexp = ', exp)
         #print('np.unique(self.segments) = ', np.unique(self.segments))
+        segments_labels = np.unique(self.segments)
+        #print('segments_labels = ', segments_labels)
 
         for f, w in exp:
-            #print('\n(f, w): ', (f, w))
+            print('(f, w): ', (f, w))
+            f = segments_labels[f]
+            print('segments_labels[f] = ', f)
 
             if w < -0.01:
                 c = -1
@@ -601,12 +605,19 @@ class lime_rt_pub(object):
             self.labels = []
             imgs = []
             rows = self.data
+            #start = time.time()
+            segments_labels = np.unique(self.segments)
+            #end = time.time()
+            #print('np.unique-TIME = ', end-start)
+            #print('segments_labels = ', segments_labels)
             for row in rows:
                 temp = copy.deepcopy(image)
                 zeros = np.where(row == 0)[0]
+                #print('zeros = ', zeros)
                 mask = np.zeros(segments.shape).astype(bool)
                 for z in zeros:
-                    mask[segments == z] = True
+                    #print('(z, segments_labels[z]) = ', (z, self.segments_labels[z]))
+                    mask[segments == segments_labels[z]] = True
                 temp[mask] = fudged_image[mask]
                 imgs.append(temp)
                 if len(imgs) == batch_size:
@@ -709,6 +720,9 @@ class lime_rt_pub(object):
             self.segments = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/segments.csv'))
             if print_data == True:
                 print('self.segments.shape = ', self.segments.shape)
+            #self.segments_labels = np.unique(self.segments)
+            #print('segments_labels = ', self.segments_labels) 
+               
             
             if os.path.getsize(self.file_path_13) == 0 or os.path.exists(self.file_path_13) == False:
                 return False       
