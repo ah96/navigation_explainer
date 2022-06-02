@@ -15,6 +15,7 @@ import tf2_ros
 import math
 from skimage.measure import regionprops
 import os
+from gazebo_msgs.msg import ModelStates
 
 
 class lime_rt_sub(object):
@@ -66,6 +67,11 @@ class lime_rt_sub(object):
         self.semantic_global_map = []
 
         self.plot_data = False
+        
+        self.gazebo_names = []
+        self.gazebo_poses = []
+
+        self.static_names = []
 
     # Segmentation algorithm
     def segment_local_costmap(self, image, img_rgb):
@@ -586,14 +592,43 @@ class lime_rt_sub(object):
         r_ = np.asarray(r.as_matrix())
 
         centroids_in_lc = []
-        edges_in_lc = []
+        #edges_in_lc = []
         values_in_lc = []
         labels_in_lc = []
 
-        centroids_all = []
-        values_all = []
-        labels_all = []
-        
+        centroids_static = []
+        values_static = []
+        labels_static = []
+
+        for i in range(0, len(self.gazebo_names)):
+            if self.gazebo_names[i] not in self.static_names and ('citizen' in self.gazebo_names[i] or 'chair' in self.gazebo_names[i]):
+                #print('found - ' + self.gazebo_names[i])
+
+                # centroidi u map
+                px = float(self.gazebo_poses[i].position.x)
+                py = float(self.gazebo_poses[i].position.y)
+                # preslikavanje iz map u odom
+                p_map = np.array([px, py, 0.0])
+                p_odom = p_map.dot(r_) + t
+                # centroidi u odom
+                cx_odom = int((p_odom[0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                cy_odom = int((p_odom[1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                # da li je centroid u lc?
+                #'''
+                #print('[cx_odom,cy_odom] = ', [cx_odom,cy_odom])
+                if 0 <= cx_odom < self.costmap_size and 0 <= cy_odom < self.costmap_size:
+                    label = self.gazebo_names[i]
+                    v = len(self.static_names) + 1
+
+                    centroids_in_lc.append([cx_odom, cy_odom])
+                    values_in_lc.append(v)
+                    labels_in_lc.append(label)
+                #'''
+
+                labels_static.append(self.gazebo_names[i])
+                values_static.append(len(self.static_names) + 1)
+                centroids_static.append([cx_odom,cy_odom])
+
         # preslikavanje centroida iz map u odom
         for i in range(0, self.semantic_tags.shape[0]):
             # centroidi u map
@@ -608,7 +643,7 @@ class lime_rt_sub(object):
             cx_odom = int((p_odom[0] - self.localCostmapOriginX) / self.localCostmapResolution)
             cy_odom = int((p_odom[1] - self.localCostmapOriginY) / self.localCostmapResolution)
             # da li je centroid u lc?
-            '''
+            #'''
             if 0 <= cx_odom < self.costmap_size and 0 <= cy_odom < self.costmap_size:
                 label = self.semantic_tags.iloc[i][1]
                 dx = self.semantic_tags.iloc[i][5]
@@ -616,18 +651,19 @@ class lime_rt_sub(object):
                 v = self.semantic_tags.iloc[i][0]
 
                 centroids_in_lc.append([cx_odom, cy_odom])
-                edges_in_lc.append([[max(cx_odom-dx,0),max(cy_odom-dy,0)],[min(cx_odom+dx,159),max(cy_odom-dy,0)],
-                [max(cx_odom-dx,0),min(cy_odom+dy,159)],[min(cx_odom+dx,159),min(cy_odom+dy,159)]])
+                #edges_in_lc.append([[max(cx_odom-dx,0),max(cy_odom-dy,0)],[min(cx_odom+dx,159),max(cy_odom-dy,0)],
+                #[max(cx_odom-dx,0),min(cy_odom+dy,159)],[min(cx_odom+dx,159),min(cy_odom+dy,159)]])
                 values_in_lc.append(v)
                 labels_in_lc.append(label)
-            '''
+            #'''
 
-            centroids_all.append([cx_odom, cy_odom])
-            values_all.append(self.semantic_tags.iloc[i][0])
-            labels_all.append(self.semantic_tags.iloc[i][1])
+            centroids_static.append([cx_odom, cy_odom])
+            values_static.append(self.semantic_tags.iloc[i][0])
+            labels_static.append(self.semantic_tags.iloc[i][1])
 
         N_centroids = len(centroids_in_lc)
-        N_centroids_all = len(centroids_all)
+        N_centroids_all = len(labels_static)
+        print('\nlabels_in_lc:', labels_in_lc)
 
         start = time.time()
         self.segments = copy.deepcopy(self.image_99s_100s)
@@ -636,12 +672,12 @@ class lime_rt_sub(object):
                 if self.segments[i, j] == 99 or self.segments[i, j] == 100:
                     distances_to_centroids = []
                     for k in range(0, N_centroids_all):
-                        dx = abs(j - centroids_all[k][0])
-                        dy = abs(i - centroids_all[k][1])
+                        dx = abs(j - centroids_static[k][0])
+                        dy = abs(i - centroids_static[k][1])
                         distances_to_centroids.append(dx + dy)
                     idx = distances_to_centroids.index(min(distances_to_centroids))
-                    self.segments[i, j] = values_all[idx]
-        '''
+                    self.segments[i, j] = values_static[idx]
+        #'''
         fig = plt.figure(frameon=False)
         w = 1.6 * 3
         h = 1.6 * 3
@@ -657,7 +693,7 @@ class lime_rt_sub(object):
 
         fig.savefig('segments.png', transparent=False)
         fig.clf()
-        '''
+        #'''
 
         '''
         i = 0
@@ -667,17 +703,6 @@ class lime_rt_sub(object):
         '''    
         end = time.time()
         print('\ntime = ', end-start)
-
-        '''
-        # Find segments_slic
-        start = time.time()
-        segments_slic = slic(self.image_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                                multichannel=True, convert2lab=True,
-                                enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
-                                start_label=1, mask=None)
-        end = time.time()
-        print('\nslic_time = ', end-start)
-        '''
 
         return self.segments    
 
@@ -917,6 +942,10 @@ class lime_rt_sub(object):
         self.amcl_pose_tmp = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
         pd.DataFrame(self.amcl_pose_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/amcl_pose_tmp.csv', index=False)#, header=False)
 
+    def model_state_callback(self, states_msg):
+        self.gazebo_names = states_msg.name
+        self.gazebo_poses = states_msg.pose
+
     # Declare subscribers
     def main_(self):
         self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
@@ -936,6 +965,9 @@ class lime_rt_sub(object):
         # semantic part
         self.semantic_tags = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/world_movable_chair_3/world_movable_chair_3_tags.csv')
         #print(self.semantic_tags)
+        for i in range(0, self.semantic_tags.shape[0]):
+            self.static_names.append(self.semantic_tags.iloc[i][1])
+
         self.semantic_global_map = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/world_movable_chair_3/world_movable_chair_3.csv',index_col=None,header=None))
         #print(self.semantic_global_map.shape)
         self.semantic_global_map_info = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/world_movable_chair_3/world_movable_chair_3_info.csv',index_col=None,header=None)
@@ -947,6 +979,9 @@ class lime_rt_sub(object):
         print(self.semantic_global_map_origin_x)
         self.semantic_global_map_origin_y = float(self.semantic_global_map_info.iloc[5][1])
         print(self.semantic_global_map_origin_y)
+
+        # Initalize a subscriber to the "/gazebo/model_states" topic with the function "model_state_callback" as a callback
+        self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
 
         # find centroids
         '''
