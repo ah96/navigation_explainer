@@ -16,8 +16,16 @@ from scipy.spatial.transform import Rotation as R
 
 PI = math.pi
 
+dirCurr = os.getcwd()
+dirName = 'lime_rt_data'
+
 # Initialize the ROS Node named 'qsr', allow multiple nodes to be run with this name
 rospy.init_node('qsr_live_2', anonymous=True)
+
+pub_markers_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
+pub_markers_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
+marker_array_semantic_labels = MarkerArray()
+marker_array_orientations = MarkerArray()
 
 # convert orientation quaternion to euler angles
 def quaternion_to_euler(x, y, z, w):
@@ -49,16 +57,13 @@ def euler_to_quaternion(roll, pitch, yaw):
 # objects class
 class Object():
     # constructor
-    def __init__(self,ID,label,position_map,position_odom,centroid_map,centroid_odom,distance,known):
+    def __init__(self,ID,label,position_map,centroid_map,distance,known):
         self.ID = ID
-        self.label = label
-        self.position_map = Point(position_map[0],position_map[1],0.0)
-        self.position_odom = Point(position_odom[0],position_odom[1],0.0)
-        self.centroid_map = Point(centroid_map[0],centroid_map[1],0.0)
-        self.centroid_odom = Point(centroid_odom[0],centroid_odom[1],0.0)
-        self.distance = Point(distance[0],distance[1],0.0)
+        self.name = label
+        self.position_map = position_map
+        self.centroid_map = centroid_map
+        self.distance = distance
         self.known = known
-        
         
         if 'cabinet' in self.name:
             self.orientation_map = euler_to_quaternion(0.0,0.0,PI/2)
@@ -132,13 +137,79 @@ class Object():
 
         return value
 
+# known objects
+known_objects = []
 
 # known objects
-# [ID, label, x_odom, y_odom, x_map, y_map, cx_odom, cy_odom, cx_map, cy_map, dx, dy]
+# [ID, label, cx_map, cy_map, dx, dy, x_map, y_map]
 known_objects = []
 known_objects_names =  []
 known_objects_positions =  []
+known_objects_ids =  []
 N_known_objects = len(known_objects_names)
+
+# fill in known objects
+known_objects_pd = pd.read_csv(dirCurr + '/src/navigation_explainer/src/world_movable_chair_3/world_movable_chair_3_tags.csv')
+for i in range(0, known_objects_pd.shape[0]):
+    ID = known_objects_pd.iloc[i,0]
+    label = known_objects_pd.iloc[i,1]
+    centroid_map = Point(known_objects_pd.iloc[i,2],known_objects_pd.iloc[i,3],0.0)
+    distance = Point(known_objects_pd.iloc[i,4],known_objects_pd.iloc[i,5],0.0)
+    known = True
+    position_map = Point(known_objects_pd.iloc[i,6],known_objects_pd.iloc[i,7],0.0)
+    known_objects.append(Object(ID,label,position_map,centroid_map,distance,known))
+    known_objects_names.append(label)
+    known_objects_positions.append(position_map)
+    known_objects_ids.append(ID)
+    N_known_objects = len(known_objects_names)
+
+    #print(known_objects[i].position_map.x, known_objects[i].position_map.y)
+
+    # visualize oriented static objects
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = i
+    marker.type = marker.TEXT_VIEW_FACING
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = known_objects[i].position_map.x
+    marker.pose.position.y = known_objects[i].position_map.y
+    marker.pose.position.z = 0.5
+    marker.color.r = 1.0
+    marker.color.g = 0.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.5
+    marker.scale.y = 0.5
+    marker.scale.z = 0.5
+    #marker.frame_locked = False
+    marker.text = known_objects[i].name
+    marker.ns = "my_namespace"
+    marker_array_semantic_labels.markers.append(marker)
+
+    if 'cabinet' in known_objects[i].name or 'bookshelf' in known_objects[i].name or 'chair' in known_objects[i].name or 'wardrobe' in known_objects[i].name:
+        marker = Marker()
+        marker.header.frame_id = 'map'
+        marker.id = i
+        marker.type = marker.ARROW
+        marker.action = marker.ADD
+        marker.pose = Pose()
+        marker.pose.position.x = known_objects[i].position_map.x
+        marker.pose.position.y = known_objects[i].position_map.y
+        marker.pose.position.z = 0.0
+        marker.pose.orientation.x = known_objects[i].orientation_map.x
+        marker.pose.orientation.y = known_objects[i].orientation_map.y
+        marker.pose.orientation.z = known_objects[i].orientation_map.z
+        marker.pose.orientation.w = known_objects[i].orientation_map.w
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+        marker.scale.x = 0.8
+        marker.scale.y = 0.3
+        marker.scale.z = 0.1
+        marker.ns = "my_namespace"
+        marker_array_orientations.markers.append(marker)
 
 # unknown objects
 # [ID, label, x_odom, y_odom, x_map, y_map, cx_odom, cy_odom]
@@ -152,85 +223,6 @@ lc_objects = []
 lc_objects_names =  []
 lc_objects_positions =  []
 N_lc_objects = len(lc_objects_names)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# intialize static objects
-static_objects = []
-marker_array_semantic_labels = MarkerArray()
-marker_array_orientations = MarkerArray()
-marker_array_robot_human_orientations = MarkerArray()
-marker_array_robot_human_semantic_labels = MarkerArray()
-
-for i in range(0, len(static_objects_names)):
-    static_objects.append(Object(static_objects_names[i], static_objects_positions[i]))
-
-    # visualize oriented static objects
-    marker = Marker()
-    marker.header.frame_id = 'map'
-    marker.id = i
-    marker.type = marker.TEXT_VIEW_FACING
-    marker.action = marker.ADD
-    marker.pose = Pose()
-    marker.pose.position.x = static_objects[i].position_map.x
-    marker.pose.position.y = static_objects[i].position_map.y
-    marker.pose.position.z = 0.5
-    marker.color.r = 1.0
-    marker.color.g = 0.0
-    marker.color.b = 0.0
-    marker.color.a = 1.0
-    marker.scale.x = 0.5
-    marker.scale.y = 0.5
-    marker.scale.z = 0.5
-    #marker.frame_locked = False
-    marker.text = static_objects[i].name
-    marker.ns = "my_namespace"
-    marker_array_semantic_labels.markers.append(marker) 
-
-    if 'cabinet' in static_objects[i].name or 'bookshelf' in static_objects[i].name:
-        marker = Marker()
-        marker.header.frame_id = 'map'
-        marker.id = i
-        marker.type = marker.ARROW
-        marker.action = marker.ADD
-        marker.pose = Pose()
-        marker.pose.position.x = static_objects[i].position_map.x
-        marker.pose.position.y = static_objects[i].position_map.y
-        marker.pose.position.z = 0.0
-        marker.pose.orientation.x = static_objects[i].orientation_map.x
-        marker.pose.orientation.y = static_objects[i].orientation_map.y
-        marker.pose.orientation.z = static_objects[i].orientation_map.z
-        marker.pose.orientation.w = static_objects[i].orientation_map.w
-        marker.color.r = 0.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
-        marker.color.a = 1.0
-        marker.scale.x = 0.8
-        marker.scale.y = 0.3
-        marker.scale.z = 0.1
-        marker.ns = "my_namespace"
-        marker_array_orientations.markers.append(marker)
-#print('\nlen(static_objects) = ', len(static_objects))
-
-
-pub_markers_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
-pub_markers_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
 
 # Robot class
 class Robot():
@@ -593,11 +585,10 @@ class Human():
 robot = Robot('tiago')
 human = Human('human')
 
-
 # visualize robot
 marker = Marker()
 marker.header.frame_id = 'map'
-marker.id = N_static_objects
+marker.id = N_known_objects
 marker.type = marker.TEXT_VIEW_FACING
 marker.action = marker.ADD
 marker.pose = Pose()
@@ -618,7 +609,7 @@ marker_array_semantic_labels.markers.append(marker)
 
 marker = Marker()
 marker.header.frame_id = 'map'
-marker.id = N_static_objects
+marker.id = N_known_objects
 marker.type = marker.ARROW
 marker.action = marker.ADD
 marker.pose = Pose()
@@ -639,10 +630,10 @@ marker.scale.z = 0.1
 marker.ns = "my_namespace"
 marker_array_orientations.markers.append(marker)
 
-    # visualize robot
+# visualize human
 marker = Marker()
 marker.header.frame_id = 'map'
-marker.id = N_static_objects + 1
+marker.id = N_known_objects + 1
 marker.type = marker.TEXT_VIEW_FACING
 marker.action = marker.ADD
 marker.pose = Pose()
@@ -663,7 +654,7 @@ marker_array_semantic_labels.markers.append(marker)
 
 marker = Marker()
 marker.header.frame_id = 'map'
-marker.id = N_static_objects + 1
+marker.id = N_known_objects + 1
 marker.type = marker.ARROW
 marker.action = marker.ADD
 marker.pose = Pose()
@@ -684,9 +675,6 @@ marker.scale.z = 0.1
 marker.ns = "my_namespace"
 marker_array_orientations.markers.append(marker)
 
-
-dirCurr = os.getcwd()
-dirName = 'lime_rt_data'
 file_path_odom = dirName + '/odom_tmp.csv'
 file_path_amcl = dirName + '/amcl_pose_tmp.csv'
 
@@ -721,7 +709,6 @@ class TF():
 
 tf_map_odom = TF() 
 
-
 class LimeExplanation():
     def __init__(self):
         self.exp = []
@@ -744,7 +731,6 @@ def lime_callback(msg):
     lime_explanation.original_deviation = msg.data[-1]
     #lime_explanation.printAttributes()
 
-
     # update local costmap
     if os.path.getsize(file_path_lc) == 0 or os.path.exists(file_path_lc) == False:
         return
@@ -755,7 +741,6 @@ def lime_callback(msg):
     local_costmap.origin_x_odom = lc_tmp.iloc[3][0]
     local_costmap.origin_y_odom = lc_tmp.iloc[4][0] 
     #local_costmap.printAttributes()
-
 
     # update tf_map_odom
     if os.path.getsize(file_path_tf_map_odom) == 0 or os.path.exists(file_path_tf_map_odom) == False:
@@ -769,23 +754,11 @@ def lime_callback(msg):
     r_ = np.asarray(r.as_matrix())
 
     # find objects in the current local costmap
-    #print('\nObjects in the current local costmap:')
-    objects_in_lc = []
-    for i in range(0, len(static_objects_names)):
-        p = np.array([static_objects_positions[i][0], static_objects_positions[i][1], 0.0])
-        pnew = p.dot(r_) + t
-        x_temp = int(pnew[0] - local_costmap.origin_x_odom) / local_costmap.resolution
-        y_temp = int(pnew[1] - local_costmap.origin_y_odom) / local_costmap.resolution
-        if 0 <= x_temp <= local_costmap.width and 0 <= y_temp <= local_costmap.height:
-            objects_in_lc.append(static_objects[i])
-            objects_in_lc[-1].lime_coefficients = []
-            objects_in_lc[-1].lime_coefficients_distances = []
-            # printing object that is in the current local costmap
-            #print(static_objects[i].name)
-            # update odom position of the object
-            static_objects[i].position_odom = Point(pnew[0],pnew[1],pnew[2])
-
-    N_objects_in_lc = len(objects_in_lc)        
+    # [ID, label, x_odom, y_odom, x_map, y_map, cx_odom, cy_odom]
+    known_objects_pd = pd.read_csv(dirCurr + '/' + dirName + '/unknown_objects.csv')
+    print(known_objects_pd)
+    lc_labels_pd = np.array(pd.read_csv(dirCurr + '/' + dirName + '/lc_labels.csv'))
+    print(lc_labels_pd)
 
     # append LIME coefficients to the objects in the current local costmap
     N_coefficients = len(lime_explanation.exp)
@@ -803,285 +776,12 @@ def lime_callback(msg):
         indices_of_closest_objects_from_objects_in_lc[i] = index_min
         objects_in_lc[index_min].lime_coefficients.append(lime_explanation.exp[i][2])
         objects_in_lc[index_min].lime_coefficients_distances.append(dist_min)
-    #print('\nindices_of_closest_objects_from_objects_in_lc = ', indices_of_closest_objects_from_objects_in_lc)
-    # print objects from the local costmap with their lime coefficients
-    #print('\n')
-    used_coefficients = []
-    used_objects = []
-    for i in range(0, N_objects_in_lc):
-        lime_coeff_str = ''
-        if len(objects_in_lc[i].lime_coefficients) > 1:
-            dist_min = min(objects_in_lc[i].lime_coefficients_distances)
-            index_min = objects_in_lc[i].lime_coefficients_distances.index(dist_min)
-            lime_coeff_str = str(objects_in_lc[i].lime_coefficients[index_min])
-            #print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
-            lime_coeffs_string += objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str + '\n'
-            used_coefficients.append(objects_in_lc[i].lime_coefficients[index_min])
-            used_objects.append(i)
-        elif len(objects_in_lc[i].lime_coefficients) == 1:
-            lime_coeff_str = str(objects_in_lc[i].lime_coefficients[0])
-            #print(objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str)
-            lime_coeffs_string += objects_in_lc[i].name + ' has a LIME coefficient ' + lime_coeff_str + '\n'
-            used_coefficients.append(objects_in_lc[i].lime_coefficients[0])
-            used_objects.append(i)
-        else:
-            pass
-
-    if len(used_objects) < N_objects_in_lc:
-        for i in range(0, N_objects_in_lc):
-            if i in used_objects:
-                continue
-            local_distances = []
-            local_distances_indices = []
-            for j in range(0, N_coefficients):
-                if lime_explanation.exp[j][2] in used_coefficients:
-                    continue
-                dist = math.sqrt( (lime_explanation.exp[j][0] - objects_in_lc[i].position_odom.x)**2 + (lime_explanation.exp[j][1] - objects_in_lc[i].position_odom.y)**2)
-                local_distances.append(dist)
-                local_distances_indices.append(j)
-            if len(local_distances) == 0:
-                continue    
-            dist_min = min(local_distances)
-            index_min = local_distances.index(dist_min)
-            coeff = lime_explanation.exp[local_distances_indices[index_min]][2]
-            #print(objects_in_lc[i].name + ' has a LIME coefficient ' + str(coeff))
-            lime_coeffs_string += objects_in_lc[i].name + ' has a LIME coefficient ' + str(coeff) + '\n'
-            used_coefficients.append(coeff)
-            used_objects.append(i)
-
-    print('\nLIME coefficients:')
-    print(lime_coeffs_string)
-
-    # how a robot passes relative to the objects in the local costmap
-    #print('')
-    objects_intrinsic_string = ''
-    for i in range(0, N_objects_in_lc):
-        if objects_in_lc[i].intrinsic_qsr == False or i not in used_objects:
-            continue
-        d_x = robot.position_map.x - objects_in_lc[i].position_map.x
-        d_y = robot.position_map.y - objects_in_lc[i].position_map.y
-        #r = math.sqrt(d_x**2+d_y**2)
-        angle = np.arctan2(d_y, d_x)
-        angle_ref = objects_in_lc[i].yaw_map
-        angle = angle - angle_ref
-        if angle >= PI:
-            angle -= 2*PI
-        elif angle < -PI:
-            angle += 2*PI
-        qsr_value = objects_in_lc[i].getIntrinsicQsrValue(angle)
-        #print(robot.name + ' passes ' + qsr_value + ' of the ' + objects_in_lc[i].name)
-        objects_intrinsic_string += robot.name + ' is to the ' + qsr_value + ' of the ' + objects_in_lc[i].name + '\n'
-
-    print('\nRobot relative to the immediate objects:')
-    print(objects_intrinsic_string)
-
-    # where are objects in the local costmap relative to the robot
-    #print('')
-    robot_string = ''
-    for i in range(0, N_objects_in_lc):
-        if i not in used_objects:
-            continue
-        d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
-        d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
-        #r = math.sqrt(d_x**2+d_y**2)
-        angle = np.arctan2(d_y, d_x)
-        [angle_ref,pitch,roll] = quaternion_to_euler(robot.orientation_map.x,robot.orientation_map.y,robot.orientation_map.z,robot.orientation_map.w)
-        angle = angle - angle_ref
-        if angle >= PI:
-            angle -= 2*PI
-        elif angle < -PI:
-            angle += 2*PI
-        qsr_value = robot.getIntrinsicQsrValue(angle)
-        #print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name)
-        robot_string += objects_in_lc[i].name + ' is to my ' + qsr_value + '\n'
-    print('\n' + robot.name + ':')
-    print(robot_string)
-
-    # visualize robot
-    marker = Marker()
-    marker.header.frame_id = 'map'
-    marker.id = N_static_objects
-    marker.type = marker.TEXT_VIEW_FACING
-    marker.action = marker.ADD
-    marker.pose = Pose()
-    marker.pose.position.x = robot.position_map.x
-    marker.pose.position.y = robot.position_map.y
-    marker.pose.position.z = 2.0
-    marker.color.r = 1.0
-    marker.color.g = 0.0
-    marker.color.b = 0.0
-    marker.color.a = 1.0
-    marker.scale.x = 0.5
-    marker.scale.y = 0.5
-    marker.scale.z = 0.5
-    #marker.frame_locked = False
-    marker.text = robot.name
-    marker.ns = "my_namespace"
-    marker_array_semantic_labels.markers[-2] = copy.deepcopy(marker) 
-
-    marker = Marker()
-    marker.header.frame_id = 'map'
-    marker.id = N_static_objects
-    marker.type = marker.ARROW
-    marker.action = marker.ADD
-    marker.pose = Pose()
-    marker.pose.position.x = robot.position_map.x
-    marker.pose.position.y = robot.position_map.y
-    marker.pose.position.z = 3.0
-    marker.pose.orientation.x = robot.orientation_map.x
-    marker.pose.orientation.y = robot.orientation_map.y
-    marker.pose.orientation.z = robot.orientation_map.z
-    marker.pose.orientation.w = robot.orientation_map.w
-    marker.color.r = 0.0
-    marker.color.g = 1.0
-    marker.color.b = 0.0
-    marker.color.a = 1.0
-    marker.scale.x = 0.8
-    marker.scale.y = 0.3
-    marker.scale.z = 0.1
-    marker.ns = "my_namespace"
-    marker_array_orientations.markers[-2] = copy.deepcopy(marker)
-
-    # visualize robot
-    marker = Marker()
-    marker.header.frame_id = 'map'
-    marker.id = N_static_objects + 1
-    marker.type = marker.TEXT_VIEW_FACING
-    marker.action = marker.ADD
-    marker.pose = Pose()
-    marker.pose.position.x = human.position_map.x
-    marker.pose.position.y = human.position_map.y
-    marker.pose.position.z = 2.0
-    marker.color.r = 1.0
-    marker.color.g = 0.0
-    marker.color.b = 0.0
-    marker.color.a = 1.0
-    marker.scale.x = 0.5
-    marker.scale.y = 0.5
-    marker.scale.z = 0.5
-    #marker.frame_locked = False
-    marker.text = human.name
-    marker.ns = "my_namespace"
-    marker_array_semantic_labels.markers[-1] = copy.deepcopy(marker) 
-
-    marker = Marker()
-    marker.header.frame_id = 'map'
-    marker.id = N_static_objects + 1
-    marker.type = marker.ARROW
-    marker.action = marker.ADD
-    marker.pose = Pose()
-    marker.pose.position.x = human.position_map.x
-    marker.pose.position.y = human.position_map.y
-    marker.pose.position.z = -1.0
-    marker.pose.orientation.x = human.orientation_map.x
-    marker.pose.orientation.y = human.orientation_map.y
-    marker.pose.orientation.z = human.orientation_map.z
-    marker.pose.orientation.w = human.orientation_map.w
-    marker.color.r = 0.0
-    marker.color.g = 1.0
-    marker.color.b = 0.0
-    marker.color.a = 1.0
-    marker.scale.x = 0.8
-    marker.scale.y = 0.3
-    marker.scale.z = 0.1
-    marker.ns = "my_namespace"
-    marker_array_orientations.markers[-1] = copy.deepcopy(marker)
-
-    # publish orientations
-    pub_markers_orientations.publish(marker_array_orientations)
-    # publish semantic labels
-    pub_markers_semantic_labels.publish(marker_array_semantic_labels)
-
-    '''
-    nula = euler_to_quaternion(0.0,0.0,0.0)
-    print('nula = ', nula)
-    pi_2 = euler_to_quaternion(0.0,0.0,PI/2)
-    print('pi_2 = ', pi_2)
-    minus_pi_2 = euler_to_quaternion(0.0,0.0,-PI/2)
-    print('minus_pi_2 = ', minus_pi_2)
-    pi_ = euler_to_quaternion(0.0,0.0,PI)
-    print('pi_ = ', pi_)
-    minus_pi_ = euler_to_quaternion(0.0,0.0,-PI)
-    print('minus_pi_ = ', minus_pi_)
-    '''
-
-    d_x = human.position_map.x - robot.position_map.x 
-    d_y = human.position_map.x - robot.position_map.y 
-    R_ = math.sqrt(d_x**2+d_y**2)
-    
-    # find objects in human POV
-    #print('\nObjects in human POV:')
-    objects_in_human_POV = []
-    objects_in_human_POV_distances = []
-    wall_blocking = False
-    wall_blocking_name = ''
-    for i in range(0, N_static_objects):
-        d_x = static_objects[i].position_map.x - human.position_map.x 
-        d_y = static_objects[i].position_map.y - human.position_map.y
-        angle = np.arctan2(d_y, d_x)
-        [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
-        angle = angle - angle_ref
-        if abs(angle) <= PI/3:
-            objects_in_human_POV.append(static_objects[i])
-            #print(static_objects[i].name)
-            r = math.sqrt(d_x**2+d_y**2) 
-            objects_in_human_POV_distances.append(r)
-            if 'wall' in static_objects[i].name and r < R_ and abs(angle) <= PI/5:
-                wall_blocking = True
-                wall_blocking_name = static_objects[i].name
-                break  
-    if wall_blocking:
-        print('\n' + human.name + ' cannot see ' + robot.name + ' because of ' + wall_blocking_name)
-    else:
-        # where are objects in the local costmap relative to the human
-        tpcc_string = ''
-        #human_string = ''
-        for i in range(0, N_objects_in_lc):
-            if i not in used_objects:
-                continue
-            
-            # TPCC part
-            d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
-            d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
-            r = math.sqrt(d_x**2+d_y**2) 
-            angle = np.arctan2(d_y, d_x)
-            [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
-            angle = angle - angle_ref
-            if angle >= PI:
-                angle -= 2*PI
-            elif angle < -PI:
-                angle += 2*PI
-            qsr_value = robot.getRelativeQsrValue(r,angle,R_)
-            #print(objects_in_lc[i].name + ' is to the ' + qsr_value + ' of the ' + robot.name + ' seen by ' + human.name)
-            #tpcc_string += objects_in_lc[i].name + ' is to the ' + qsr_value + ' of the ' + robot.name + ' seen by ' + human.name + '\n'
-            tpcc_string += human.name + ',' + robot.name + ' ' + qsr_value + ' ' + objects_in_lc[i].name + '\n'
-
-            '''
-            # Human intrinsic part
-            d_x = objects_in_lc[i].position_map.x - human.position_map.x 
-            d_y = objects_in_lc[i].position_map.y - human.position_map.y 
-            angle = np.arctan2(d_y, d_x)
-            angle = angle - angle_ref
-            if angle >= PI:
-                angle -= 2*PI
-            elif angle < -PI:
-                angle += 2*PI
-            qsr_value = human.getIntrinsicQsrValue(angle)
-            #print(objects_in_lc[i].name + ' is to my ' + qsr_value)
-            human_string += objects_in_lc[i].name + ' is to my ' + qsr_value + '\n'
-            '''
-        
-        print('\nTPCC:')
-        print(tpcc_string)    
-
-        #print('\n' + human.name + ':')
-        #print(human_string)
 
 
 
-             
 
-update_robot_from_gazebo = False
+
+update_robot_from_gazebo = True
 # update human and robot variables
 def model_state_callback(states_msg):
     # update robot map pose from amcl_pose
@@ -1132,14 +832,110 @@ def model_state_callback(states_msg):
         #human.orientation_map = states_msg.pose[human_idx].orientation
         #human.printAttributes()
 
+    # visualize robot
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_known_objects
+    marker.type = marker.TEXT_VIEW_FACING
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = robot.position_map.x
+    marker.pose.position.y = robot.position_map.y
+    marker.pose.position.z = 2.0
+    marker.color.r = 1.0
+    marker.color.g = 0.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.5
+    marker.scale.y = 0.5
+    marker.scale.z = 0.5
+    #marker.frame_locked = False
+    marker.text = robot.name
+    marker.ns = "my_namespace"
+    marker_array_semantic_labels.markers[-2] = copy.deepcopy(marker) 
+
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_known_objects
+    marker.type = marker.ARROW
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = robot.position_map.x
+    marker.pose.position.y = robot.position_map.y
+    marker.pose.position.z = 3.0
+    marker.pose.orientation.x = robot.orientation_map.x
+    marker.pose.orientation.y = robot.orientation_map.y
+    marker.pose.orientation.z = robot.orientation_map.z
+    marker.pose.orientation.w = robot.orientation_map.w
+    marker.color.r = 0.0
+    marker.color.g = 1.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.8
+    marker.scale.y = 0.3
+    marker.scale.z = 0.1
+    marker.ns = "my_namespace"
+    marker_array_orientations.markers[-2] = copy.deepcopy(marker)
+
+    # visualize robot
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_known_objects + 1
+    marker.type = marker.TEXT_VIEW_FACING
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = human.position_map.x
+    marker.pose.position.y = human.position_map.y
+    marker.pose.position.z = 2.0
+    marker.color.r = 1.0
+    marker.color.g = 0.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.5
+    marker.scale.y = 0.5
+    marker.scale.z = 0.5
+    #marker.frame_locked = False
+    marker.text = human.name
+    marker.ns = "my_namespace"
+    marker_array_semantic_labels.markers[-1] = copy.deepcopy(marker) 
+
+    marker = Marker()
+    marker.header.frame_id = 'map'
+    marker.id = N_known_objects + 1
+    marker.type = marker.ARROW
+    marker.action = marker.ADD
+    marker.pose = Pose()
+    marker.pose.position.x = human.position_map.x
+    marker.pose.position.y = human.position_map.y
+    marker.pose.position.z = -1.0
+    marker.pose.orientation.x = human.orientation_map.x
+    marker.pose.orientation.y = human.orientation_map.y
+    marker.pose.orientation.z = human.orientation_map.z
+    marker.pose.orientation.w = human.orientation_map.w
+    marker.color.r = 0.0
+    marker.color.g = 1.0
+    marker.color.b = 0.0
+    marker.color.a = 1.0
+    marker.scale.x = 0.8
+    marker.scale.y = 0.3
+    marker.scale.z = 0.1
+    marker.ns = "my_namespace"
+    marker_array_orientations.markers[-1] = copy.deepcopy(marker)
+
+    # publish orientations
+    #print('len(marker_array_orientations) = ', len(marker_array_orientations.markers))
+    pub_markers_orientations.publish(marker_array_orientations)
+    # publish semantic labels
+    #print('len(pub_markers_semantic_labels) = ', len(marker_array_semantic_labels.markers))
+    pub_markers_semantic_labels.publish(marker_array_semantic_labels)
 
 # ----------main-----------
 
 # Initalize a subscriber to the "/gazebo/model_states" topic with the function "model_state_callback" as a callback
-#sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, model_state_callback)
+sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, model_state_callback)
 
 #[x,y,coeff]
-#sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, lime_callback)
+sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, lime_callback)
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():

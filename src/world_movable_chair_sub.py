@@ -600,7 +600,12 @@ class lime_rt_sub(object):
         values_static = []
         labels_static = []
 
+        unknown_obstacles = []
+
+        # find unknown objects
         for i in range(0, len(self.gazebo_names)):
+            if 'citizen' in self.gazebo_names[i]:
+                continue
             if self.gazebo_names[i] not in self.static_names and ('citizen' in self.gazebo_names[i] or 'chair' in self.gazebo_names[i]):
                 #print('found - ' + self.gazebo_names[i])
 
@@ -616,6 +621,7 @@ class lime_rt_sub(object):
                 # da li je centroid u lc?
                 #'''
                 #print('[cx_odom,cy_odom] = ', [cx_odom,cy_odom])
+                
                 if 0 <= cx_odom < self.costmap_size and 0 <= cy_odom < self.costmap_size:
                     label = self.gazebo_names[i]
                     v = len(self.static_names) + 1
@@ -625,9 +631,15 @@ class lime_rt_sub(object):
                     labels_in_lc.append(label)
                 #'''
 
+                unknown_obstacles.append([len(self.static_names) + 1,self.gazebo_names[i],px,py])
+
                 labels_static.append(self.gazebo_names[i])
                 values_static.append(len(self.static_names) + 1)
                 centroids_static.append([cx_odom,cy_odom])
+
+        # [ID, label, x_map, y_map]
+        pd.DataFrame(unknown_obstacles).to_csv(self.dirCurr + '/' + self.dirName + '/unknown_objects.csv', index=False)#, header=False)
+        
 
         # preslikavanje centroida iz map u odom
         for i in range(0, self.semantic_tags.shape[0]):
@@ -637,6 +649,7 @@ class lime_rt_sub(object):
             px = cx*self.semantic_global_map_resolution + self.semantic_global_map_origin_x
             py = cy*self.semantic_global_map_resolution + self.semantic_global_map_origin_y
             # preslikavanje iz map u odom
+            #print('name, px_map, py_map) = ', (self.semantic_tags.iloc[i][1], px, py))
             p_map = np.array([px, py, 0.0])
             p_odom = p_map.dot(r_) + t
             # centroidi u odom
@@ -664,6 +677,8 @@ class lime_rt_sub(object):
         N_centroids = len(centroids_in_lc)
         N_centroids_all = len(labels_static)
         print('\nlabels_in_lc:', labels_in_lc)
+
+        pd.DataFrame(labels_in_lc).to_csv(self.dirCurr + '/' + self.dirName + '/lc_labels.csv', index=False)#, header=False)
 
         start = time.time()
         self.segments = copy.deepcopy(self.image_99s_100s)
@@ -874,6 +889,7 @@ class lime_rt_sub(object):
         self.odom_y = msg.pose.pose.position.y
         self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
         #pd.DataFrame(self.odom_tmp).to_csv('~/amar_ws/lime_rt_data/odom_tmp.csv', index=False)#, header=False)
+        #pd.DataFrame(self.odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/odom_tmp.csv', index=False)#, header=False)
         
     # Define a callback for the global plan
     def global_plan_callback(self, msg):
