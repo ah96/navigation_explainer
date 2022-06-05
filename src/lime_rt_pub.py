@@ -232,15 +232,15 @@ class ImageExplanation(object):
             temp[self.image != 0] = self.val_low
             return temp, exp
 
-        print('\nexp = ', exp)
+        #print('\nexp = ', exp)
         #print('np.unique(self.segments) = ', np.unique(self.segments))
         segments_labels = np.unique(self.segments)
         #print('segments_labels = ', segments_labels)
 
         for f, w in exp:
-            print('(f, w): ', (f, w))
+            #print('(f, w): ', (f, w))
             f = segments_labels[f]
-            print('segments_labels[f] = ', f)
+            #print('segments_labels[f] = ', f)
 
             if w < -0.01:
                 c = -1
@@ -833,6 +833,17 @@ class lime_rt_pub(object):
             pd.DataFrame(output[:,:,1]).to_csv(self.dirCurr + '/' + self.dirName + '/output_G.csv', index=False) #, header=False)
             pd.DataFrame(output[:,:,2]).to_csv(self.dirCurr + '/' + self.dirName + '/output_R.csv', index=False) #, header=False)
 
+            publish_explanation_coeffs = True
+            if publish_explanation_coeffs:
+                # publish explanation coefficients
+                exp_with_centroids = Float32MultiArray()
+                segs_unique = np.unique(self.segments)
+                for k in range(0, len(exp)):
+                    exp_with_centroids.data.append(segs_unique[exp[k][0]])
+                    exp_with_centroids.data.append(exp[k][1]) 
+                exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
+                self.pub_lime.publish(exp_with_centroids)
+
             publish_explanation_image = True
             if publish_explanation_image:
                 # publish explanation image
@@ -842,32 +853,6 @@ class lime_rt_pub(object):
                 #print('\nBGR time = ', end_bgr - start_bgr)
                 output_cv = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
                 self.pub_exp_image.publish(output_cv)
-
-            publish_explanation_coeffs = True
-            if publish_explanation_coeffs:
-                # publish explanation coefficients
-                exp_with_centroids = Float32MultiArray()
-                self.segments += 1
-                regions = regionprops(self.segments.astype(int))
-                self.tf_odom_map_tmp = self.tf_odom_map_tmp.transpose()
-                #t = np.asarray([self.tf_odom_map_tmp.iloc[0],self.tf_odom_map_tmp.iloc[1],self.tf_odom_map_tmp.iloc[2]])
-                #r = R.from_quat([self.tf_odom_map_tmp.iloc[3],self.tf_odom_map_tmp.iloc[4],self.tf_odom_map_tmp.iloc[5],self.tf_odom_map_tmp.iloc[6]])
-                #r_ = np.asarray(r.as_matrix())
-                for props in regions:
-                    v = props.label  # value of label
-                    cx, cy = props.centroid  # centroid coordinates
-                    for j in range(0, len(exp)):
-                        if exp[j][0] == v - 1:
-                            px = cy*self.localCostmapResolution + self.localCostmapOriginX
-                            py = cx*self.localCostmapResolution + self.localCostmapOriginY
-                            #p = np.array([px, py, 0.0])
-                            #pnew = p.dot(r_) + t
-                            exp_with_centroids.data.append(px) #(pnew[0])
-                            exp_with_centroids.data.append(py) #(pnew[1])
-                            exp_with_centroids.data.append(exp[j][1])
-                            break
-                exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
-                self.pub_lime.publish(exp_with_centroids)
 
             publish_pointcloud = False
             if publish_pointcloud:
@@ -895,6 +880,7 @@ class lime_rt_pub(object):
                 self.pub_exp_pointcloud.publish(pc2)
                 #rospy.sleep(1.0)
         except:
+            print('except!!!!')
             return
         #print('\nKRAJ!!!')
     
@@ -918,12 +904,12 @@ rospy.init_node('lime_rt_pub', anonymous=True)
 lime_rt_pub_obj.tfBuffer = tf2_ros.Buffer()
 lime_rt_pub_obj.tf_listener = tf2_ros.TransformListener(lime_rt_pub_obj.tfBuffer)
 
-#rate = rospy.Rate(5)
+rate = rospy.Rate(1)
 
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
     #print('spinning lime_rt_pub')
     lime_rt_pub_obj.explain()
-    #rate.sleep()
+    rate.sleep()
     #rospy.spin()

@@ -137,6 +137,21 @@ class Object():
 
         return value
 
+    # get QSR value
+    def getIntrinsicQsrValue_(self, angle):
+        value = ''    
+
+        if self.PI/4 <= angle < self.PI/4:
+            value += 'front'
+        elif self.PI/4 <= angle <= 3*self.PI/4:
+            value += 'left'
+        elif -3*self.PI/4 <= angle < -self.PI/4:
+            value += 'right'
+        else:
+            value += 'back'
+
+        return value
+
 # known objects
 known_objects = []
 
@@ -724,12 +739,13 @@ lime_explanation = LimeExplanation()
 def lime_callback(msg):
     #print('\n\n\n\n\nlime_callback\n')
     print('\n\n\n\n\n')
-    # [x, y, exp]*N_FEATURES + ORIGINAL_DEVIATION
+    # [v-ID, coeff]*N_FEATURES + ORIGINAL_DEVIATION
+    #print('msg = ', msg)
     lime_explanation.exp = []
-    for i in range(1, int((len(msg.data)-1)/3)): # not taking free-space weight, which is always 0
-        lime_explanation.exp.append([msg.data[3*i],msg.data[3*i+1],msg.data[3*i+2]])
+    for i in range(0, int((len(msg.data)-1)/2)): # not taking free-space weight, which is always 0
+        lime_explanation.exp.append([msg.data[2*i],msg.data[2*i+1]])
     lime_explanation.original_deviation = msg.data[-1]
-    #lime_explanation.printAttributes()
+    lime_explanation.printAttributes()
 
     # update local costmap
     if os.path.getsize(file_path_lc) == 0 or os.path.exists(file_path_lc) == False:
@@ -743,6 +759,7 @@ def lime_callback(msg):
     #local_costmap.printAttributes()
 
     # update tf_map_odom
+    '''
     if os.path.getsize(file_path_tf_map_odom) == 0 or os.path.exists(file_path_tf_map_odom) == False:
         return
     tf_msg = pd.read_csv(dirCurr + '/' + file_path_tf_map_odom)
@@ -752,30 +769,241 @@ def lime_callback(msg):
     t = np.asarray([tf_map_odom.translation.x,tf_map_odom.translation.y,tf_map_odom.translation.z])
     r = R.from_quat([tf_map_odom.rotation.x,tf_map_odom.rotation.y,tf_map_odom.rotation.z,tf_map_odom.rotation.w])
     r_ = np.asarray(r.as_matrix())
+    '''
 
     # find objects in the current local costmap
     # [ID, label, x_odom, y_odom, x_map, y_map, cx_odom, cy_odom]
-    known_objects_pd = pd.read_csv(dirCurr + '/' + dirName + '/unknown_objects.csv')
-    print(known_objects_pd)
+    unknown_objects_pd = pd.read_csv(dirCurr + '/' + dirName + '/unknown_objects.csv')
+    #print('\nunknown_objects_pd = ', unknown_objects_pd)
+    N_unknown_objects = unknown_objects_pd.shape[0]
     lc_labels_pd = np.array(pd.read_csv(dirCurr + '/' + dirName + '/lc_labels.csv'))
-    print(lc_labels_pd)
+    #print('lc_labels_pd = ', lc_labels_pd)
+    #print('lc_labels_pd.shape = ', lc_labels_pd.shape)
+    N_objects_in_lc = lc_labels_pd.shape[0]
+    objects_in_lc = []
+    for i in range(0, N_objects_in_lc):
+        if lc_labels_pd[i, 0] in known_objects_names:
+            idx = known_objects_names.index(lc_labels_pd[i, 0])
+            objects_in_lc.append(known_objects[idx])
 
     # append LIME coefficients to the objects in the current local costmap
     N_coefficients = len(lime_explanation.exp)
     #print('\nN of LIME coeficients = ', N_coefficients)
+    #print('\nlime_explanation.exp = ', lime_explanation.exp)
     lime_coeffs_string = ''
-    indices_of_closest_objects_from_objects_in_lc = [0] * N_coefficients
     for i in range(0, N_coefficients):
-        #[x,y,coeff]
-        local_distances_of_segment_centroid_from_objects = []
-        for j in range(0, N_objects_in_lc):
-            dist = math.sqrt( (lime_explanation.exp[i][0] - objects_in_lc[j].position_odom.x)**2 + (lime_explanation.exp[i][1] - objects_in_lc[j].position_odom.y)**2)
-            local_distances_of_segment_centroid_from_objects.append(dist)
-        dist_min = min(local_distances_of_segment_centroid_from_objects)
-        index_min = local_distances_of_segment_centroid_from_objects.index(dist_min)
-        indices_of_closest_objects_from_objects_in_lc[i] = index_min
-        objects_in_lc[index_min].lime_coefficients.append(lime_explanation.exp[i][2])
-        objects_in_lc[index_min].lime_coefficients_distances.append(dist_min)
+        #[v,coeff]*N_coefficients + original_deviation
+        coeff = lime_explanation.exp[i][1]
+        v = lime_explanation.exp[i][0]
+        #print('(v, coeff) = ', (v, coeff))
+        found_unknown = False
+        # first check unknown objects
+        for j in range(0, N_unknown_objects):
+            #print('unknown_objects_pd.iloc[j, 0] = ', unknown_objects_pd.iloc[j, 0])
+            if v == unknown_objects_pd.iloc[j, 0]:
+                lime_coeffs_string += unknown_objects_pd.iloc[j, 1] + ' has a LIME coefficient ' + str(coeff) + '\n'
+                found_unknown = True
+        if found_unknown == False:
+            # then check unknown objects
+            for j in range(0, N_known_objects):
+                if v == known_objects_ids[j]:
+                    lime_coeffs_string += known_objects_names[j] + ' has a LIME coefficient ' + str(coeff) + '\n'
+    print('\nLIME coefficients:')
+    print(lime_coeffs_string)
+
+
+    # how a robot passes relative to the objects in the local costmap
+    #print('')
+    objects_intrinsic_string = ''
+    for i in range(0, len(objects_in_lc)):
+        if objects_in_lc[i].intrinsic_qsr == False:
+            continue
+        d_x = robot.position_map.x - objects_in_lc[i].position_map.x
+        d_y = robot.position_map.y - objects_in_lc[i].position_map.y
+        #r = math.sqrt(d_x**2+d_y**2)
+        angle = np.arctan2(d_y, d_x)
+        angle_ref = objects_in_lc[i].yaw_map
+        angle = angle - angle_ref
+        if angle >= PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        qsr_value = objects_in_lc[i].getIntrinsicQsrValue(angle)
+        #print(robot.name + ' passes ' + qsr_value + ' of the ' + objects_in_lc[i].name)
+        objects_intrinsic_string += robot.name + ' is to the ' + qsr_value + ' of the ' + objects_in_lc[i].name + '\n'
+
+    print('\nRobot relative to the immediate objects:')
+    print(objects_intrinsic_string)
+
+    # where are objects in the local costmap relative to the robot
+    #print('')
+    robot_string = ''
+    for i in range(0, len(objects_in_lc)):
+        d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
+        d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
+        #r = math.sqrt(d_x**2+d_y**2)
+        angle = np.arctan2(d_y, d_x)
+        [angle_ref,pitch,roll] = quaternion_to_euler(robot.orientation_map.x,robot.orientation_map.y,robot.orientation_map.z,robot.orientation_map.w)
+        angle = angle - angle_ref
+        if angle >= PI:
+            angle -= 2*PI
+        elif angle < -PI:
+            angle += 2*PI
+        qsr_value = robot.getIntrinsicQsrValue(angle)
+        #print(objects_in_lc[i].name + ' is ' + qsr_value + ' of the ' + robot.name)
+        robot_string += objects_in_lc[i].name + ' is to my ' + qsr_value + '\n'
+    for j in range(0, N_unknown_objects):
+        if unknown_objects_pd.iloc[j, 1] in lc_labels_pd:
+            d_x = unknown_objects_pd.iloc[j, 2] - robot.position_map.x 
+            d_y = unknown_objects_pd.iloc[j, 3] - robot.position_map.y 
+            angle = np.arctan2(d_y, d_x)
+            [angle_ref,pitch,roll] = quaternion_to_euler(robot.orientation_map.x,robot.orientation_map.y,robot.orientation_map.z,robot.orientation_map.w)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = robot.getIntrinsicQsrValue(angle)
+            robot_string += unknown_objects_pd.iloc[j, 1] + ' is to my ' + qsr_value + '\n'
+    print('\n' + robot.name + ':')
+    print(robot_string)
+
+
+    d_x = human.position_map.x - robot.position_map.x 
+    d_y = human.position_map.y - robot.position_map.y 
+    R_ = math.sqrt(d_x**2+d_y**2)
+    
+    # find objects in human POV - currently only working with known objects
+    #print('\nObjects in human POV:')
+    objects_in_human_POV = []
+    objects_in_human_POV_distances = []
+    wall_blocking = False
+    wall_blocking_name = ''
+    for i in range(0, N_known_objects):
+        d_x = known_objects[i].position_map.x - human.position_map.x 
+        d_y = known_objects[i].position_map.y - human.position_map.y
+        angle = np.arctan2(d_y, d_x)
+        [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
+        angle = angle - angle_ref
+        if abs(angle) <= PI/3:
+            objects_in_human_POV.append(known_objects[i])
+            #print(static_objects[i].name)
+            r = math.sqrt(d_x**2+d_y**2) 
+            objects_in_human_POV_distances.append(r)
+            #print('known_objects[i].name,r,R = ', known_objects[i].name,r,R_)
+            if 'wall' in known_objects[i].name and r < R_ and abs(angle) <= PI/3:
+                wall_blocking = True
+                wall_blocking_name = known_objects[i].name
+                break  
+    if wall_blocking:
+        print('\n' + human.name + ' cannot see ' + robot.name + ' because of ' + wall_blocking_name)
+    else:
+        # where are objects in the local costmap relative to the human
+        tpcc_string = ''
+        #human_string = ''
+        for i in range(0, len(objects_in_lc)):
+            # TPCC part
+            d_x = objects_in_lc[i].position_map.x - robot.position_map.x 
+            d_y = objects_in_lc[i].position_map.y - robot.position_map.y 
+            r = math.sqrt(d_x**2+d_y**2) 
+            angle = np.arctan2(d_y, d_x)
+            [angle_ref,pitch,roll] = quaternion_to_euler(human.orientation_map.x,human.orientation_map.y,human.orientation_map.z,human.orientation_map.w)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = robot.getRelativeQsrValue(r,angle,R_)
+            #print(objects_in_lc[i].name + ' is to the ' + qsr_value + ' of the ' + robot.name + ' seen by ' + human.name)
+            #tpcc_string += objects_in_lc[i].name + ' is to the ' + qsr_value + ' of the ' + robot.name + ' seen by ' + human.name + '\n'
+            tpcc_string += human.name + ',' + robot.name + ' ' + qsr_value + ' ' + objects_in_lc[i].name + '\n'
+
+            '''
+            # Human intrinsic part
+            d_x = objects_in_lc[i].position_map.x - human.position_map.x 
+            d_y = objects_in_lc[i].position_map.y - human.position_map.y 
+            angle = np.arctan2(d_y, d_x)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = human.getIntrinsicQsrValue(angle)
+            #print(objects_in_lc[i].name + ' is to my ' + qsr_value)
+            human_string += objects_in_lc[i].name + ' is to my ' + qsr_value + '\n'
+            '''
+        
+        print('\nTPCC:')
+        print(tpcc_string)    
+
+        #print('\n' + human.name + ':')
+        #print(human_string)
+
+    #lc_labels_pd = [l for lc in lc_labels_pd for l in lc]
+    #print(lc_labels_pd)
+    # action and openable unknown objects
+    for i in range(0, N_unknown_objects):
+        if unknown_objects_pd.iloc[i, 1] in lc_labels_pd:
+            #print('USAO')
+            if 'door' in unknown_objects_pd.iloc[j, 1]:
+                print('\nPlease open the ' + str(unknown_objects_pd.iloc[i, 1]) + ' so I can proceed!')
+            elif 'chair' in unknown_objects_pd.iloc[i, 1]: 
+                #print(unknown_objects_pd.iloc[i, 1])   
+                for j in range(0, len(objects_in_lc)):
+                    if objects_in_lc[j].intrinsic_qsr == True:
+                        d_x = unknown_objects_pd.iloc[i, 2] - objects_in_lc[j].position_map.x 
+                        d_y = unknown_objects_pd.iloc[i, 3] - objects_in_lc[j].position_map.y 
+                        r = math.sqrt(d_x**2+d_y**2) 
+                        angle = np.arctan2(d_y, d_x)
+                        [angle_ref,pitch,roll] = quaternion_to_euler(objects_in_lc[j].orientation_map.x,objects_in_lc[j].orientation_map.y,objects_in_lc[j].orientation_map.z,objects_in_lc[j].orientation_map.w)
+                        angle = angle - angle_ref
+                        if angle >= PI:
+                            angle -= 2*PI
+                        elif angle < -PI:
+                            angle += 2*PI
+                        qsr_value = objects_in_lc[j].getIntrinsicQsrValue_(angle)
+                        r_unknown_object = copy.deepcopy(r)
+                        angle_unknown_object = copy.deepcopy(angle)
+                        qsr_unknown_object = copy.deepcopy(qsr_value)
+
+                        d_x = robot.position_map.x - objects_in_lc[j].position_map.x 
+                        d_y = robot.position_map.y - objects_in_lc[j].position_map.y 
+                        r = math.sqrt(d_x**2+d_y**2) 
+                        angle = np.arctan2(d_y, d_x)
+                        [angle_ref,pitch,roll] = quaternion_to_euler(objects_in_lc[j].orientation_map.x,objects_in_lc[j].orientation_map.y,objects_in_lc[j].orientation_map.z,objects_in_lc[j].orientation_map.w)
+                        angle = angle - angle_ref
+                        if angle >= PI:
+                            angle -= 2*PI
+                        elif angle < -PI:
+                            angle += 2*PI
+                        qsr_value = objects_in_lc[j].getIntrinsicQsrValue(angle)
+                        if 'left' in qsr_value:
+                            robot_dir = 'left'                                        
+                        else:
+                            robot_dir = 'right'
+                        qsr_vals = []    
+                        for k in range(0, len(objects_in_lc)):
+                            if k != j:
+                                d_x = objects_in_lc[k].position_map.x - objects_in_lc[j].position_map.x 
+                                d_y = objects_in_lc[k].position_map.y - objects_in_lc[j].position_map.y 
+                                r = math.sqrt(d_x**2+d_y**2) 
+                                angle = np.arctan2(d_y, d_x)
+                                [angle_ref,pitch,roll] = quaternion_to_euler(objects_in_lc[j].orientation_map.x,objects_in_lc[j].orientation_map.y,objects_in_lc[j].orientation_map.z,objects_in_lc[j].orientation_map.w)
+                                angle = angle - angle_ref
+                                if angle >= PI:
+                                    angle -= 2*PI
+                                elif angle < -PI:
+                                    angle += 2*PI
+                                qsr_value = objects_in_lc[j].getIntrinsicQsrValue_(angle)            
+                                qsr_vals.append(qsr_value)
+                        if robot_dir == 'left':
+                            if 'right' not in qsr_vals:
+                                print('\nPlease move the ' + unknown_objects_pd.iloc[i, 1] + ' to the ' + 'right' + ' of the ' + objects_in_lc[j].name + ' so I can proceed!')
+                                break
+                        else:
+                            if 'left' not in qsr_vals:
+                                print('\nPlease move the ' + unknown_objects_pd.iloc[i, 1] + ' to the ' + 'left' + ' of the ' + objects_in_lc[j].name + ' so I can proceed!')
+                                break
 
 
 

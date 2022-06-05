@@ -968,7 +968,7 @@ def lime_callback(msg):
     '''
 
     d_x = human.position_map.x - robot.position_map.x 
-    d_y = human.position_map.x - robot.position_map.y 
+    d_y = human.position_map.y - robot.position_map.y 
     R_ = math.sqrt(d_x**2+d_y**2)
     
     # find objects in human POV
