@@ -904,12 +904,12 @@ rospy.init_node('lime_rt_pub', anonymous=True)
 lime_rt_pub_obj.tfBuffer = tf2_ros.Buffer()
 lime_rt_pub_obj.tf_listener = tf2_ros.TransformListener(lime_rt_pub_obj.tfBuffer)
 
-rate = rospy.Rate(1)
+#rate = rospy.Rate(1)
 
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
     #print('spinning lime_rt_pub')
     lime_rt_pub_obj.explain()
-    rate.sleep()
+    #rate.sleep()
     #rospy.spin()

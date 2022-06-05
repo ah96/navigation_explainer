@@ -23,6 +23,7 @@ dirName = 'lime_rt_data'
 rospy.init_node('qsr_live_2', anonymous=True)
 
 pub_markers_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
+pub_markers_semantic_labels_unknown = rospy.Publisher('/semantic_labels_unknown', MarkerArray, queue_size=10)
 pub_markers_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
 marker_array_semantic_labels = MarkerArray()
 marker_array_orientations = MarkerArray()
@@ -164,7 +165,8 @@ known_objects_ids =  []
 N_known_objects = len(known_objects_names)
 
 # fill in known objects
-known_objects_pd = pd.read_csv(dirCurr + '/src/navigation_explainer/src/world_movable_chair_3/world_movable_chair_3_tags.csv')
+#known_objects_pd = pd.read_csv(dirCurr + '/src/navigation_explainer/src/world_movable_chair_3/world_movable_chair_3_tags.csv')
+known_objects_pd = pd.read_csv(dirCurr + '/src/navigation_explainer/src/world_no_openable_door/world_no_openable_door_tags.csv')
 for i in range(0, known_objects_pd.shape[0]):
     ID = known_objects_pd.iloc[i,0]
     label = known_objects_pd.iloc[i,1]
@@ -939,6 +941,8 @@ def lime_callback(msg):
         #print('\n' + human.name + ':')
         #print(human_string)
 
+    marker_array_semantic_labels_unknown = MarkerArray()
+
     #lc_labels_pd = [l for lc in lc_labels_pd for l in lc]
     #print(lc_labels_pd)
     # action and openable unknown objects
@@ -947,6 +951,27 @@ def lime_callback(msg):
             #print('USAO')
             if 'door' in unknown_objects_pd.iloc[j, 1]:
                 print('\nPlease open the ' + str(unknown_objects_pd.iloc[i, 1]) + ' so I can proceed!')
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.id = i
+                marker.type = marker.TEXT_VIEW_FACING
+                marker.action = marker.ADD
+                marker.pose = Pose()
+                marker.pose.position.x = unknown_objects_pd.iloc[i, 2]
+                marker.pose.position.y = unknown_objects_pd.iloc[i, 3]
+                marker.pose.position.z = 2.0
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
+                marker.color.a = 1.0
+                marker.scale.x = 0.5
+                marker.scale.y = 0.5
+                marker.scale.z = 0.5
+                #marker.frame_locked = False
+                marker.text = unknown_objects_pd.iloc[i, 1]
+                marker.ns = "my_namespace"
+                marker_array_semantic_labels_unknown.markers.append(marker)
+                pub_markers_semantic_labels_unknown.publish(marker_array_semantic_labels_unknown)
             elif 'chair' in unknown_objects_pd.iloc[i, 1]: 
                 #print(unknown_objects_pd.iloc[i, 1])   
                 for j in range(0, len(objects_in_lc)):
@@ -999,9 +1024,51 @@ def lime_callback(msg):
                         if robot_dir == 'left':
                             if 'right' not in qsr_vals:
                                 print('\nPlease move the ' + unknown_objects_pd.iloc[i, 1] + ' to the ' + 'right' + ' of the ' + objects_in_lc[j].name + ' so I can proceed!')
+                                marker = Marker()
+                                marker.header.frame_id = 'map'
+                                marker.id = i
+                                marker.type = marker.TEXT_VIEW_FACING
+                                marker.action = marker.ADD
+                                marker.pose = Pose()
+                                marker.pose.position.x = unknown_objects_pd.iloc[i, 2]
+                                marker.pose.position.y = unknown_objects_pd.iloc[i, 3]
+                                marker.pose.position.z = 2.0
+                                marker.color.r = 1.0
+                                marker.color.g = 0.0
+                                marker.color.b = 0.0
+                                marker.color.a = 1.0
+                                marker.scale.x = 0.5
+                                marker.scale.y = 0.5
+                                marker.scale.z = 0.5
+                                #marker.frame_locked = False
+                                marker.text = unknown_objects_pd.iloc[i, 1]
+                                marker.ns = "my_namespace"
+                                marker_array_semantic_labels_unknown.markers.append(marker)
+                                pub_markers_semantic_labels_unknown.publish(marker_array_semantic_labels_unknown)
                                 break
                         else:
                             if 'left' not in qsr_vals:
+                                marker = Marker()
+                                marker.header.frame_id = 'map'
+                                marker.id = i
+                                marker.type = marker.TEXT_VIEW_FACING
+                                marker.action = marker.ADD
+                                marker.pose = Pose()
+                                marker.pose.position.x = unknown_objects_pd.iloc[i, 2]
+                                marker.pose.position.y = unknown_objects_pd.iloc[i, 3]
+                                marker.pose.position.z = 2.0
+                                marker.color.r = 1.0
+                                marker.color.g = 0.0
+                                marker.color.b = 0.0
+                                marker.color.a = 1.0
+                                marker.scale.x = 0.5
+                                marker.scale.y = 0.5
+                                marker.scale.z = 0.5
+                                #marker.frame_locked = False
+                                marker.text = unknown_objects_pd.iloc[i, 1]
+                                marker.ns = "my_namespace"
+                                marker_array_semantic_labels_unknown.markers.append(marker)
+                                pub_markers_semantic_labels_unknown.publish(marker_array_semantic_labels_unknown)
                                 print('\nPlease move the ' + unknown_objects_pd.iloc[i, 1] + ' to the ' + 'left' + ' of the ' + objects_in_lc[j].name + ' so I can proceed!')
                                 break
 
