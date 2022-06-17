@@ -5,87 +5,90 @@ from geometry_msgs.msg import PolygonStamped, PoseWithCovarianceStamped
 import rospy
 import numpy as np
 from matplotlib import pyplot as plt
-import time
+#import time
 import pandas as pd
 from skimage.segmentation import slic
 from skimage.color import gray2rgb
-from scipy.spatial.transform import Rotation as R
-import copy
+#from scipy.spatial.transform import Rotation as R
+#import copy
 import tf2_ros
-import math
-from skimage.measure import regionprops
+#import math
+#from skimage.measure import regionprops
 import os
 
 
 class lime_rt_sub(object):
     # Constructor
     def __init__(self):
+        # plans' variables
         self.global_plan_xs = []
         self.global_plan_ys = []
         self.transformed_plan_xs = [] 
         self.transformed_plan_ys = []
         self.local_plan_x_list = [] 
         self.local_plan_y_list = []
-        self.footprint_tmp = [] 
         self.local_plan_tmp = [] 
         self.plan_tmp = [] 
-        self.global_plan_tmp = [] 
-        self.costmap_info_tmp = [] 
-        self.amcl_pose_tmp = [] 
+        self.global_plan_tmp = []
+        self.global_plan_empty = True
+        self.local_plan_empty = True
+
+        # tf variables
         self.tf_odom_map_tmp = [] 
         self.tf_map_odom_tmp = [] 
+        
+        # footprint
+        self.footprint_tmp = [] 
+         
+        # pose variables
+        self.amcl_pose_tmp = [] 
         self.odom_tmp = []
+        self.odom_x = 0
+        self.odom_y = 0
+  
+        # costmap variables
+        self.costmap_info_tmp = [] 
         self.image_rgb = np.array([]) 
         self.segments = np.array([])
         self.data = np.array([]) 
         self.image = np.array([])
-        self.odom_x = 0
-        self.odom_y = 0
         self.localCostmapOriginX = 0 
         self.localCostmapOriginY = 0 
         self.localCostmapResolution = 0
-        self.original_deviation = 0
         self.costmap_size = 160
-        self.global_plan_empty = True
         self.local_costmap_empty = True
-        self.local_plan_empty = True
+
+        # segments
+        self.plot_segments = True
+
+        # samples' variables
         self.num_samples = 0
         self.n_features = 0
-        #self.start = time.time()
-        #self.end = time.time()
 
+        # deviation
+        self.original_deviation = 0
+        
+        # directory to save data
         self.dirCurr = os.getcwd()
-
         self.dirName = 'lime_rt_data'
         try:
             os.mkdir(self.dirName)
         except FileExistsError:
             pass
 
-    # Segmentation algorithm
-    def segment_local_costmap(self, image, img_rgb):
+    # LC segmentation algorithm
+    def segment_local_costmap(self, image):
         #print('segmentation algorithm')
-        # show original image
-        #img = copy.deepcopy(image)
+
+        # find image_rgb
+        image_rgb = gray2rgb(self.image)
+        #image = np.stack(3 * (image,), axis=-1)
 
         # Find segments_slic
-        segments_slic = slic(img_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
+        segments_slic = slic(image_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
                                 multichannel=True, convert2lab=True,
                                 enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False,
                                 start_label=1, mask=None)
-
-        '''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments_slic.astype('float64'), aspect='auto')
-        fig.savefig('segments_slic.png', transparent=False)
-        fig.clf()
-        '''
 
         self.segments = np.zeros(image.shape, np.uint8)
 
@@ -109,24 +112,35 @@ class lime_rt_sub(object):
                 num_of_obstacles += 1
         #print('num_of_obstacles: ', num_of_obstacles)        
 
-        '''
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(self.segments.astype('float64'), aspect='auto')
-        fig.savefig('segments_final.png', transparent=False)
-        fig.clf()
-        '''
+
+        if self.plot_segments:
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(segments_slic.astype('float64'), aspect='auto')
+            fig.savefig('segments_slic.png', transparent=False)
+            fig.clf()
+
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.segments.astype('float64'), aspect='auto')
+            fig.savefig('segments_final.png', transparent=False)
+            fig.clf()
 
         return self.segments
 
-    # Create data based on segments
+    # Create data--perturbations based on segments
     def create_data(self):
-        # create data
+        # create data -- perturbations -- N+1 perturbations
         self.n_features = np.unique(self.segments).shape[0]
         self.num_samples = self.n_features
         lst = [[1]*self.n_features]
@@ -139,6 +153,7 @@ class lime_rt_sub(object):
     def local_costmap_callback(self, msg):
         #print('\nlocal_costmap_callback')
 
+        # if you can get tf proceed
         try:
             # catch transform from /map to /odom and vice versa
             transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
@@ -153,42 +168,39 @@ class lime_rt_sub(object):
         except:
             pass    
 
+        # save tf 
         pd.DataFrame(self.tf_odom_map_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map_tmp.csv', index=False)#, header=False)
         pd.DataFrame(self.tf_map_odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom_tmp.csv', index=False)#, header=False)
         
-
         # save costmap in a right image format
         self.localCostmapOriginX = msg.info.origin.position.x
         self.localCostmapOriginY = msg.info.origin.position.y
         self.localCostmapResolution = msg.info.resolution
         self.costmap_info_tmp = [self.localCostmapResolution, msg.info.width, msg.info.height, self.localCostmapOriginX, self.localCostmapOriginY, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
-
+        # create image object
         self.image = np.asarray(msg.data)
         self.image.resize((msg.info.height,msg.info.width))
 
-        # Turn inflated area to free space and 100s to 99s
+        # Turn non-lethal inflated area (< 99) to free space and 100s to 99s
         self.image[self.image == 100] = 99
         self.image[self.image <= 98] = 0
 
         # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
         self.image = self.image * 1.0
 
-        # find image_rgb
-        self.image_rgb = gray2rgb(self.image)
-        #image = np.stack(3 * (image,), axis=-1)
-
         # my change - to return grayscale to classifier_fn
         self.fudged_image = self.image.copy()
-        self.fudged_image[:] = hide_color = 0
+        self.fudged_image[:] = 0 #hide_color = 0
 
         # save indices of robot's odometry location in local costmap to class variables
         self.x_odom_index = round((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
         self.y_odom_index = round((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
 
         # find segments
-        self.segments = self.segment_local_costmap(self.image, self.image_rgb)
+        self.segments = self.segment_local_costmap(self.image)
 
+        # create data -- perturbations
         self.create_data()
 
         self.local_costmap_empty = False
@@ -198,14 +210,6 @@ class lime_rt_sub(object):
         pd.DataFrame(self.fudged_image).to_csv(self.dirCurr + '/' + self.dirName + '/fudged_image.csv', index=False)#, header=False)
         pd.DataFrame(self.segments).to_csv(self.dirCurr + '/' + self.dirName + '/segments.csv', index=False)#, header=False)
         pd.DataFrame(self.data).to_csv(self.dirCurr + '/' + self.dirName + '/data.csv', index=False)#, header=False)
-
-    # Define a callback for the local plan
-    def odom_callback(self, msg):
-        #print('odom_callback!!!')
-        self.odom_x = msg.pose.pose.position.x
-        self.odom_y = msg.pose.pose.position.y
-        self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
-        #pd.DataFrame(self.odom_tmp).to_csv('~/amar_ws/lime_rt_data/odom_tmp.csv', index=False)#, header=False)
         
     # Define a callback for the global plan
     def global_plan_callback(self, msg):
@@ -215,8 +219,8 @@ class lime_rt_sub(object):
         self.global_plan_ys = []
         self.global_plan_tmp = []
         self.plan_tmp = []
-        self.transformed_plan_xs = []
-        self.transformed_plan_ys = []
+        #self.transformed_plan_xs = []
+        #self.transformed_plan_ys = []
 
         for i in range(0,len(msg.poses)):
             self.global_plan_xs.append(msg.poses[i].pose.position.x) 
@@ -269,6 +273,13 @@ class lime_rt_sub(object):
             self.footprint_tmp.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
         pd.DataFrame(self.footprint_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/footprint_tmp.csv', index=False)#, header=False)
 
+    # Define a callback for the odometry
+    def odom_callback(self, msg):
+        #print('odom_callback!!!')
+        self.odom_x = msg.pose.pose.position.x
+        self.odom_y = msg.pose.pose.position.y
+        self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+
     # Define a callback for the amcl pose
     def amcl_callback(self, msg):
         self.amcl_pose_tmp = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
@@ -282,28 +293,27 @@ class lime_rt_sub(object):
 
         self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
 
-        # Initalize a subscriber to the odometry
         self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
 
         self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
 
-        # Initalize a subscriber to the local costmap
         self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
 
 
 
+# main function
+# define lime_rt_sub object
 lime_rt_obj = lime_rt_sub()
-
+# call main to initialize subscribers
 lime_rt_obj.main_()
 
-# Initialize the ROS Node named 'get_model_state', allow multiple nodes to be run with this name
+# Initialize the ROS Node named 'lime_rt_sub', allow multiple nodes to be run with this name
 rospy.init_node('lime_rt_sub', anonymous=True)
 
+# declare transformation buffer
 lime_rt_obj.tfBuffer = tf2_ros.Buffer()
 lime_rt_obj.tf_listener = tf2_ros.TransformListener(lime_rt_obj.tfBuffer)
 
-
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
-    #print('spinning')
     rospy.spin()
