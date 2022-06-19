@@ -15,6 +15,15 @@ import tf2_ros
 import os
 from gazebo_msgs.msg import ModelStates
 
+from typing import NamedTuple
+from point2d import Point2D
+class obstaclePoints(NamedTuple):
+    c: Point2D
+    tl: Point2D
+    tr: Point2D
+    bl: Point2D
+    br: Point2D
+
 
 class lime_rt_sub(object):
     # Constructor
@@ -95,6 +104,7 @@ class lime_rt_sub(object):
         self.data = np.array(lst).reshape((self.num_samples, self.n_features))
 
     # Segmentation algorithm
+    # Append to the closest centroid
     def segment_local_costmap_semantic(self):
         # tf from map to odom
         t = np.asarray([self.tf_map_odom_tmp[0],self.tf_map_odom_tmp[1],self.tf_map_odom_tmp[2]])
@@ -237,6 +247,203 @@ class lime_rt_sub(object):
 
         return self.segments    
 
+    # Segmentation algorithm
+    # Map the objects to the LC and append remaining points to the closes centroid
+    def segment_local_costmap_semantic_2(self):
+        # tf from map to odom
+        t_mo = np.asarray([self.tf_map_odom_tmp[0],self.tf_map_odom_tmp[1],self.tf_map_odom_tmp[2]])
+        r_mo = R.from_quat([self.tf_map_odom_tmp[3],self.tf_map_odom_tmp[4],self.tf_map_odom_tmp[5],self.tf_map_odom_tmp[6]])
+        r_mo = np.asarray(r_mo.as_matrix())
+
+        # tf from odom to map
+        t_om = np.asarray([self.tf_odom_map_tmp[0],self.tf_odom_map_tmp[1],self.tf_odom_map_tmp[2]])
+        r_om = R.from_quat([self.tf_odom_map_tmp[3],self.tf_odom_map_tmp[4],self.tf_odom_map_tmp[5],self.tf_odom_map_tmp[6]])
+        r_om = np.asarray(r_om.as_matrix())
+
+        # convert LC points from /odom too /map
+        c_odom_x = self.localCostmapOriginX + 0.5 * self.costmap_size * self.localCostmapOriginResolution
+        c_odom_y = self.localCostmapOriginY + 0.5 * self.costmap_size * self.localCostmapOriginResolution
+        p_odom = np.array([c_odom_x, c_odom_y, 0.0])
+        p_map = p_odom.dot(r_om) + t_om
+        c_map_x = p_map[0]
+        c_map_y = p_map[1]
+
+        tl_odom_x = self.localCostmapOriginX
+        tl_odom_y = self.localCostmapOriginY
+        p_odom = np.array([tl_odom_x, tl_odom_y, 0.0])
+        p_map = p_odom.dot(r_om) + t_om
+        tl_map_x = p_map[0]
+        tl_map_y = p_map[1]
+
+        tr_odom_x = self.localCostmapOriginX + self.costmap_size * self.localCostmapOriginResolution
+        tr_odom_y = self.localCostmapOriginY
+        p_odom = np.array([tr_odom_x, tr_odom_y, 0.0])
+        p_map = p_odom.dot(r_om) + t_om
+        tr_map_x = p_map[0]
+        tr_map_y = p_map[1]
+
+        bl_odom_x = self.localCostmapOriginX
+        bl_odom_y = self.localCostmapOriginY + self.costmap_size * self.localCostmapOriginResolution
+        p_odom = np.array([bl_odom_x, bl_odom_y, 0.0])
+        p_map = p_odom.dot(r_om) + t_om
+        bl_map_x = p_map[0]
+        bl_map_y = p_map[1]
+
+        br_odom_x = self.localCostmapOriginX + self.costmap_size * self.localCostmapOriginResolution
+        br_odom_y = self.localCostmapOriginY + self.costmap_size * self.localCostmapOriginResolution        
+        p_odom = np.array([br_odom_x, br_odom_y, 0.0])
+        p_map = p_odom.dot(r_om) + t_om
+        br_map_x = p_map[0]
+        br_map_y = p_map[1]
+
+        LC_points_map = obstaclePoints((c_map_x,c_map_y),(tl_map_x,tl_map_y),(tr_map_x,tr_map_y),(bl_map_x,bl_map_y),(br_map_x,br_map_y))
+
+        # static(=known+unknown) objects
+        centroids_static = []
+        values_static = []
+        labels_static = []
+
+        # find unknown objects from gazebo
+        for i in range(0, len(self.gazebo_names)):
+            # human is not an unknown object -- only observer
+            # ground_plane is not an unknown object
+            if 'citizen' in self.gazebo_names[i] or 'plane' in self.gazebo_names[i]:
+                continue
+
+            # if an object is not in the list of static objects and it is not a ground_plane
+            if self.gazebo_names[i] not in self.static_names:
+                #print('found - ' + self.gazebo_names[i])
+
+                # centroids of an unknown object in a /map frame
+                px = float(self.gazebo_poses[i].position.x)
+                py = float(self.gazebo_poses[i].position.y)
+                # transform centroids from /map to /odom frame
+                p_map = np.array([px, py, 0.0])
+                p_odom = p_map.dot(r_) + t
+                # centroids of an unknown object in /odom frame
+                cx_odom = int((p_odom[0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                cy_odom = int((p_odom[1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                # add it also to the list of static objects, as it is not a moving object -- human
+                labels_static.append(self.gazebo_names[i])
+                values_static.append(len(self.static_names) + 1)
+                centroids_static.append([cx_odom,cy_odom])
+
+        # save unknown objects to the
+        # [ID, label, x_map, y_map]
+        #pd.DataFrame(unknown_obstacles).to_csv(self.dirCurr + '/' + self.dirName + '/unknown_objects.csv', index=False)#, header=False)
+        
+        # known obstacles
+        for i in range(0, self.semantic_tags.shape[0]):
+            
+            # centroids of a known object in a /map frame
+            cx = float(self.semantic_tags.iloc[i][3])
+            cy = float(self.semantic_tags.iloc[i][2])
+            px = cx*self.semantic_global_map_resolution + self.semantic_global_map_origin_x
+            py = cy*self.semantic_global_map_resolution + self.semantic_global_map_origin_y
+            # transform centroids from /map to /odom frame
+            p_map = np.array([px, py, 0.0])
+            p_odom = p_map.dot(r_) + t
+            # centroids of a known object in /odom frame
+            cx_odom = int((p_odom[0] - self.localCostmapOriginX) / self.localCostmapResolution)
+            cy_odom = int((p_odom[1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+            # add it also to the list of static objects, as it is not a moving object -- human
+            centroids_static.append([cx_odom, cy_odom])
+            values_static.append(self.semantic_tags.iloc[i][0])
+            labels_static.append(self.semantic_tags.iloc[i][1])
+
+        # num of all centroids--objects
+        N_centroids_all = len(labels_static)
+
+        # save labels of objects in the local costmap
+        #pd.DataFrame(labels_in_lc).to_csv(self.dirCurr + '/' + self.dirName + '/lc_labels.csv', index=False)#, header=False)
+
+        # segmentation part
+        start = time.time()
+        # first segment image is a lc with 99s and 100s
+        self.segments = copy.deepcopy(self.image_99s_100s)
+
+        # populate LC with objects that have centroids in LC
+        for i in range(0, self.semantic_tags.shape[0]):
+            c_map_x = self.semantic_tags.iloc[i, 6]
+            c_map_y = self.semantic_tags.iloc[i, 7]
+
+            if LC_points_map.tl.x < c_map_x < LC_points_map.tr.x and LC_points_map.tl.y < c_map_y < LC_points_map.bl.y:
+                # centroid of the current object is in the LC
+
+                # objects vertices from /map to /odom
+                tl_map_x = self.semantic_tags.iloc[i, 8]
+                tl_map_y = self.semantic_tags.iloc[i, 9]
+                p_map = np.array([tl_odom_x, tl_odom_y, 0.0])
+                p_odom = p_map.dot(r_mo) + t_mo
+                tl_odom_x = p_odom[0]
+                tl_odom_y = p_odom[1]
+                tl_odom_x = int((tl_odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+                tl_odom_y = int((tl_odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                tr_map_x = self.semantic_tags.iloc[i, 10]
+                tr_map_y = self.semantic_tags.iloc[i, 11]
+                p_map = np.array([tr_odom_x, tr_odom_y, 0.0])
+                p_odom = p_map.dot(r_mo) + t_mo
+                tr_odom_x = p_odom[0]
+                tr_odom_y = p_odom[1]
+                tr_odom_x = int((tr_odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+                tr_odom_y = int((tr_odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                bl_map_x = self.semantic_tags.iloc[i, 12]
+                bl_map_y = self.semantic_tags.iloc[i, 13]
+                p_map = np.array([bl_odom_x, bl_odom_y, 0.0])
+                p_odom = p_map.dot(r_mo) + t_mo
+                bl_odom_x = p_odom[0]
+                bl_odom_y = p_odom[1]
+                bl_odom_x = int((bl_odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+                bl_odom_y = int((bl_odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                br_map_x = self.semantic_tags.iloc[i, 14]
+                br_map_y = self.semantic_tags.iloc[i, 15]
+                p_map = np.array([br_odom_x, br_odom_y, 0.0])
+                p_odom = p_map.dot(r_mo) + t_mo
+                br_odom_x = p_odom[0]
+                br_odom_y = p_odom[1]
+                br_odom_x = int((br_odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+                br_odom_y = int((br_odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                self.segments[max(0,tl_odom_y):min(self.costmap_size-1,bl_odom_y),max(0,tl_odom_x):min(self.costmap_size-1,tr_odom_x)] = self.semantic_tags.iloc[i, 0]
+        
+        for i in range(0, self.costmap_size):
+            for j in range(0, self.costmap_size):
+                if self.segments[i, j] >= 99:
+                    distances_to_centroids = []
+                    for k in range(0, N_centroids_all):
+                        dx = abs(j - centroids_static[k][0])
+                        dy = abs(i - centroids_static[k][1])
+                        distances_to_centroids.append(dx + dy)
+                    idx = distances_to_centroids.index(min(distances_to_centroids))
+                    self.segments[i, j] = values_static[idx]
+
+        if self.plot_segments == True:
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(self.segments.astype('float64'), aspect='auto')
+            '''
+            for i in range(0, N_centroids_in_lc):
+                ax.scatter(centroids_in_lc[i][0], centroids_in_lc[i][1], c='white', marker='o')   
+                ax.text(centroids_in_lc[i][0], centroids_in_lc[i][1], labels_in_lc[i], c='white')
+            '''
+            fig.savefig('segments.png', transparent=False)
+            fig.clf()
+        
+        end = time.time()
+        print('\nsemantic_segmentation_time = ', end-start)
+
+        return self.segments
+
     # Define a callback for the local costmap
     def local_costmap_callback(self, msg):
         #print('\nlocal_costmap_callback')
@@ -354,7 +561,8 @@ class lime_rt_sub(object):
         self.y_odom_index = round((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
 
         # find segments
-        self.segments = self.segment_local_costmap_semantic()
+        #self.segments = self.segment_local_costmap_semantic()
+        self.segments = self.segment_local_costmap_semantic_2()
 
         self.create_data()
 
@@ -485,6 +693,8 @@ class lime_rt_sub(object):
         print(self.semantic_global_map_origin_y)
 
 
+
+# ----------main-----------
 # main function
 # define lime_rt_sub object
 lime_rt_obj = lime_rt_sub()
