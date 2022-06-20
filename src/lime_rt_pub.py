@@ -777,6 +777,7 @@ class lime_rt_pub(object):
         self.pub_lime = rospy.Publisher("/lime_exp", Float32MultiArray, queue_size=10)
 
 
+# ----------main-----------
 # main function
 # define lime_rt_pub object
 lime_rt_pub_obj = lime_rt_pub()

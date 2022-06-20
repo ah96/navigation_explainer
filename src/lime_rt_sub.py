@@ -245,26 +245,30 @@ class lime_rt_sub(object):
     # Define a callback for the local plan
     def local_plan_callback(self, msg):
         #print('\nlocal_plan_callback')
+
+        try:        
+            self.local_plan_x_list = [] 
+            self.local_plan_y_list = [] 
+            self.local_plan_tmp = []
+
+            for i in range(0,len(msg.poses)):
+                self.local_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+
+                x_temp = int((msg.poses[i].pose.position.x - self.localCostmapOriginX) / self.localCostmapResolution)
+                y_temp = int((msg.poses[i].pose.position.y - self.localCostmapOriginY) / self.localCostmapResolution)
+                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                    self.local_plan_x_list.append(x_temp)
+                    self.local_plan_y_list.append(y_temp)
+
+            self.local_plan_empty = False
+
+            pd.DataFrame(self.local_plan_x_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_x_list.csv', index=False)#, header=False)
+            pd.DataFrame(self.local_plan_y_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_y_list.csv', index=False)#, header=False)
+            pd.DataFrame(self.local_plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_tmp.csv', index=False)#, header=False)
+            pd.DataFrame(self.odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/odom_tmp.csv', index=False)#, header=False)
         
-        self.local_plan_x_list = [] 
-        self.local_plan_y_list = [] 
-        self.local_plan_tmp = []
-
-        for i in range(0,len(msg.poses)):
-            self.local_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-
-            x_temp = int((msg.poses[i].pose.position.x - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((msg.poses[i].pose.position.y - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                self.local_plan_x_list.append(x_temp)
-                self.local_plan_y_list.append(y_temp)
-
-        self.local_plan_empty = False
-
-        pd.DataFrame(self.local_plan_x_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_x_list.csv', index=False)#, header=False)
-        pd.DataFrame(self.local_plan_y_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_y_list.csv', index=False)#, header=False)
-        pd.DataFrame(self.local_plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_tmp.csv', index=False)#, header=False)
-        pd.DataFrame(self.odom_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/odom_tmp.csv', index=False)#, header=False)
+        except:
+            pass
 
     # Define a callback for the footprint
     def footprint_callback(self, msg):
@@ -300,7 +304,7 @@ class lime_rt_sub(object):
         self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
 
 
-
+# ----------main-----------
 # main function
 # define lime_rt_sub object
 lime_rt_obj = lime_rt_sub()
