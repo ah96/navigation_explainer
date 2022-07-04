@@ -196,7 +196,6 @@ class ImageExplanation(object):
         self.gray_shade = 180
 
     def get_image_and_mask(self, label):
-        #print('get_image_and_mask starting')
 
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
@@ -340,63 +339,55 @@ class lime_rt_pub(object):
         self.publish_explanation_image = True
         self.publish_pointcloud = False
             
-    # load data from subscriber
+    # load lime_rt_sub data
     def load_data(self):
         print_data = False
         try:
             if os.path.getsize(self.file_path_1) == 0 or os.path.exists(self.file_path_1) == False:
                 return False
             self.footprint_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/footprint_tmp.csv')
-            #self.footprint_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/footprint_tmp.csv'))
             if print_data == True:
                 print('self.footprint_tmp.shape = ', self.footprint_tmp.shape)
             
             if os.path.getsize(self.file_path_2) == 0 or os.path.exists(self.file_path_2) == False:
                 return False
             self.plan_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/plan_tmp.csv')
-            #self.plan_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/plan_tmp.csv'))
             if print_data == True:
                 print('self.plan_tmp.shape = ', self.plan_tmp.shape)
             
             if os.path.getsize(self.file_path_3) == 0 or os.path.exists(self.file_path_3) == False:
                 return False
             self.global_plan_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/global_plan_tmp.csv')
-            #self.global_plan_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/global_plan_tmp.csv'))
             if print_data == True:
                 print('self.global_plan_tmp.shape = ', self.global_plan_tmp.shape)
             
             if os.path.getsize(self.file_path_4) == 0 or os.path.exists(self.file_path_4) == False:
                 return False
             self.costmap_info_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/costmap_info_tmp.csv')
-            #self.costmap_info_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/costmap_info_tmp.csv'))
             if print_data == True:
                 print('self.costmap_info_tmp.shape = ', self.costmap_info_tmp.shape)
             
             if os.path.getsize(self.file_path_5) == 0 or os.path.exists(self.file_path_5) == False:
                 return False
             self.amcl_pose_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/amcl_pose_tmp.csv')
-            #self.amcl_pose_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/amcl_pose_tmp.csv'))
             if print_data == True:
                 print('self.amcl_pose_tmp.shape = ', self.amcl_pose_tmp.shape)
             
             if os.path.getsize(self.file_path_6) == 0 or os.path.exists(self.file_path_6) == False:
                 return False
             self.tf_odom_map_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map_tmp.csv')
-            #self.tf_odom_map_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/tf_odom_map_tmp.csv'))
             if print_data == True:
                 print('self.tf_odom_map_tmp.shape = ', self.tf_odom_map_tmp.shape)
             
             if os.path.getsize(self.file_path_7) == 0 or os.path.exists(self.file_path_7) == False:
                 return False
             self.tf_map_odom_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom_tmp.csv')
-            #self.tf_map_odom_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/tf_map_odom_tmp.csv'))
             if print_data == True:
                 print('self.tf_map_odom_tmp.shape = ', self.tf_map_odom_tmp.shape)
             
             if os.path.getsize(self.file_path_8) == 0 or os.path.exists(self.file_path_8) == False:
                 return False
             self.odom_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/odom_tmp.csv')
-            #self.odom_tmp = np.array(pd.read_csv('~/amar_ws/lime_rt_data/odom_tmp.csv'))
             if print_data == True:
                 print('self.odom_tmp.shape = ', self.odom_tmp.shape)
 
@@ -415,7 +406,6 @@ class lime_rt_pub(object):
             if os.path.getsize(self.file_path_11) == 0 or os.path.exists(self.file_path_11) == False:
                 return False        
             self.local_plan_tmp_fixed = pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_tmp.csv')
-            #self.local_plan_tmp_fixed = np.array(pd.read_csv('~/amar_ws/lime_rt_data/local_plan_tmp.csv'))
             if print_data == True:
                 print('self.local_plan_tmp_fixed.shape = ', self.local_plan_tmp_fixed.shape)
             
@@ -424,10 +414,7 @@ class lime_rt_pub(object):
             self.segments = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/segments.csv'))
             if print_data == True:
                 print('self.segments.shape = ', self.segments.shape)
-            #self.segments_labels = np.unique(self.segments)
-            #print('segments_labels = ', self.segments_labels) 
                
-            
             if os.path.getsize(self.file_path_13) == 0 or os.path.exists(self.file_path_13) == False:
                 return False       
             self.data = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/data.csv'))
@@ -446,7 +433,7 @@ class lime_rt_pub(object):
             if print_data == True:
                 print('self.fudged_image.shape = ', self.fudged_image.shape)
 
-            # if anything is empty do not explain
+            # if anything is empty or not of the right shape do not explain
             if self.footprint_tmp.empty or self.plan_tmp.empty or self.global_plan_tmp.empty or self.costmap_info_tmp.empty or self.amcl_pose_tmp.empty or self.tf_odom_map_tmp.empty or self.tf_map_odom_tmp.empty or self.odom_tmp.empty or self.local_plan_tmp_fixed.empty:
                 return False
 
@@ -472,51 +459,47 @@ class lime_rt_pub(object):
     # save data for local planner
     def saveImageDataForLocalPlanner(self):
         # Saving data to .csv files for C++ node - local navigation planner
-        # Save footprint instance to a file
-        #self.footprint_tmp = pd.DataFrame(self.footprint_tmp)#.transpose()
-        self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+        
+        try:
+            # Save footprint instance to a file
+            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
-        # Save local plan instance to a file
-        #self.local_plan_tmp_fixed = pd.DataFrame(self.local_plan_tmp_fixed)#.transpose()
-        self.local_plan_tmp_fixed.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+            # Save local plan instance to a file
+            self.local_plan_tmp_fixed.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
-        # Save plan (from global planner) instance to a file
-        #self.plan_tmp = pd.DataFrame(self.plan_tmp)#.transpose()
-        self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+            # Save plan (from global planner) instance to a file
+            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
-        # Save global plan instance to a file
-        #self.global_plan_tmp = pd.DataFrame(self.global_plan_tmp)#.transpose()
-        self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
+            # Save global plan instance to a file
+            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
 
-        # Save costmap_info instance to file
-        #self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
-        self.costmap_info_tmp = self.costmap_info_tmp.transpose()
-        self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
+            # Save costmap_info instance to file
+            self.costmap_info_tmp = self.costmap_info_tmp.transpose()
+            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
-        # Save amcl_pose instance to file
-        #self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
-        self.amcl_pose_tmp = self.amcl_pose_tmp.transpose()
-        self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+            # Save amcl_pose instance to file
+            self.amcl_pose_tmp = self.amcl_pose_tmp.transpose()
+            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
-        # Save tf_odom_map instance to file
-        #self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-        self.tf_odom_map_tmp = self.tf_odom_map_tmp.transpose()
-        self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
+            # Save tf_odom_map instance to file
+            self.tf_odom_map_tmp = self.tf_odom_map_tmp.transpose()
+            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
 
-        # Save tf_map_odom instance to file
-        #self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-        self.tf_map_odom_tmp = self.tf_map_odom_tmp.transpose()
-        self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
+            # Save tf_map_odom instance to file
+            self.tf_map_odom_tmp = self.tf_map_odom_tmp.transpose()
+            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
 
-        # Save odometry instance to file
-        #self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
-        self.odom_tmp = self.odom_tmp.transpose()
-        self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+            # Save odometry instance to file
+            self.odom_tmp = self.odom_tmp.transpose()
+            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+
+        except:
+            return False
+
+        return True
 
     # call teb
     def create_labels(self, image, fudged_image, segments, classifier_fn, batch_size=10):
-        #print('data_labels starts')
-
         try:
             # call teb and get labels
             self.labels = []
@@ -548,10 +531,8 @@ class lime_rt_pub(object):
 
         return True    
 
-        # classifier function for lime image
+    # classifier function for lime image
     def classifier_fn(self, sampled_instance):
-        #print('\nclassifier_fn_image_lime started')
-
         # save perturbations for the local planner
         sampled_instance_shape_len = len(sampled_instance.shape)
         sample_size = 1 if sampled_instance_shape_len == 2 else sampled_instance.shape[0]
@@ -560,15 +541,15 @@ class lime_rt_pub(object):
             temp = np.delete(sampled_instance,2,3)
             temp = np.delete(temp,1,3)
             temp = temp.reshape(temp.shape[0]*160,160)
-            np.savetxt('/home/amar/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
         elif sampled_instance_shape_len == 3:
             temp = sampled_instance.reshape(sampled_instance.shape[0]*160,160)
-            np.savetxt('/home/amar/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
         elif sampled_instance_shape_len == 2:
-            np.savetxt('/home/amar/amar_ws/src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
+            np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
 
         # calling ROS C++ node
-        #print('\nstarting C++ node')
+        #print('\nC++ node started')
 
         # start perturbed_node_image ROS C++ node
         Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
@@ -583,13 +564,13 @@ class lime_rt_pub(object):
 
         # load local path planner's outputs
         # load command velocities - output from local planner
-        cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
+        cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
 
         # load local plans - output from local planner
-        local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
+        local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
 
         # load transformed global plan to /odom frame
-        transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
+        transformed_plan = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv')
         
         # fill the list of transformed plan coordinates
         self.transformed_plan_xs = []
@@ -621,7 +602,7 @@ class lime_rt_pub(object):
                         local_plan_xs.append(x_temp)
                         local_plan_ys.append(y_temp)
 
-            # find deviation as a sum of minimal point-to-point differences
+            # find deviation as a sum of minimal point-to-point differences (L2) differences between local and transformed (global) plan
             diff_x = 0
             diff_y = 0
             devs = []
@@ -645,21 +626,16 @@ class lime_rt_pub(object):
         # original_deviation for rotate_in_place = 307.4962940090125
 
         cmd_vel_perturb['deviate'] = local_plan_deviation
-        return np.array(cmd_vel_perturb.iloc[:, 3:])
         #return local_plan_deviation
+        return np.array(cmd_vel_perturb.iloc[:, 3:])
 
-    # explain
+    # explain function
     def explain(self):
-        #print('\nexplain!!!')
-
-        # try to load data
+        # try to load lime_rt_sub data
+        # if data not loaded do not explain
         if self.load_data() == False:
             #print('\nData not loaded!')
             return
-        # if data not loaded do not explain
-        else:
-            #print('\nData loaded!')
-            pass    
 
         # turn grayscale image to rgb image
         self.image_rgb = gray2rgb(self.image * 1.0)
@@ -669,10 +645,12 @@ class lime_rt_pub(object):
         self.localCostmapResolution = self.costmap_info_tmp.iloc[0]
 
         # save data for teb
-        self.saveImageDataForLocalPlanner()
+        if self.saveImageDataForLocalPlanner() == False:
+            #print('\nData not saved correctly!')
+            return
 
         # call teb
-        self.labels=(1,)
+        self.labels=(0,)
         self.top = self.labels
         if self.create_labels(self.image, self.fudged_image, self.segments, self.classifier_fn, batch_size=2048) == False:
             return
@@ -686,7 +664,7 @@ class lime_rt_pub(object):
             metric=distance_metric
         ).ravel()
 
-        # Explanation part
+        # Explanation variables
         top_labels=1 #10
         model_regressor = None
         num_features=100000
@@ -696,13 +674,10 @@ class lime_rt_pub(object):
             # find explanation
             ret_exp = ImageExplanation(self.image_rgb, self.segments)
             if top_labels:
-                #print('top_labels usao')
                 top = np.argsort(self.labels[0])[-top_labels:]
                 ret_exp.top_labels = list(top)
                 ret_exp.top_labels.reverse()
-            #print('labels =', self.labels)
             for label in top:
-                #print('label = ', label)
                 (ret_exp.intercept[label],
                     ret_exp.local_exp[label],
                     ret_exp.score[label],
@@ -728,15 +703,14 @@ class lime_rt_pub(object):
                     exp_with_centroids.data.append(segs_unique[exp[k][0]])
                     exp_with_centroids.data.append(exp[k][1]) 
                 exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
-                self.pub_lime.publish(exp_with_centroids) # N_segments * 2 (label, coefficient) + 1 (original_deviation)
+                self.pub_lime.publish(exp_with_centroids) # N_segments * (label, coefficient) + (original_deviation)
 
             if self.publish_explanation_image:
                 # publish explanation image
                 output[:,:,0] = np.flip(output[:,:,0], axis=1)
                 output[:,:,1] = np.flip(output[:,:,1], axis=1)
                 output[:,:,2] = np.flip(output[:,:,2], axis=1)
-                #print('\nBGR time = ', end_bgr - start_bgr)
-                output_cv = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3 - it seems so
+                output_cv = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3
                 self.pub_exp_image.publish(output_cv)
 
             if self.publish_pointcloud:
@@ -756,13 +730,12 @@ class lime_rt_pub(object):
                         pt = [x, y, z, rgb]
                         points.append(pt)
                 #points_end = time.time()
-                #print('\npoints_time = ', points_end - points_start)
+                #print('\npointcloud_points_time = ', points_end - points_start)
                 self.header.frame_id = 'odom'
                 pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
                 pc2.header.stamp = rospy.Time.now()
-                #transf = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
                 self.pub_exp_pointcloud.publish(pc2)
-                #rospy.sleep(1.0)
+                
         except:
             print('Exception - explanation is skipped!!!')
             return
@@ -774,7 +747,7 @@ class lime_rt_pub(object):
 
         self.pub_exp_pointcloud = rospy.Publisher("/local_explanation_layer", PointCloud2)
 
-        self.pub_lime = rospy.Publisher("/lime_exp", Float32MultiArray, queue_size=10)
+        self.pub_lime = rospy.Publisher("/lime_rt_exp", Float32MultiArray, queue_size=10)
 
 
 # ----------main-----------

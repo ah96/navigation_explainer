@@ -5,26 +5,19 @@ from geometry_msgs.msg import PolygonStamped, PoseWithCovarianceStamped
 import rospy
 import numpy as np
 from matplotlib import pyplot as plt
-#import time
 import pandas as pd
 from skimage.segmentation import slic
 from skimage.color import gray2rgb
-#from scipy.spatial.transform import Rotation as R
-#import copy
 import tf2_ros
-#import math
-#from skimage.measure import regionprops
 import os
 
-
+# data received from each subscriber is saved to .csv file
 class lime_rt_sub(object):
     # Constructor
     def __init__(self):
         # plans' variables
         self.global_plan_xs = []
         self.global_plan_ys = []
-        self.transformed_plan_xs = [] 
-        self.transformed_plan_ys = []
         self.local_plan_x_list = [] 
         self.local_plan_y_list = []
         self.local_plan_tmp = [] 
@@ -76,13 +69,10 @@ class lime_rt_sub(object):
         except FileExistsError:
             pass
 
-    # LC segmentation algorithm
+    # LC segmentation algorithm based on slic
     def segment_local_costmap(self, image):
-        #print('segmentation algorithm')
-
         # find image_rgb
         image_rgb = gray2rgb(self.image)
-        #image = np.stack(3 * (image,), axis=-1)
 
         # Find segments_slic
         segments_slic = slic(image_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
@@ -102,17 +92,13 @@ class lime_rt_sub(object):
         for i in np.unique(segments_slic):
             temp = image[segments_slic == i]
             count_of_99_s = np.count_nonzero(temp == 99)
-            #print('count: ', count)
-            #print('temp: ', temp)
-            #print('len(temp): ', temp.shape[0])
             if np.all(image[segments_slic == i] == 99) or count_of_99_s > 0.95 * temp.shape[0]:
-                #print('obstacle')
                 self.segments[segments_slic == i] = ctr
                 ctr = ctr + 1
                 num_of_obstacles += 1
         #print('num_of_obstacles: ', num_of_obstacles)        
 
-
+        # plot segments
         if self.plot_segments:
             fig = plt.figure(frameon=False)
             w = 1.6 * 3
@@ -140,7 +126,7 @@ class lime_rt_sub(object):
 
     # Create data--perturbations based on segments
     def create_data(self):
-        # create data -- perturbations -- N+1 perturbations
+        # create N+1 perturbations for N segments--superpixels
         self.n_features = np.unique(self.segments).shape[0]
         self.num_samples = self.n_features
         lst = [[1]*self.n_features]
@@ -151,18 +137,11 @@ class lime_rt_sub(object):
 
     # Define a callback for the local costmap
     def local_costmap_callback(self, msg):
-        #print('\nlocal_costmap_callback')
-
         # if you can get tf proceed
         try:
             # catch transform from /map to /odom and vice versa
             transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
-            #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
-            #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
-            #r_ = np.asarray(r.as_matrix())
-
             transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
-
             self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
             self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
         except:
@@ -205,6 +184,7 @@ class lime_rt_sub(object):
 
         self.local_costmap_empty = False
 
+        # save data to the .csv files
         pd.DataFrame(self.costmap_info_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/costmap_info_tmp.csv', index=False)#, header=False)
         pd.DataFrame(self.image).to_csv(self.dirCurr + '/' + self.dirName + '/image.csv', index=False) #, header=False)
         pd.DataFrame(self.fudged_image).to_csv(self.dirCurr + '/' + self.dirName + '/fudged_image.csv', index=False)#, header=False)
@@ -213,29 +193,16 @@ class lime_rt_sub(object):
         
     # Define a callback for the global plan
     def global_plan_callback(self, msg):
-        #print('\nglobal_plan_callback!')
-
         self.global_plan_xs = [] 
         self.global_plan_ys = []
         self.global_plan_tmp = []
         self.plan_tmp = []
-        #self.transformed_plan_xs = []
-        #self.transformed_plan_ys = []
 
         for i in range(0,len(msg.poses)):
             self.global_plan_xs.append(msg.poses[i].pose.position.x) 
             self.global_plan_ys.append(msg.poses[i].pose.position.y)
             self.global_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
             self.plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-            '''
-            p = np.array([self.global_plan_xs[-1], self.global_plan_ys[-1], 0.0])
-            pnew = p.dot(r_) + t
-            x_temp = round((pnew[0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = round((pnew[1] - self.localCostmapOriginY) / self.localCostmapResolution)
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                self.transformed_plan_xs.append(x_temp)
-                self.transformed_plan_ys.append(y_temp)
-            '''
 
         self.global_plan_empty = False
 
@@ -244,8 +211,6 @@ class lime_rt_sub(object):
         
     # Define a callback for the local plan
     def local_plan_callback(self, msg):
-        #print('\nlocal_plan_callback')
-
         try:        
             self.local_plan_x_list = [] 
             self.local_plan_y_list = [] 
@@ -262,6 +227,7 @@ class lime_rt_sub(object):
 
             self.local_plan_empty = False
 
+            # save data to the .csv files
             pd.DataFrame(self.local_plan_x_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_x_list.csv', index=False)#, header=False)
             pd.DataFrame(self.local_plan_y_list).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_y_list.csv', index=False)#, header=False)
             pd.DataFrame(self.local_plan_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/local_plan_tmp.csv', index=False)#, header=False)
@@ -278,8 +244,8 @@ class lime_rt_sub(object):
         pd.DataFrame(self.footprint_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/footprint_tmp.csv', index=False)#, header=False)
 
     # Define a callback for the odometry
+    # Because odometry is received very often it is saved in the "local_plan_callback' function
     def odom_callback(self, msg):
-        #print('odom_callback!!!')
         self.odom_x = msg.pose.pose.position.x
         self.odom_y = msg.pose.pose.position.y
         self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
@@ -314,7 +280,7 @@ lime_rt_obj.main_()
 # Initialize the ROS Node named 'lime_rt_sub', allow multiple nodes to be run with this name
 rospy.init_node('lime_rt_sub', anonymous=True)
 
-# declare transformation buffer
+# declare tf2 transformation buffer
 lime_rt_obj.tfBuffer = tf2_ros.Buffer()
 lime_rt_obj.tf_listener = tf2_ros.TransformListener(lime_rt_obj.tfBuffer)
 
