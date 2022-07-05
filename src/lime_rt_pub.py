@@ -193,7 +193,7 @@ class ImageExplanation(object):
 
         self.val_low = 0.0
         self.val_high = 255.0
-        self.gray_shade = 180
+        self.free_space_shade = 180
 
     def get_image_and_mask(self, label):
 
@@ -212,7 +212,7 @@ class ImageExplanation(object):
         max_w = max(w_s)
         if max_w == 0:
             self.all_weights_zero = True
-            temp[self.image == 0] = self.gray_shade
+            temp[self.image == 0] = self.free_space_shade
             temp[self.image != 0] = 0.0
             return temp, exp
 
@@ -235,9 +235,9 @@ class ImageExplanation(object):
             if f == 0:
                 #print('free_space, (f, w) = ', (f, w))
                 if self.color_free_space == False:
-                    temp[self.segments == f, 0] = self.gray_shade
-                    temp[self.segments == f, 1] = self.gray_shade
-                    temp[self.segments == f, 2] = self.gray_shade
+                    temp[self.segments == f, 0] = self.free_space_shade
+                    temp[self.segments == f, 1] = self.free_space_shade
+                    temp[self.segments == f, 2] = self.free_space_shade
             # obstacle
             else:
                 if self.color_free_space == False:

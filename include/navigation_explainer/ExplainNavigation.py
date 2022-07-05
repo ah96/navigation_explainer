@@ -77,6 +77,8 @@ class ExplainRobotNavigation:
         self.output_class_name = output_class_name
         self.plot = plot
 
+        self.dirCurr = os.getcwd()
+
         if self.explanation_algorithm == 'LIME':
             # manually modified LIME image
             if self.explanation_mode == 'image':
@@ -117,6 +119,7 @@ class ExplainRobotNavigation:
         
         print('\nConstructor ending')
 
+    # SINGLE EXPLANATION
     # explain instance
     def explain_instance(self, expID):
         print('\nexplain_instance starting')
@@ -124,19 +127,13 @@ class ExplainRobotNavigation:
         self.expID = expID
         self.index = self.expID
 
-        self.manual_instance_loading = False
-        
-        self.case = 3
-        self.eps = False
-        self.semantic_seg = False
-        self.manually_make_semantic_map = False
-        self.test_segmentation = False
+        self.manual_instance_loading = False        
 
         if self.explanation_algorithm == 'LIME':    
             # if explanation_mode is 'image'
             if self.explanation_mode == 'image':
                 import time
-                before_explain_instance_start = time.time()
+                #before_explain_instance_start = time.time()
 
                 if self.manual_instance_loading == False:
                     # Get local costmap
@@ -146,16 +143,15 @@ class ExplainRobotNavigation:
                     # Make image a np.array deepcopy of local_costmap_original
                     self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
-                    inflated_to_static_start = time.time()
+                    #inflated_to_static_start = time.time()
                     # Turn inflated area to free space and 100s to 99s
                     self.inflatedToStatic()
-                    inflated_to_static_end = time.time()
-                    inflated_to_static_time = inflated_to_static_end - inflated_to_static_start
-                    print('\ninflated_to_static_time: ', inflated_to_static_end - inflated_to_static_start)
+                    #inflated_to_static_end = time.time()
+                    #print('\ninflated_to_static_time: ', inflated_to_static_end - inflated_to_static_start)
 
                     # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
                     self.image = self.image * 1.0
-                    print('self.image.size = ', self.image.size)
+                    #print('self.image.size = ', self.image.size)
 
                 elif self.manual_instance_loading == True:
                     # Load costmap
@@ -189,27 +185,23 @@ class ExplainRobotNavigation:
                     # Load odometry
                     self.odom_tmp = pd.read_csv('odom_new.csv')
                 
-                save_data_for_local_planner_start = time.time()
+                #save_data_for_local_planner_start = time.time()
                 # Saving data to .csv files for C++ node - local navigation planner
                 self.SaveImageDataForLocalPlanner()
-                save_data_for_local_planner_end = time.time()
-                save_data_for_local_planner_time = save_data_for_local_planner_end - save_data_for_local_planner_start
+                #save_data_for_local_planner_end = time.time()
+                #save_data_for_local_planner_time = save_data_for_local_planner_end - save_data_for_local_planner_start
                 
                 # Saving important data to class variables
                 self.saveImportantData2ClassVars()
 
                 # Choose semantic or standard segmentation
-                if self.semantic_seg == True:
-                    segm_fn = 'semantic_segmentation'
-                elif self.semantic_seg == False:
-                    segm_fn = 'custom_segmentation'
+                segm_fn = 'custom_segmentation'
 
-                before_explain_instance_end = time.time()
-                before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
+                #before_explain_instance_end = time.time()
+                #before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
+                #print('\nsave_data_for_local_planner_time / before_explain_instance_time (%) = ', 100 * save_data_for_local_planner_time / before_explain_instance_time)
 
-                print('\nsave_data_for_local_planner_time / before_explain_instance_time (%) = ', 100 * save_data_for_local_planner_time / before_explain_instance_time)
-
-                # get data needed for sm7 segmentation method
+                # get data needed for a special segmentation method
                 #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
                 devDistance_x = 0 
                 sum_x = 0
@@ -217,82 +209,28 @@ class ExplainRobotNavigation:
                 sum_y = 0
                 devDistance = 0
 
-                if self.manually_make_semantic_map == True:
-                    # manually make semantic map
-                    self.costmap2Map()
-                else:
-                    # test segmentation
-                    if self.test_segmentation == True:
-                        self.testSegmentation(self.expID)
-                    else:
-                        # explain with LIME    
-                        import time
-                        real_explanation_start = time.time()
-                        self.explanation, self.segments = self.explainer.explain_instance(self.image, self.classifier_fn_image_lime, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                                                                    self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
-                                                                                    self.plan_x_list, self.plan_y_list,
-                                                                                    hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
-                        real_explanation_end = time.time()
-                        real_explanation_time = real_explanation_end - real_explanation_start
-                        print('\nReal (pure) explanation time = ', real_explanation_time)
-                        
-                        # get explanation image
-                        self.temp_img, self.exp = self.explanation.get_image_and_mask(label=0)
-                        print('self.exp = ', self.exp)
+                # explain with LIME    
+                import time
+                #real_explanation_start = time.time()
+                self.explanation, self.segments = self.explainer.explain_instance(self.image, self.classifier_fn_image_lime, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                                                            self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
+                                                                            self.plan_x_list, self.plan_y_list,
+                                                                            hide_color=perturb_hide_color_value, batch_size=2048, segmentation_fn=segm_fn, top_labels=10)
+                #real_explanation_end = time.time()
+                #real_explanation_time = real_explanation_end - real_explanation_start
+                #print('\nReal (pure) explanation time = ', real_explanation_time)
 
-                        # Qualitative Spatial Reasoning
-                        #self.QSR()            
-                        
-                        if self.plot == True:
-                            plotting_time_start = time.time()
-                            self.plotExplanation()
-                            plotting_time_end = time.time()
-                            plotting_time_start = plotting_time_end - plotting_time_start
-                            print('\nPlotting time = ', plotting_time_start)
-                        else:
-                            path_core = os.getcwd()
-                            # plot explanation
-                            fig = plt.figure(frameon=True)
-                            w = 1.6
-                            h = 1.6
-                            fig.set_size_inches(w, h)
-                            ax = plt.Axes(fig, [0., 0., 1., 1.])
-                            ax.set_axis_off()
-                            fig.add_axes(ax)
-                            
-                            ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
-                            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-                            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+                # get explanation image
+                self.temp_img, self.exp = self.explanation.get_image_and_mask(label=0)
+                #print('self.exp = ', self.exp)
 
-                            ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
-                            fig.savefig(path_core + '/explanation.png', transparent=False)
-                            fig.clf()
-
-                            gray_shade = 180
-                            white_shade = 255
-                            image = gray2rgb(self.image)
-                            for i in range(0, image.shape[0]):
-                                for j in range(0, image.shape[1]):
-                                    if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
-                                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
-                                    elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
-                                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade    
-                            
-                            # plot costmap with plans
-                            fig = plt.figure(frameon=False)
-                            w = 1.6
-                            h = 1.6
-                            fig.set_size_inches(w, h)
-                            ax = plt.Axes(fig, [0., 0., 1., 1.])
-                            ax.set_axis_off()
-                            fig.add_axes(ax)
-                            ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
-                            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-                            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-                            ax.imshow(image.astype(np.uint8), aspect='auto')
-                            fig.savefig(path_core + '/input.png')
-                            fig.clf()
-                                            
+                #self.plot = True
+                if self.plot == True:
+                    #plotting_time_start = time.time()
+                    self.plotExplanation()
+                    #plotting_time_end = time.time()
+                    #plotting_time_start = plotting_time_end - plotting_time_start
+                    #print('\nPlotting time = ', plotting_time_start)
 
             elif self.explanation_mode == 'tabular':
                 # search for instance queue index (original instance queue name in almost (haman) input data frames)
@@ -462,642 +400,6 @@ class ExplainRobotNavigation:
 
         print('\nexplain_instance ending')
 
-    def QSR(self):
-        path_core = os.getcwd()
-
-        # QSR - qualitative spatial reasoning
-        print('\nQSR function beginning!!!')
-
-        # relatum = robot or a salient object or a centroid of a group of objects
-        relatum = copy.deepcopy([self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom])
-        relatum_orient = self.yaw_odom
-        #print('\nrelatum = ', relatum)
-        
-        # referent = object
-        referent = copy.deepcopy(relatum)
-        #print('\nreferent = ', referent)
-        
-        # origin = human or robot
-        origin = copy.deepcopy(relatum)
-        different = True
-        if different == True:
-            origin[0] /= 2
-            origin[1] /= 3
-        origin_orient = self.yaw_odom
-        #print('\norigin = ', origin)
-        
-        height = self.image.shape[0]
-        #print('\nheight = ', height)
-        width = self.image.shape[1]
-        #print('\nwidth = ', width)
-
-        R = math.sqrt((relatum[0] - origin[0])**2+(relatum[1] - origin[1])**2)
-
-        PI = math.pi
-
-        '''
-        # determine the reference system based on the global plan direction
-        d_x = self.plan_x_list[-1] - self.localCostmapIndex_x_odom
-        if d_x == 0:
-            d_x = 1
-        d_y = -self.plan_y_list[-1] + self.localCostmapIndex_y_odom 
-        angle_gp = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
-        angle_gp -= PI / 2
-        #print('angle_gp (in rad) = ', angle_gp)
-        #print('angle_gp (in deg) = ', angle_gp * 180 / PI)
-        '''
-
-        '''
-        # determine the reference system based on the local plan direction
-        d_x = self.local_plan_x_list[14] - self.localCostmapIndex_x_odom
-        if d_x == 0:
-            d_x = 1
-        d_y = -self.local_plan_y_list[14] + self.localCostmapIndex_y_odom 
-        #k = d_y / d_x
-        #print('\nabs(k) = ', abs(k))
-        angle_lp = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
-        print('angle_lp (in rad) = ', angle_lp)
-        print('angle_lp (in deg) = ', angle_lp * 180 / PI)
-        angle_lp -= PI / 2
-        '''
-
-        qsr_choice = 4
-
-        if qsr_choice == 0:
-            # left -- right dichotomy in a relative refence system
-            # from 'moratz2008qualitative'
-            # used for getting semantic costmap
-            tpcc_dict = {
-                'left': 0,
-                'right': 1
-            }
-
-        elif qsr_choice == 1:
-            # single cross calculus from 'moratz2008qualitative'
-            # used for getting semantic costmap
-            tpcc_dict = {
-                'left/front': 0,
-                'right/front': 1,
-                'left/back': 2,
-                'right/back': 3
-            }
-
-        elif qsr_choice == 2:
-            # TPCC reference system
-            # my modified version from 'moratz2008qualitative'
-            # used for getting semantic costmap
-            if R == 0:
-                tpcc_dict = {
-                    'sb': 0,
-                    'lb': 1,
-                    'bl': 2,
-                    'sl': 3,
-                    'fl': 4,
-                    'lf': 5,
-                    'sf': 6,
-                    'rf': 7,
-                    'fr': 8,
-                    'sr': 9,
-                    'br': 10,
-                    'rb': 11
-                }
-            else:
-                tpcc_dict = {
-                    'csb': 0,
-                    'clb': 1,
-                    'cbl': 2,
-                    'csl': 3,
-                    'cfl': 4,
-                    'clf': 5,
-                    'csf': 6,
-                    'crf': 7,
-                    'cfr': 8,
-                    'csr': 9,
-                    'cbr': 10,
-                    'crb': 11,
-                    'dsb': 12,
-                    'dlb': 13,
-                    'dbl': 14,
-                    'dsl': 15,
-                    'dfl': 16,
-                    'dlf': 17,
-                    'dsf': 18,
-                    'drf': 19,
-                    'dfr': 20,
-                    'dsr': 21,
-                    'dbr': 22,
-                    'drb': 23
-                }
-
-
-        elif qsr_choice == 3:
-            # A model [(Herrmann, 1990),(Hernandez, 1994)] from 'moratz2002spatial'
-            # used for getting semantic costmap
-            tpcc_dict = {
-                'front': 0,
-                'left': 1,
-                'back': 2,
-                'right': 3
-            }
-
-        elif qsr_choice == 4:
-            # Model for combined expressions from 'moratz2002spatial'
-            # used for getting semantic costmap
-            tpcc_dict = {
-                'left-front': 0,
-                'left-back': 1,
-                'right-front': 2,
-                'right-back': 3,
-                'straight-front': 4,
-                'exactly-left': 5,
-                'straight-back': 6,
-                'exactly-right': 7
-            }    
-
-        # used for deriving NLP annotations
-        tpcc_dict_inv = {v: k for k, v in tpcc_dict.items()}
-
-        # determine the reference system based on relatum and origin
-        if origin == relatum:
-            # reference direction == robot's orientation
-            angle_ref = relatum_orient
-            print('\nangle_ref (in rad) = ', angle_ref)
-            print('angle_ref (in deg) = ', angle_ref * 180 / PI)
-
-        elif origin != relatum:
-            # reference direction == direction between relatum and origin orientations
-            d_x = relatum[0] - origin[0]
-            if d_x == 0:
-                d_x = 1
-            d_y = -relatum[1] + origin[1]
-            k = d_y / d_x
-            print('\nabs(k) = ', abs(k))
-            angle_ref = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
-            print('angle_ref (in rad) = ', angle_ref)
-            print('angle_ref (in deg) = ', angle_ref * 180 / PI)
-
-        qsr_map = np.zeros(self.image.shape, np.uint8)
-
-        for i in range(0, height):
-            for j in range(0, width):
-                d_x = j - relatum[0]
-                d_y = -1 * (i - relatum[0])
-
-                r = math.sqrt(d_x**2+d_y**2)
-
-                #print('\n(i, j) = ', (i, j))
-                
-                #k = (-plan_y_list[-1] + y_odom) / (d_x)
-                #k = d_y / max(1, d_x)
-                #print('abs(k) = ', abs(k))
-                # angle in radians
-                angle = np.arctan2(d_y, np.sign(d_x) * max(1, abs(d_x)))
-                #print('angle (in degrees) = ', angle * 180 / math.pi)
-                angle -= angle_ref
-                if angle > PI:
-                    angle -= 2*PI
-                elif angle < -PI:
-                    angle += 2*PI        
-
-                value = ''
-
-                #print('angle = ', angle)
-
-                if qsr_choice == 0:
-                    if -PI <= angle < 0:
-                        value += 'right'
-                    else:
-                        value += 'left'
-
-                elif qsr_choice == 1:
-                    if 0 <= angle < PI/2:
-                        value += 'left/front'
-                    elif PI/2 <= angle <= PI:
-                        value += 'left/back'
-                    elif -PI/2 <= angle < 0:
-                        value += 'right/front'
-                    elif -PI <= angle < -PI/2:
-                        value += 'right/back'
-
-                elif qsr_choice == 2:
-                    if r <= R:
-                        value += 'c'
-                    else: 
-                        value += 'd'    
-
-                    if angle == 0:
-                        value += 'sb'
-                    elif 0 < angle <= PI/4:
-                        value += 'lb'
-                    elif PI/4 < angle < PI/2:
-                        value += 'bl'
-                    elif angle == PI/2:
-                        value += 'sl'
-                    elif PI/2 < angle < 3*PI/4:
-                        value += 'fl'
-                    elif 3*PI/4 <= angle < PI:
-                        value += 'lf'
-                    elif angle == PI or angle == -PI:
-                        value += 'sf'
-                    elif -PI < angle <= -3*PI/4:
-                        value += 'rf'
-                    elif -3*PI/4 < angle < -PI/2:
-                        value += 'fr'
-                    elif angle == -PI/2:
-                        value += 'sr'
-                    elif -PI/2 < angle < -PI/4:
-                        value += 'br'        
-                    elif -PI/4 <= angle < 0:
-                        value += 'rb'
-
-                elif qsr_choice == 3:
-                    if -PI/4 <= angle <= PI/4:
-                        value += 'front'
-                    elif PI/4 < angle < 3*PI/4:
-                        value += 'left'
-                    elif 3*PI/4 <= angle or angle <= -3*PI/4:
-                        value += 'back'
-                    elif -3*PI/4 < angle < -PI/4:
-                        value += 'right'  
-
-                elif qsr_choice == 4:
-                    if angle == 0:
-                        value += 'straight-front'
-                    elif 0 < angle < PI/2:
-                        value += 'left-front'
-                    elif angle == PI/2:
-                        value += 'exactly-left'
-                    elif PI/2 < angle < PI:
-                        value += 'left-back'
-                    elif angle == PI or angle == -PI:
-                        value += 'straight-back'
-                    elif -PI < angle < -PI/2:
-                        value += 'right-back'
-                    elif angle == -PI/2:
-                        value += 'exactly-right'
-                    elif -PI/2 < angle < 0:
-                        value += 'right-front'
-
-                qsr_map[i, j] = tpcc_dict[value]
-
-        # qsr_map plotting
-        fig = plt.figure(frameon=False)
-        w = 1.6 * 3
-        h = 1.6 * 3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1.0, 1.0])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-
-        yaw_x = math.cos(angle_ref)
-        yaw_y = math.sin(angle_ref)
-        plt.quiver(relatum[0], relatum[1], yaw_x, yaw_y, color='white')
-
-        plt.plot(relatum[0], relatum[1], 'x', color='blue')
-        plt.plot(origin[0], origin[1], 'x', color='red')
-
-        qsr_map += 1
-        regions = regionprops(qsr_map.astype(int))
-        labels = []
-        for props in regions:
-            labels.append(props.label)
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            ax.scatter(cy, cx, c='white', marker='o')   
-            # printing/plotting explanation weights
-            ax.text(cy, cx, tpcc_dict_inv[v-1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
-        qsr_map -= 1
-
-        ax.imshow(qsr_map.astype('float64'), aspect='auto')
-        fig.savefig('qsr_map.png', transparent=False)
-        fig.clf()
-
-        
-        # plot segments with weights
-        self.segments += 1
-        regions = regionprops(self.segments.astype(int))
-        labels = []
-        for props in regions:
-            labels.append(props.label)
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)    
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            if v == 1:
-                i = i + 1
-                continue
-            cx, cy = props.centroid  # centroid coordinates
-            ax.scatter(cy, cx, c='white', marker='o')   
-            # printing/plotting explanation weights
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == v - 1:
-                    ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='black')  # str(round(self.exp[j][1],4)) #str(v))
-                    break
-            i = i + 1
-        # Save segments with nice numbering as a picture
-        ax.imshow(self.segments, aspect='auto')
-        fig.savefig(path_core + '/labeled_segments.png')
-        fig.clf()
-        #self.segments -= 1
-
-        # reasoning part
-        print('self.exp = ', self.exp)
-        dict_len = len(tpcc_dict)
-        exp_counter_list = []
-        for i in range(0, len(self.exp) - 1):
-            exp_counter_list.append([0]*dict_len)
-        for k in range(0, len(self.exp) - 1):
-            e = self.exp[k]
-            print('\ne = ', e)
-            print('e[0] = ', e[0])
-            print('e[1] = ', e[1])
-            print('k = ', k)
-            for i in range(0, height):
-                for j in range(0, width):
-                    if e[0] == self.segments[i, j]:
-                        exp_counter_list[k][qsr_map[i, j]] += 1    
-        print('\nexp_counter_list = ', exp_counter_list)
-
-        referent = [0,0] # ovo srediti sa centroidom prepreke 
-        dodatak = ''
-        if relatum == origin == referent:
-            dodatak = 'tri,'
-        elif relatum == origin:
-            dodatak = 'dou,'
-        elif relatum == referent:
-            dodatak = 'sam,'
-
-        # TCPP reasoning
-        print('\n')
-        utterances = []
-        for k in range(0, len(self.exp) - 1):
-            utterances_local = []
-            for i in range(0, dict_len):
-                if exp_counter_list[k][i] > 0:
-                    utterances_local.append(tpcc_dict_inv[i])
-            utterances.append(utterances_local)
-            utterances_string = ','.join(utterances_local)
-            print('Robot (' + dodatak + utterances_string + ') segment_' + str(k+1))
-        print('utterances = ', utterances)
-
-        w_sum = 0
-        print('\n')
-        for k in range(0, len(self.exp) - 1):
-            w_sum += abs(self.exp[k][1])    
-        for k in range(0, len(self.exp) - 1):
-            utterances_sum = sum(exp_counter_list[k])
-            utt_nums = []
-            for i in range(0, dict_len):
-                if exp_counter_list[k][i] > 0:
-                    utt_nums.append(exp_counter_list[k][i])
-            utt_string = ''
-            for i in range(0, len(utterances[k])):
-                utt_string += utterances[k][i] + '-' + str(round(100*utt_nums[i]/utterances_sum,2)) + '%'
-                if i != len(utterances[k]) - 1:
-                    utt_string += ','
-            print('Robot (' + dodatak + utt_string + ') segment_' + str(k+1) + ' with weight=' + str(round(self.exp[k][1],2)) + ' and relative absolute (weight) importance ' + str(round(100*abs(self.exp[k][1])/w_sum,2)) + '%')        
-
-        # semantic tags
-        semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
-        costmap_segmented = np.array(pd.read_csv('~/amar_ws/costmap_segmented.csv'))
-        costmap_static_new = np.array(pd.read_csv('~/amar_ws/costmap_static_new.csv'))
-
-        print('\nsemantic_tags = ', semantic_tags)
-        print('\n')
-
-        # finding unknown obstacles
-        unknown_obstacles_vals = []
-        segments = copy.deepcopy(self.segments)
-        #segments -= 1
-        for val in np.unique(segments):
-            # static known obstacle
-            if np.all(self.image[segments == val] == 99) == True and np.all(costmap_static_new[segments == val] == 0) == True:
-
-                unknown_obstacles_vals.append(val)
-                #print('val = ', val)
-                
-                '''
-                semantic_num = np.bincount(costmap_segmented[segments == val]).argmax()
-                
-                if semantic_num >= 90:
-                    pass
-                else:
-                    unknown_obstacles_vals.append(val)
-                '''
-            # free space    
-            else:
-                pass
-
-        # plot semantic map
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-
-        for i in range(0, len(unknown_obstacles_vals)):
-            x_s = []
-            y_s = []
-            color = []
-            for j in range(0, self.segments.shape[0]):
-                for k in range(0, self.segments.shape[1]):
-                    if self.segments[j, k] == unknown_obstacles_vals[i]:
-                        x_s.append(k)
-                        y_s.append(j)
-                        R = self.temp_img[x_s[0], y_s[0]][0] / 255
-                        G = self.temp_img[x_s[0], y_s[0]][1] / 255
-                        B = self.temp_img[x_s[0], y_s[0]][2] / 255
-                        color.append(np.array([R, G, B]))
-
-            x_center = sum(x_s) / len(x_s)
-            y_center = sum(y_s) / len(y_s)
-            deltas = []
-
-            for j in range(0, len(x_s)):
-                delta = (x_s[j] - x_center)**2 + (y_s[j] - y_center)**2
-                delta = math.sqrt(delta)
-                deltas.append(delta)
-
-            max_delta = max(deltas)
-
-            points_to_plot_x = []
-            points_to_plot_y = []    
-
-            for j in range(0, len(x_s)):
-                if deltas[j] >= 0.8 * max_delta:
-                    points_to_plot_x.append(x_s[j])
-                    points_to_plot_y.append(y_s[j])
-
-            ax.scatter(points_to_plot_x, points_to_plot_y, c='yellow', marker='.')
-            for j in range(0, len(self.exp)):
-                if self.exp[j][0] == unknown_obstacles_vals[i]:
-                    print('Unknown obstacle ' + str(i+1) + ' has a coefficient ' + str(round(self.exp[j][1], 4)))
-                    
-                    if self.case == 1:
-                        # case 1
-                        ax.text(x_center + 2, y_center - 4, 'Unknown obstacle ' + str(i+1), c='white')
-                    
-                    elif self.case == 2:
-                        # case 2
-                        if i == 1:
-                            ax.text(x_center, y_center-3, 'Unknown obstacle ' + str(i), c='white')
-
-                    elif self.case == 3:
-                        # case 3
-                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
-
-                    else:
-                        ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
-
-                    break
-                
-
-        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
-        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='purple', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-
-        regions = regionprops(np.array(costmap_segmented).astype(int))
-        
-        #'''
-        labels = []
-        for props in regions:
-            labels.append(props.label)
-        #print('labels_semantic: ', labels)
-        #'''    
-        i = 0
-        for props in regions:
-            v = props.label  # value of label
-            cx, cy = props.centroid  # centroid coordinates
-            #ax.scatter(cy, cx, c='white', marker='o')   
-            # printing/plotting explanation weights
-            for j in range(0, len(semantic_tags)):
-                if semantic_tags.iloc[j, 0] == v:
-                    if self.case == 3:
-                        # case 3
-                        if semantic_tags.iloc[j, 1] == 'lab south':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                            ax.text(cy - 10, cx + 5, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                            ax.text(cy, cx + 12, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab north':    
-                            ax.text(cy - 20, cx - 10, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab east':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall I':    
-                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall II':    
-                            ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall III':    
-                            ax.text(cy - 3, cx + 5, semantic_tags.iloc[j, 1], c='white')
-
-                    elif self.case == 2:
-                        # case 2
-                        if semantic_tags.iloc[j, 1] == 'lab south':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                            ax.text(cy-15, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab north':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab east':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall I':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall II':    
-                            ax.text(cy-8, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall III':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-
-                    elif self.case == 1:
-                        # case 1
-                        if semantic_tags.iloc[j, 1] == 'lab south':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab north':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'lab east':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall I':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall II':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                        elif semantic_tags.iloc[j, 1] == 'wall III':    
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')    
-
-                    else:
-                        ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
-
-                    break
-            i = i + 1
-
-        marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
-
-        ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
-        fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
-
-        for i in range(0, semantic_tags.shape[0]):
-            segments_label = np.unique(self.segments[costmap_segmented == semantic_tags.iloc[i, 0]])
-            
-            #if len(segments_label) == 1 and segments_label == [0]:
-            #    continue
-            if 0 in segments_label:
-                continue
-
-            '''
-            print('\n')
-            print('i = ', i)
-            print('segments_label: ', segments_label)
-            print('semantic_tags.iloc[i, 1]: ', semantic_tags.iloc[i, 1])
-            print('semantic_tags.iloc[i, 0]: ', semantic_tags.iloc[i, 0])
-            '''
-            
-            weights_unique = []
-            for label in segments_label:
-                #if label in unknown_obstacles_vals:
-                    #print('label pass: ', label)
-                #    continue
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == label:
-                        rounded = str(round(self.exp[j][1], 4))
-                        if rounded not in weights_unique:
-                            '''
-                            print('label:', label)
-                            print('rounded: ', rounded)
-                            print('weights_unique: ', weights_unique)
-                            '''
-                            weights_unique.append(rounded)        
-                        break
-            #print('weights_unique: ', weights_unique)
-        
-            if len(weights_unique) == 1:        
-                print(semantic_tags.iloc[i, 1] + " has a coefficient " + weights_unique[0])
-            else:
-                weights_string = ""
-                for j in range(0, len(weights_unique) - 1):
-                    weights_string += weights_unique[j] + ", "
-                if len(weights_unique) > 0:    
-                    weights_string += weights_unique[-1] + " "    
-                    print(semantic_tags.iloc[i, 1] + " segments have coefficients " + weights_string)
-        
-        print('\nQSR function ending!!!')
-
-        return 0
-
     # save data for local planner in explanation with image
     def SaveImageDataForLocalPlanner(self):
         if self.manual_instance_loading == False:
@@ -1110,87 +412,87 @@ class ExplainRobotNavigation:
             # Save footprint instance to a file
             self.footprint_tmp = self.footprints.loc[self.footprints['ID'] == self.index + self.offset]
             self.footprint_tmp = self.footprint_tmp.iloc[:, 1:]
-            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+            self.footprint_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
             # Save local plan instance to a file
             self.local_plan_tmp = self.local_plan.loc[self.local_plan['ID'] == self.index + self.offset]
             self.local_plan_tmp = self.local_plan_tmp.iloc[:, 1:]
-            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+            self.local_plan_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
             # Save plan (from global planner) instance to a file
             self.plan_tmp = self.plan.loc[self.plan['ID'] == self.index + self.offset]
             self.plan_tmp = self.plan_tmp.iloc[:, 1:]
-            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+            self.plan_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
             # Save global plan instance to a file
             self.global_plan_tmp = self.global_plan.loc[self.global_plan['ID'] == self.index + self.offset]
             self.global_plan_tmp = self.global_plan_tmp.iloc[:, 1:]
-            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
+            self.global_plan_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/global_plan.csv', index=False,
                                         header=False)
 
             # Save costmap_info instance to file
             self.costmap_info_tmp = self.costmap_info.iloc[self.index, :]
             self.costmap_info_tmp = pd.DataFrame(self.costmap_info_tmp).transpose()
             self.costmap_info_tmp = self.costmap_info_tmp.iloc[:, 1:]
-            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
+            self.costmap_info_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
                                         header=False)
 
             # Save amcl_pose instance to file
             self.amcl_pose_tmp = self.amcl_pose.iloc[self.index, :]
             self.amcl_pose_tmp = pd.DataFrame(self.amcl_pose_tmp).transpose()
             self.amcl_pose_tmp = self.amcl_pose_tmp.iloc[:, 1:]
-            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+            self.amcl_pose_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
             # Save tf_odom_map instance to file
             self.tf_odom_map_tmp = self.tf_odom_map.iloc[self.index, :]
             self.tf_odom_map_tmp = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
+            self.tf_odom_map_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
                                         header=False)
 
             # Save tf_map_odom instance to file
             self.tf_map_odom_tmp = self.tf_map_odom.iloc[self.index, :]
             self.tf_map_odom_tmp = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
+            self.tf_map_odom_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
                                         header=False)
 
             # Save odometry instance to file
             self.odom_tmp = self.odom.iloc[self.index, :]
             self.odom_tmp = pd.DataFrame(self.odom_tmp).transpose()
             self.odom_tmp = self.odom_tmp.iloc[:, 2:]
-            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+            self.odom_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
         elif self.manual_instance_loading == True:
             # Saving data to .csv files for C++ node - local navigation planner
             # Save footprint instance to a file
-            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+            self.footprint_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
             # Save local plan instance to a file
-            self.local_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+            self.local_plan_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
             # Save plan (from global planner) instance to a file
-            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+            self.plan_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
             # Save global plan instance to a file
-            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False,
+            self.global_plan_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/global_plan.csv', index=False,
                                         header=False)
 
             # Save costmap_info instance to file
-            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
+            self.costmap_info_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_info.csv', index=False,
                                         header=False)
 
             # Save amcl_pose instance to file
-            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+            self.amcl_pose_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
             # Save tf_odom_map instance to file
-            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
+            self.tf_odom_map_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False,
                                         header=False)
 
             # Save tf_map_odom instance to file
-            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
+            self.tf_map_odom_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False,
                                         header=False)
 
             # Save odometry instance to file
-            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+            self.odom_tmp.to_csv(self.dirCurr + '/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
     # saving important data to class variables
     def saveImportantData2ClassVars(self):
@@ -1246,41 +548,6 @@ class ExplainRobotNavigation:
         self.yaw_odom_y = math.sin(self.yaw_odom)
         #'''
 
-        '''
-        # save indices of footprint's poses in local costmap to class variables
-        self.footprint_x_list = []
-        self.footprint_y_list = []
-        for j in range(0, self.footprint_tmp.shape[0]):
-            self.footprint_x_list.append(int((self.footprint_tmp.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution))
-            self.footprint_y_list.append(int((self.footprint_tmp.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution))
-        '''
-
-        '''
-        # map info
-        self.mapOriginX = self.map_info.iloc[0, 4]
-        # print('self.mapOriginX: ', self.mapOriginX)
-        self.mapOriginY = self.map_info.iloc[0, 5]
-        # print('self.mapOriginY: ', self.mapOriginY)
-        self.mapResolution = self.map_info.iloc[0, 1]
-        # print('self.mapResolution: ', self.mapResolution)
-        self.mapHeight = self.map_info.iloc[0, 3]
-        # print('self.mapHeight: ', self.mapHeight)
-        self.mapWidth = self.map_info.iloc[0, 2]
-        # print('self.mapWidth: ', self.mapWidth)
-
-        # robot amcl location
-        self.amcl_x = self.amcl_pose_tmp.iloc[0, 0]
-        # print('self.amcl_x: ', self.amcl_x)
-        self.amcl_y = self.amcl_pose_tmp.iloc[0, 1]
-        # print('self.amcl_y: ', self.amcl_y)
-
-        # robot amcl orientation
-        self.amcl_z = self.amcl_pose_tmp.iloc[0, 2]
-        self.amcl_w = self.amcl_pose_tmp.iloc[0, 3]
-        # calculate Euler angles based on orientation quaternion
-        [self.yaw_amcl, pitch_amcl, roll_amcl] = self.quaternion_to_euler(0.0, 0.0, self.amcl_z, self.amcl_w)
-        '''
-        
         # transform global plan from /map to /odom frame
         # rotation matrix
         from scipy.spatial.transform import Rotation as R
@@ -1318,8 +585,6 @@ class ExplainRobotNavigation:
             if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 self.plan_x_list.append(x_temp)
                 self.plan_y_list.append(y_temp)
-        #print('self.plan_tmp_tmp.shape: ', self.plan_tmp_tmp.shape)
-        #print('self.plan_y_list.shape: ', len(self.plan_y_list))
                     
     # turn inflated costmap to static costmap
     def inflatedToStatic(self):
@@ -1327,33 +592,135 @@ class ExplainRobotNavigation:
         #self.image[self.image > 0] = 99
         self.image[self.image == 100] = 99
         self.image[self.image <= 98] = 0
+
+    # plot explanation picture and segments
+    def plotExplanation(self):
+        dirName = 'explanation_results'
+        try:
+            os.mkdir(dirName)
+        except FileExistsError:
+            pass
+
+        self.eps = False
+
+        big_plot_size = True
+        w = h = 1.6
+        if big_plot_size == True:
+            w *= 3
+            h *= 3    
+
+        # import needed libraries
+        from skimage.measure import regionprops
+        import matplotlib.pyplot as plt
+
+        # plot costmap
+        fig = plt.figure(frameon=False)
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        free_space_shade = 180
+        obstacle_shade = 0
+        image = gray2rgb(self.image)
+        for i in range(0, image.shape[0]):
+            for j in range(0, image.shape[1]):
+                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = free_space_shade
+                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
+                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = obstacle_shade    
+        #pd.DataFrame(image[:,:,0]).to_csv('R.csv')
+        #pd.DataFrame(image[:,:,1]).to_csv('G.csv')
+        #pd.DataFrame(image[:,:,2]).to_csv('B.csv')            
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(self.dirCurr + '/' + dirName + '/costmap.png')
+        fig.clf()
+
+        # plot costmap with plans
+        fig = plt.figure(frameon=False)
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
+        #ax.imshow(self.image, aspect='auto')
+        ax.imshow(image.astype(np.uint8), aspect='auto')
+        fig.savefig(self.dirCurr + '/' + dirName + '/input.png')
+        if self.eps == True:
+            fig.savefig(self.dirCurr + '/' + dirName + '/input.eps')
+        fig.clf()
+
+        # plot explanation
+        fig = plt.figure(frameon=True)
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
         
+        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
+        #print('len(self.transformed_plan_x_list): ', len(self.transformed_plan_xs))
+        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
+        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
+        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+
+        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
+        #marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(180, 180, 180)) #color=(255, 255, 0)
+        #ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        for i in range(0, self.temp_img.shape[0]):
+            for j in range(0, self.temp_img.shape[1]):
+                if self.image[i, j] == 99 and self.temp_img[i, j, 0] == self.temp_img[i, j, 1] == self.temp_img[i, j, 2] == 180:
+                    self.temp_img[i, j, 0] = 0
+                    self.temp_img[i, j, 1] = 0
+                    self.temp_img[i, j, 2] = 0
+        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
+        fig.savefig(self.dirCurr + '/' + dirName + '/explanation.png', transparent=False)
+        if self.eps == True:
+            fig.savefig(self.dirCurr + '/' + dirName + '/explanation.eps', transparent=False)
+        fig.clf()
+                        
+        # plot segments with weights
+        self.segments += 1
+        regions = regionprops(self.segments.astype(int))
+        labels = []
+        for props in regions:
+            labels.append(props.label)
+        fig = plt.figure(frameon=False)
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)    
+        for props in regions:
+            v = props.label  # value of label
+            if v > 1:
+                cx, cy = props.centroid  # centroid coordinates
+                ax.scatter(cy, cx, c='white', marker='o')   
+                # printing/plotting explanation weights
+                for j in range(0, len(self.exp)):
+                    if self.exp[j][0] == v-1:
+                        ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='black')  # str(round(self.exp[j][1],4)) #str(v))
+                        break
+        # Save segments with nice numbering as a picture
+        ax.imshow(self.segments, aspect='auto')
+        fig.savefig(self.dirCurr + '/' + dirName + '/weighted_segments.png')
+        fig.clf()
+        self.segments -= 1                
+
+        fig = plt.figure(frameon=False)
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')
+        fig.savefig(self.dirCurr + '/' + dirName + '/temp_img.png')
+        fig.clf()
+
     # classifier function for lime image
     def classifier_fn_image_lime(self, sampled_instance):
 
         print('\nclassifier_fn_image_lime started')
-
-        '''
-        # perturbation when free space is also segmented
-        #perturbation_start = time.time()  
-        # I will use channel 0 from sampled_instance as actual perturbed data
-        # Perturbed pixel intensity is perturb_hide_color_value
-        # Convert perturbed free space to obstacle (99), and perturbed obstacles to free space (0) in all perturbations
-        for i in range(0, sampled_instance.shape[0]):
-            #pd.DataFrame(sampled_instance[i][:, :, 0]).to_csv('original' + str(i) + '.csv')
-            for j in range(0, sampled_instance[i].shape[0]):
-                for k in range(0, sampled_instance[i].shape[1]):
-                    if sampled_instance[i][j, k, 0] == perturb_hide_color_value:
-                        if self.image[j, k] == 0.0:
-                            sampled_instance[i][j, k, 0] = 99.0
-                            #print('free space')
-                        elif self.image[j, k] == 99.0:
-                            sampled_instance[i][j, k, 0] = 0.0
-                            #print('obstacle')
-        #perturbation_end = time.time()
-        #perturbation_time = perturbatio_end - perturbation_start
-        #print('\nperturb runtime = ', perturbation_time)
-        '''
 
         print('\nsampled_instance.shape = ', sampled_instance.shape)
 
@@ -1361,7 +728,7 @@ class ExplainRobotNavigation:
         self.sample_size = 1 if self.sampled_instance_shape_len == 2 else sampled_instance.shape[0]
 
         # Save perturbed costmap_data to file for C++ node
-        costmap_save_start = time.time()
+        #costmap_save_start = time.time()
 
         if self.sampled_instance_shape_len > 3:
             temp = np.delete(sampled_instance,2,3)
@@ -1369,21 +736,21 @@ class ExplainRobotNavigation:
             temp = np.delete(temp,1,3)
             #print(temp.shape)
             temp = temp.reshape(temp.shape[0]*160,160)
-            np.savetxt('./src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
         elif self.sampled_instance_shape_len == 3:
             temp = sampled_instance.reshape(sampled_instance.shape[0]*160,160)
-            np.savetxt('./src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
         elif self.sampled_instance_shape_len == 2:
-            np.savetxt('./src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
 
-        costmap_save_end = time.time()
-        costmap_save_time = costmap_save_end - costmap_save_start
-        print('\nsave perturbed costmap_data runtime: ', costmap_save_time)
+        #costmap_save_end = time.time()
+        #costmap_save_time = costmap_save_end - costmap_save_start
+        #print('\nsave perturbed costmap_data runtime: ', costmap_save_time)
 
         # calling ROS C++ node
         #print('\nstarting C++ node')
 
-        planner_calculation_start = time.time()
+        #planner_calculation_start = time.time()
 
         # start perturbed_node_image ROS C++ node
         Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
@@ -1395,29 +762,29 @@ class ExplainRobotNavigation:
         # kill ROS node
         Popen(shlex.split('rosnode kill /perturb_node_image'))
 
-        planner_calculation_end = time.time()
-        planner_calculation_time = planner_calculation_end - planner_calculation_start
-        print('\nplanner calculation runtime = ', planner_calculation_time)
+        #planner_calculation_end = time.time()
+        #planner_calculation_time = planner_calculation_end - planner_calculation_start
+        #print('\nplanner calculation runtime = ', planner_calculation_time)
 
-        rospy.sleep(1)
+        #rospy.sleep(1)
 
         #print('\nC++ node ended')
 
         #output_start = time.time()
         # load command velocities - output from local planner
-        self.cmd_vel_perturb = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/cmd_vel.csv')
+        self.cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('self.cmd_vel: ', self.cmd_vel_perturb)
         #print('self.cmd_vel.shape: ', self.cmd_vel_perturb.shape)
         #self.cmd_vel_perturb.to_csv('cmd_vel.csv')
 
         # load local plans - output from local planner
-        self.local_plans = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plans.csv')
+        self.local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
         #print('self.local_plans: ', self.local_plans)
         #print('self.local_plans.shape: ', self.local_plans.shape)
         #self.local_plans.to_csv('local_plans.csv')
 
         # load transformed global plan to /odom frame
-        self.transformed_plan = pd.read_csv('~/amar_ws/src/teb_local_planner/src/Data/transformed_plan.csv')
+        self.transformed_plan = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv')
         #print('self.transformed_plan: ', self.transformed_plan)
         #print('self.transformed_plan.shape: ', self.transformed_plan.shape)
         #self.transformed_plan.to_csv('transformed_plan.csv')
@@ -1441,25 +808,27 @@ class ExplainRobotNavigation:
         #print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
         
         # calculate original deviation - sum of minimal point-to-point distances
-        original_deviation = -1.0
-        diff_x = 0
-        diff_y = 0
-        devs = []
-        for j in range(0, len(self.local_plan_x_list)):
-            local_diffs = []
-            for k in range(0, len(self.transformed_plan_xs)):
-                diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
-                diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
-                diff = math.sqrt(diff_x + diff_y)
-                local_diffs.append(diff)                        
-            devs.append(min(local_diffs))   
-        original_deviation = sum(devs)
-        print('\noriginal_deviation = ', original_deviation)
-        # original_deviation for big_deviation = 745.5051688094327
-        # original_deviation for big_deviation without wall = 336.53749938826286
-        # original_deviation for no_deviation = 56.05455197218764
-        # original_deviation for small_deviation = 69.0
-        # original_deviation for rotate_in_place = 307.4962940090125
+        calculate_original_deviation = False
+        if calculate_original_deviation == True:
+            original_deviation = -1.0
+            diff_x = 0
+            diff_y = 0
+            devs = []
+            for j in range(0, len(self.local_plan_x_list)):
+                local_diffs = []
+                for k in range(0, len(self.transformed_plan_xs)):
+                    diff_x = (self.local_plan_x_list[j] - self.transformed_plan_xs[k]) ** 2
+                    diff_y = (self.local_plan_y_list[j] - self.transformed_plan_ys[k]) ** 2
+                    diff = math.sqrt(diff_x + diff_y)
+                    local_diffs.append(diff)                        
+                devs.append(min(local_diffs))   
+            original_deviation = sum(devs)
+            # original_deviation for big_deviation = 745.5051688094327
+            # original_deviation for big_deviation without wall = 336.53749938826286
+            # original_deviation for no_deviation = 56.05455197218764
+            # original_deviation for small_deviation = 69.0
+            # original_deviation for rotate_in_place = 307.4962940090125
+            print('\noriginal_deviation = ', original_deviation)
 
         plot_perturbations = False
         if plot_perturbations == True:
@@ -1470,7 +839,7 @@ class ExplainRobotNavigation:
 
 
         # DETERMINE THE DEVIATION TYPE
-        determine_dev_type = True
+        determine_dev_type = False
         if determine_dev_type == True:
             #start_determine_dev = time.time()
             
@@ -1509,14 +878,13 @@ class ExplainRobotNavigation:
 
             # PRINTING RESULTS                                       
             print('\ndeviation_type: ', deviation_type)
+  
+        mode = self.underlying_model_mode # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
+        print('\nmode = ', mode)
 
-        
-        mode = self.underlying_model_mode
-        #mode = 'regression' # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
-        #print('\nmode = ', mode)
-
-        my_dist_fun = True
-        if my_dist_fun == True:
+        # TARGET CALCULATION
+        my_distance_fun = True
+        if my_distance_fun == True:
             # deviation of local plan from global plan dataframe
             self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
             #print('self.local_plan_deviation: ', self.local_plan_deviation)
@@ -1530,12 +898,10 @@ class ExplainRobotNavigation:
             if mode == 'regression':
                 # fill in deviation dataframe
                 dev_original = 0
-                #for i in range(0, sampled_instance.shape[0]):
                 for i in range(0, self.sample_size):
                     #print('\ni = ', i)
                     local_plan_xs = []
                     local_plan_ys = []
-                    local_plan_found = False
                     
                     # find if there is local plan
                     self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
@@ -1546,18 +912,7 @@ class ExplainRobotNavigation:
                             if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                                 local_plan_xs.append(x_temp)
                                 local_plan_ys.append(y_temp)
-                                local_plan_found = True
                     
-                    # this happens almost never when only obstacles are segments, but let it stay for now
-                    if local_plan_found == False:
-                        if deviation_type == 'stop':
-                            self.local_plan_deviation.iloc[i, 0] = dev_original
-                        elif deviation_type == 'no_deviation':
-                            self.local_plan_deviation.iloc[i, 0] = 745.5051688094327 #1000
-                        elif deviation_type == 'big_deviation' or deviation_type == 'small_deviation':
-                            self.local_plan_deviation.iloc[i, 0] = 0.0
-                        continue             
-
                     # find deviation as a sum of minimal point-to-point differences
                     diff_x = 0
                     diff_y = 0
@@ -1570,9 +925,6 @@ class ExplainRobotNavigation:
                             diff = math.sqrt(diff_x + diff_y)
                             local_diffs.append(diff)                        
                         devs.append(min(local_diffs))   
-
-                    if i == 0:
-                        dev_original = sum(devs)    
 
                     self.local_plan_deviation.iloc[i, 0] = sum(devs)
 
@@ -2067,7 +1419,7 @@ class ExplainRobotNavigation:
 
                     self.local_plan_deviation.iloc[i, 0] = sum(devs) / original_deviation
 
-        elif my_dist_fun == False:
+        elif my_distance_fun == False:
             self.local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
 
             if mode == 'regression':
@@ -2150,7 +1502,7 @@ class ExplainRobotNavigation:
                     #self.local_plan_deviation.iloc[i, 0] = math.sqrt(dist[0,0]**2+dist[1,1]**2)
                     #print('\ndist = ', self.local_plan_deviation.iloc[i, 0])
 
-        print(self.local_plan_deviation)
+        #print(self.local_plan_deviation)
 
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
         #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
@@ -2264,7 +1616,13 @@ class ExplainRobotNavigation:
     # function for plotting lime image perturbations
     def classifier_fn_image_lime_plot(self):
 
-        print('self.sample_size = ', self.sample_size)
+        dirName = 'perturbations'
+        try:
+            os.mkdir(dirName)
+        except FileExistsError:
+            pass
+
+        #print('self.sample_size = ', self.sample_size)
 
         # plot every perturbation
         for ctr in range(0, self.sample_size):
@@ -2272,17 +1630,17 @@ class ExplainRobotNavigation:
             # save current perturbation as .csv file
             #pd.DataFrame(self.sampled_instance[i][:, :, 0]).to_csv('perturbation_' + str(i) + '.csv', index=False, header=False)
 
-            gray_shade = 180
-            white_shade = 0
+            free_space_shade = 180
+            obstacle_shade = 0
             image = copy.deepcopy(self.sampled_instance[ctr][:, :])
             image = gray2rgb(image)
             #pd.DataFrame(image[:,:,0]).to_csv('IMAGE' + str(ctr) + '.csv')
             for i in range(0, image.shape[0]):
                 for j in range(0, image.shape[1]):
                     if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
-                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = free_space_shade
                     elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
-                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade
+                        image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = obstacle_shade
 
             # plot perturbed local costmap
             #plt.imshow(self.sampled_instance[i][:, :])
@@ -2360,458 +1718,140 @@ class ExplainRobotNavigation:
 
             # save figure
             print('i = ', ctr)
-            fig.savefig('perturbation_' + str(ctr) + '.png')
+            fig.savefig(self.dirCurr + '/' + dirName + '/perturbation_' + str(ctr) + '.png')
             fig.clf()
 
-    # plot explanation picture and segments
-    def plotExplanation(self):
-        path_core = os.getcwd()
+    def explain_instance_evaluation(self, expID, ID):
+        print('explain_instance_evaluation function starting\n')
 
-        # import needed libraries
-        from skimage.measure import regionprops
-        import matplotlib.pyplot as plt
+        self.expID = expID
+        self.index = self.expID
 
-        # plot costmap
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #print('self.image.shape: ', self.image.shape)
-        gray_shade = 180
-        white_shade = 0
-        image = gray2rgb(self.image)
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
-                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
-                elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
-                    image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade    
-        #pd.DataFrame(image[:,:,0]).to_csv('R.csv')
-        #pd.DataFrame(image[:,:,1]).to_csv('G.csv')
-        #pd.DataFrame(image[:,:,2]).to_csv('B.csv')            
-        ax.imshow(image.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/costmap.png')
-        fig.clf()
+        self.manual_instance_loading = False
 
-        # plot costmap with plans
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-        #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
-        #ax.imshow(self.image, aspect='auto')
-        ax.imshow(image.astype(np.uint8), aspect='auto')
-        fig.savefig(path_core + '/input.png')
-        if self.eps == True:
-            fig.savefig(path_core + '/input.eps')
-        fig.clf()
+        if self.explanation_algorithm == 'LIME':        
+            # if explanation_mode is 'image'
+            if self.explanation_mode == 'image':
+                import time
+                before_explain_instance_start = time.time()
 
-        # plot explanation
-        fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        
-        #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')
-        #print('len(self.transformed_plan_x_list): ', len(self.transformed_plan_xs))
-        ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
-        ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='yellow', marker='o')
-        ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+                # Get local costmap
+                # Original costmap will be saved to self.local_costmap_original
+                self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
 
-        #marked_boundaries = mark_boundaries(self.temp_img / 2 + 0.5, self.mask, color=(1, 1, 0), outline_color=(0, 0, 0), mode='outer', background_label=0)
-        #marked_boundaries = mark_boundaries(self.temp_img, self.mask, color=(180, 180, 180)) #color=(255, 255, 0)
-        #ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
-        for i in range(0, self.temp_img.shape[0]):
-            for j in range(0, self.temp_img.shape[1]):
-                if self.image[i, j] == 99 and self.temp_img[i, j, 0] == self.temp_img[i, j, 1] == self.temp_img[i, j, 2] == 180:
-                    self.temp_img[i, j, 0] = 0
-                    self.temp_img[i, j, 1] = 0
-                    self.temp_img[i, j, 2] = 0
-        ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')  # , aspect='auto')
-        fig.savefig(path_core + '/explanation.png', transparent=False)
-        if self.eps == True:
-            fig.savefig(path_core + '/explanation.eps', transparent=False)
-        fig.clf()
-                        
-        if self.semantic_seg == False:
-            # plot segments with weights
-            self.segments += 1
-            regions = regionprops(self.segments.astype(int))
-            labels = []
-            for props in regions:
-                labels.append(props.label)
-            fig = plt.figure(frameon=False)
-            w = 1.6*3
-            h = 1.6*3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)    
-            for props in regions:
-                v = props.label  # value of label
-                if v > 1:
-                    cx, cy = props.centroid  # centroid coordinates
-                    ax.scatter(cy, cx, c='white', marker='o')   
-                    # printing/plotting explanation weights
-                    for j in range(0, len(self.exp)):
-                        if self.exp[j][0] == v-1:
-                            ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='black')  # str(round(self.exp[j][1],4)) #str(v))
-                            break
-            # Save segments with nice numbering as a picture
-            ax.imshow(self.segments, aspect='auto')
-            fig.savefig(path_core + '/weighted_segments.png')
-            fig.clf()
-            self.segments -= 1                
+                # Make image a np.array deepcopy of local_costmap_original
+                self.image = np.array(copy.deepcopy(self.local_costmap_original))
 
-        elif self.semantic_seg == True:
-            #semantic_map_1 = np.array(pd.read_csv('~/amar_ws/semantic_map_1.csv'))
-            #semantic_map_2 = np.array(pd.read_csv('~/amar_ws/semantic_map_2.csv'))
-            semantic_map = np.array(pd.read_csv('~/amar_ws/semantic_map.csv'))
-            semantic_tags = pd.read_csv('~/amar_ws/semantic_tags.csv')
-            self.costmap_segmented_included = True
-            if self.costmap_segmented_included == True:
-                costmap_segmented = np.array(pd.read_csv('~/amar_ws/costmap_segmented.csv'))
+                # Turn inflated area to free space and 100s to 99s
+                self.inflatedToStatic()
 
-            # plot segments with weights
-            self.segments += 1
-            regions = regionprops(self.segments.astype(int))
-            labels = []
-            for props in regions:
-                labels.append(props.label)
-            fig = plt.figure(frameon=False)
-            w = 1.6*3
-            h = 1.6*3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)    
-            i = 0
-            for props in regions:
-                v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                ax.scatter(cy, cx, c='black', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == v - 1:
-                        ax.text(cy, cx, str(round(self.exp[j][1], 4)) + ', ' + str(round(self.exp[j][0], 4)), c='white')  # str(round(self.exp[j][1],4)) #str(v))
-                        break
-                i = i + 1
-            # Save segments with nice numbering as a picture
-            ax.imshow(self.segments, aspect='auto')
-            fig.savefig(path_core + '/weighted_segments.png')
-            fig.clf()
-
-
-            from scipy.spatial.transform import Rotation as R
-            r = R.from_quat([self.tf_odom_map.iloc[0, 3], self.tf_odom_map.iloc[0, 4], self.tf_odom_map.iloc[0, 5], self.tf_odom_map.iloc[0, 6]])
-            r_array = np.asarray(r.as_matrix())
-            t = np.array([self.tf_odom_map.iloc[0, 0], self.tf_odom_map.iloc[0, 1], self.tf_odom_map.iloc[0, 2]])
-
-            map_pairs = []
-
-            semantic_local_costmap = np.zeros(self.segments.shape, np.uint8) + 10
-
-            for i in range(0, 160):
-                for j in range(0, 160):            
-                    x = j * self.localCostmapResolution + self.localCostmapOriginX
-                    y = i * self.localCostmapResolution + self.localCostmapOriginY
-
-                    p = np.array([x, y, 0])
-                    # print('p: ', p)
-                    pnew = p.dot(r_array) + t
-                    # print('pnew: ', pnew)
-                    x = pnew[0]
-                    y = pnew[1]
-
-                    j_map = int((x - self.mapOriginX) / self.mapResolution + 0.5) #- 1
-                    i_map = int((y - self.mapOriginY) / self.mapResolution + 0.5) #- 1
-
-                    if (i_map, j_map) not in map_pairs:
-                        map_pairs.append((i_map, j_map))
-                        semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
-                        #semantic_local_costmap[i, j] = semantic_map_1[i_map, j_map]
-                    else:
-                        semantic_local_costmap[i, j] = semantic_map[i_map, j_map]
-                        #semantic_local_costmap[i, j] = semantic_map_2[i_map, j_map]
-
-            #pd.DataFrame(semantic_local_costmap).to_csv('semantic_local_costmap.csv')               
-
-        
-            unknown_obstacles_vals = []
-            self.segments -= 1
-            for val in np.unique(self.segments):
-                # static known obstacle
-                if np.all(self.image[self.segments == val] == 99) == True:
-                    
-                    if self.costmap_segmented_included == False:
-                        semantic_num = np.bincount(semantic_local_costmap[self.segments == val]).argmax()
-                    else:
-                        semantic_num = np.bincount(costmap_segmented[self.segments == val]).argmax()
-                    
-                    if semantic_num >= 90:
-                        pass
-                        #print('\nSTATIC KNOWN OBSTACLE!')
-                        #print('val: ', val)
-                        #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
-                        #print('semantic_num: ', semantic_num)
-                    
-                    else:
-                        unknown_obstacles_vals.append(val)
-                        #print('\nSTATIC UNKNOWN OBSTACLE!')
-                        #print('val: ', val)
-                        #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
-                        #print('semantic_num: ', semantic_num)
-
-                # free space    
-                else:
-                    pass
-                    #print('\nFREE SPACE')
-                    #print('val: ', val)
-                    #print('bincount: ', np.bincount(semantic_local_costmap[self.segments == val]))
-                    #print('semantic_num: ', np.bincount(semantic_local_costmap[self.segments == val]).argmax())
-
-            # plot semantic map
-            fig = plt.figure(frameon=False)
-            w = 1.6*3
-            h = 1.6*3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-
-            for i in range(0, len(unknown_obstacles_vals)):
-                x_s = []
-                y_s = []
-                color = []
-                for j in range(0, self.segments.shape[0]):
-                    for k in range(0, self.segments.shape[1]):
-                        if self.segments[j, k] == unknown_obstacles_vals[i]:
-                            x_s.append(k)
-                            y_s.append(j)
-                            R = self.temp_img[x_s[0], y_s[0]][0] / 255
-                            G = self.temp_img[x_s[0], y_s[0]][1] / 255
-                            B = self.temp_img[x_s[0], y_s[0]][2] / 255
-                            color.append(np.array([R, G, B]))
-
-                x_center = sum(x_s) / len(x_s)
-                y_center = sum(y_s) / len(y_s)
-                deltas = []
-
-                for j in range(0, len(x_s)):
-                    delta = (x_s[j] - x_center)**2 + (y_s[j] - y_center)**2
-                    delta = math.sqrt(delta)
-                    deltas.append(delta)
-
-                max_delta = max(deltas)
-
-                points_to_plot_x = []
-                points_to_plot_y = []    
-
-                for j in range(0, len(x_s)):
-                    if deltas[j] >= 0.8 * max_delta:
-                        points_to_plot_x.append(x_s[j])
-                        points_to_plot_y.append(y_s[j])
-
-                ax.scatter(points_to_plot_x, points_to_plot_y, c='yellow', marker='.')
-                for j in range(0, len(self.exp)):
-                    if self.exp[j][0] == unknown_obstacles_vals[i]:
-                        print('\nUnknown obstacle ' + str(i+1) + ' has a weight ' + str(round(self.exp[j][1], 4)))
-                        
-                        if self.case == 1:
-                            # case 1
-                            ax.text(x_center + 2, y_center - 4, 'Unknown obstacle ' + str(i+1), c='white')
-                        
-                        elif self.case == 2:
-                            # case 2
-                            if i == 1:
-                                ax.text(x_center, y_center-3, 'Unknown obstacle ' + str(i), c='white')
-
-                        elif self.case == 3:
-                            # case 3
-                            ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
-
-                        else:
-                            ax.text(x_center, y_center, 'Unknown obstacle ' + str(i+1), c='white')
-
-                        break
+                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
+                self.image = self.image * 1.0
                 
+                # Saving data to .csv files for C++ node - local navigation planner
+                self.SaveImageDataForLocalPlanner()
 
-            #ax.scatter(self.plan_x_list, self.plan_y_list, c='blue', marker='o')        
-            ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='o')
-            ax.scatter(self.local_plan_x_list, self.local_plan_y_list, c='purple', marker='o')
-            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+                # Saving important data to class variables
+                self.saveImportantData2ClassVars()
 
-            if self.costmap_segmented_included == True:
-                regions = regionprops(np.array(costmap_segmented).astype(int))
-            else:
-                regions = regionprops(np.array(semantic_local_costmap).astype(int))
-            
-            #'''
-            labels = []
-            for props in regions:
-                labels.append(props.label)
-            #print('labels_semantic: ', labels)
-            #'''    
-            i = 0
-            for props in regions:
-                v = props.label  # value of label
-                cx, cy = props.centroid  # centroid coordinates
-                #ax.scatter(cy, cx, c='white', marker='o')   
-                # printing/plotting explanation weights
-                for j in range(0, len(semantic_tags)):
-                    if semantic_tags.iloc[j, 0] == v:
-                        if self.case == 3:
-                            # case 3
-                            if semantic_tags.iloc[j, 1] == 'lab south':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                                ax.text(cy - 10, cx + 5, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                                ax.text(cy, cx + 12, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'lab north':    
-                                ax.text(cy - 20, cx - 10, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'lab east':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall I':    
-                                ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall II':    
-                                ax.text(cy - 5, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall III':    
-                                ax.text(cy - 3, cx + 5, semantic_tags.iloc[j, 1], c='white')
+                segm_fn = 'custom_segmentation'
 
-                        elif self.case == 2:
-                            # case 2
-                            if semantic_tags.iloc[j, 1] == 'lab south':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                                ax.text(cy-15, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'lab north':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'lab east':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall I':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall II':    
-                                ax.text(cy-8, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall III':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
+                #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
+                devDistance_x = 0
+                sum_x = 0 
+                devDistance_y = 0 
+                sum_y = 0 
+                devDistance = 0
 
-                        elif self.case == 1:
-                            # case 1
-                            if semantic_tags.iloc[j, 1] == 'lab south':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'doorway I':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'doorway II':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'lab north':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'lab east':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall I':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall II':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')
-                            elif semantic_tags.iloc[j, 1] == 'wall III':    
-                                ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')    
+                before_explain_instance_end = time.time()
+                before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
 
-                        else:
-                            ax.text(cy, cx, semantic_tags.iloc[j, 1], c='white')  # str(round(self.exp[j][1],4)) #str(v))
-
-                        break
-                i = i + 1
-
-            if self.costmap_segmented_included == True:
-                marked_boundaries = mark_boundaries(self.temp_img, np.array(costmap_segmented), color=(255, 255, 0))
-            else:
-                marked_boundaries = mark_boundaries(self.temp_img, np.array(semantic_local_costmap), color=(255, 255, 0))
+                segments_num = 8
     
-            ax.imshow(marked_boundaries.astype(np.uint8), aspect='auto')  # , aspect='auto')
-            fig.savefig(path_core + '/semantic_explanation.png', transparent=False)
-            if self.eps == True:
-                fig.savefig(path_core + '/semantic_explanation.eps', transparent=False)
-            fig.clf()
+                import time
 
-            fig = plt.figure(frameon=False)
-            w = 1.6*3
-            h = 1.6*3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            ax.imshow(self.temp_img.astype(np.uint8), aspect='auto')
-            fig.savefig(path_core + '/temp_img.png')
-            fig.clf()
+                nums_of_samples = [2,4,8,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256]
 
-            fig = plt.figure(frameon=False)
-            w = 1.6*3
-            h = 1.6*3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            ax.imshow(np.array(semantic_local_costmap).astype(np.uint8), aspect='auto')
-            fig.savefig(path_core + '/semantic_local_costmap.png')
-            fig.clf()
+                dirName = 'evaluation_results'
+                try:
+                    os.mkdir(dirName)
+                except FileExistsError:
+                    pass
 
-            #print('unknown_obstacles_vals: ', unknown_obstacles_vals)
+                with open(self.dirCurr + '/' + dirName + "/explanations' + str(ID) + '.csv', "a") as myfile:
+                    myfile.write('num_samples,before_explain_instance_time,segmentation_time,classifier_fn_time,planner_time,target_calculation_time,costmap_save_time,distances_time,regressor_time,explain_instance_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5,weight_6,weight_7,weight_8\n')
+                    
+                    for i in nums_of_samples:
+                        #print('\i = ', i)
+                        num_of_iterations_for_one_num_of_segments = 10 #30 #50
 
-            for i in range(0, semantic_tags.shape[0]):
+                        if i == 256:
+                            num_of_iterations_for_one_num_of_segments = 1
+                        
+                        for j in range(0, num_of_iterations_for_one_num_of_segments): 
+                            # measure explain_instance time
+                            start = time.time()
+                            self.explanation, self.segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time,costmap_save_time, distances_time, regressor_time = self.explainer.explain_instance_evaluation(
+                                self.image, self.classifier_fn_image_lime_evaluation, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
+                                self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
+                                self.plan_x_list, self.plan_y_list,
+                                hide_color=perturb_hide_color_value,
+                                num_segments=segments_num,
+                                num_samples_current=i,
+                                batch_size=2048, segmentation_fn=segm_fn,
+                                top_labels=10)
+                            end = time.time()
+                            explain_instance_time = round(end - start, 3)
 
-                if self.costmap_segmented_included == True:
-                    segments_label = np.unique(self.segments[costmap_segmented == semantic_tags.iloc[i, 0]])
-                else:
-                    segments_label = np.unique(self.segments[semantic_local_costmap == semantic_tags.iloc[i, 0]])
-                
-                '''
-                print('\n')
-                print('i = ', i)
-                print('segments_label: ', segments_label)
-                print('semantic_tags.iloc[i, 1]: ', semantic_tags.iloc[i, 1])
-                print('semantic_tags.iloc[i, 0]: ', semantic_tags.iloc[i, 0])
-                '''
-                
-                weights_unique = []
-                for label in segments_label:
-                    if label in unknown_obstacles_vals:
-                        #print('label pass: ', label)
-                        continue
-                    for j in range(0, len(self.exp)):
-                        if self.exp[j][0] == label:
-                            rounded = str(round(self.exp[j][1], 4))
-                            if rounded not in weights_unique:
-                                '''
-                                print('label:', label)
-                                print('rounded: ', rounded)
-                                print('weights_unique: ', weights_unique)
-                                '''
-                                weights_unique.append(rounded)        
-                            break
-                #print('weights_unique: ', weights_unique)        
-                if len(weights_unique) == 1:        
-                    print(semantic_tags.iloc[i, 1] + " has a weight " + weights_unique[0])
-                else:
-                    weights_string = ""
-                    for j in range(0, len(weights_unique) - 1):
-                        weights_string += weights_unique[j] + ", "
-                    if len(weights_unique) > 0:    
-                        weights_string += weights_unique[-1] + " "    
-                        print(semantic_tags.iloc[i, 1] + " has weights " + weights_string)
+                            # measure get explanation_picture time
+                            start = time.time()
+                            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0,
+                                                                                                    positive_only=False,
+                                                                                                    negative_only=False,
+                                                                                                    num_features=100,
+                                                                                                    hide_rest=False,
+                                                                                                    min_weight=0.0)  # min_weight=0.1 - default
+                            end = time.time()
+                            explanation_pics_time = round(end - start, 3)
+
+                            # measure plotting time
+                            self.segments += 1
+                            start = time.time()
+                            self.plotMinimalEvaluation(i)
+                            end = time.time()
+                            plotting_time = round(end - start, 3)
+
+                            # round measured times to 3 decimal places
+                            before_explain_instance_time = round(before_explain_instance_time, 3)
+                            segmentation_time = round(segmentation_time, 3)
+                            classifier_fn_time = round(classifier_fn_time, 3)
+                            planner_time = round(planner_time, 3)
+                            target_calculation_time = round(target_calculation_time,3)
+                            costmap_save_time = round(costmap_save_time,3)
+                            distances_time = round(distances_time,3)
+                            regressor_time = round(regressor_time,3)
+
+                            # write measured times to .csv file
+                            myfile.write(str(i) + ',' + str(before_explain_instance_time) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(planner_time) + ',' + str(target_calculation_time) + ',' + str(costmap_save_time) + ',' + str(distances_time) + ',' + str(regressor_time) + ',' + str(explain_instance_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
+                            for k in range(0, len(self.exp)):
+                                for l in range(0, len(self.exp)):
+                                    if k == self.exp[l][0]:
+                                        if k != len(self.exp) - 1:
+                                            myfile.write(str(round(self.exp[l][1], 4)) + ',')
+                                        else:
+                                            myfile.write(str(round(self.exp[l][1], 4)))
+                                        break
+                            myfile.write('\n')
+                        myfile.write('\n')
+            
+        elif self.explanation_algorithm == 'Anchors':
+            pass
+
+        elif self.explanation_algorithm == 'SHAP':
+            pass
+
+
+
 
     # plot explanation picture and segments for anchors
     def plotExplanationAnchors(self):
@@ -3811,129 +2851,7 @@ class ExplainRobotNavigation:
 
 
 
-    def explain_instance_evaluation(self, expID, ID):
-        print('explain_instance_evaluation function starting\n')
 
-        self.expID = expID
-        self.index = self.expID
-
-        self.manual_instance_loading = False
-        self.manually_make_semantic_map = False
-        self.test_segmentation = False 
-
-        if self.explanation_algorithm == 'LIME':
-                
-            # if explanation_mode is 'image'
-            if self.explanation_mode == 'image':
-                import time
-                before_explain_instance_start = time.time()
-
-                # Get local costmap
-                # Original costmap will be saved to self.local_costmap_original
-                self.local_costmap_original = self.costmap_data.iloc[(self.index) * self.costmap_size:(self.index + 1) * self.costmap_size, :]
-
-                # Make image a np.array deepcopy of local_costmap_original
-                self.image = np.array(copy.deepcopy(self.local_costmap_original))
-
-                # Turn inflated area to free space and 100s to 99s
-                self.inflatedToStatic()
-
-                # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-                self.image = self.image * 1.0
-                
-                # Saving data to .csv files for C++ node - local navigation planner
-                self.SaveImageDataForLocalPlanner()
-
-                # Saving important data to class variables
-                self.saveImportantData2ClassVars()
-
-                segm_fn = 'custom_segmentation'
-
-                #devDistance_x, sum_x, devDistance_y, sum_y, devDistance = self.findDevDistance()
-                devDistance_x = 0
-                sum_x = 0 
-                devDistance_y = 0 
-                sum_y = 0 
-                devDistance = 0
-
-                before_explain_instance_end = time.time()
-                before_explain_instance_time = before_explain_instance_end - before_explain_instance_start
-
-                segments_num = 8
-    
-                import time
-
-                nums_of_samples = [2,4,8,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256]
-
-                #with open('explanations' + str(self.expID) + '.csv', "w") as myfile:
-                with open('explanations' + str(ID) + '.csv', "a") as myfile:
-                    myfile.write('num_samples,before_explain_instance_time,segmentation_time,classifier_fn_time,planner_time,target_calculation_time,costmap_save_time,distances_time,regressor_time,explain_instance_time,explanation_pics_time,plotting_time,weight_0,weight_1,weight_2,weight_3,weight_4,weight_5,weight_6,weight_7,weight_8\n')
-                    
-                    for i in nums_of_samples:
-                        #print('\i = ', i)
-                        num_of_iterations_for_one_num_of_segments = 10 #30 #50
-
-                        if i == 256:
-                            num_of_iterations_for_one_num_of_segments = 1
-                        
-                        for j in range(0, num_of_iterations_for_one_num_of_segments): 
-                            # measure explain_instance time
-                            start = time.time()
-                            self.explanation, self.segments, segmentation_time, classifier_fn_time, planner_time, target_calculation_time,costmap_save_time, distances_time, regressor_time = self.explainer.explain_instance_evaluation(
-                                self.image, self.classifier_fn_image_lime_evaluation, self.costmap_info_tmp, self.map_info, self.tf_odom_map,
-                                self.localCostmapIndex_x_odom, self.localCostmapIndex_y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance,
-                                self.plan_x_list, self.plan_y_list,
-                                hide_color=perturb_hide_color_value,
-                                num_segments=segments_num,
-                                num_samples_current=i,
-                                batch_size=2048, segmentation_fn=segm_fn,
-                                top_labels=10)
-                            end = time.time()
-                            explain_instance_time = round(end - start, 3)
-
-                            # measure get explanation_picture time
-                            start = time.time()
-                            self.temp_img, self.mask, self.exp = self.explanation.get_image_and_mask(label=0,
-                                                                                                    positive_only=False,
-                                                                                                    negative_only=False,
-                                                                                                    num_features=100,
-                                                                                                    hide_rest=False,
-                                                                                                    min_weight=0.0)  # min_weight=0.1 - default
-                            end = time.time()
-                            explanation_pics_time = round(end - start, 3)
-
-                            # measure plotting time
-                            self.segments += 1
-                            start = time.time()
-                            self.plotMinimalEvaluation(i)
-                            end = time.time()
-                            plotting_time = round(end - start, 3)
-
-                            # round measured times to 3 decimal places
-                            before_explain_instance_time = round(before_explain_instance_time, 3)
-                            segmentation_time = round(segmentation_time, 3)
-                            classifier_fn_time = round(classifier_fn_time, 3)
-                            planner_time = round(planner_time, 3)
-                            target_calculation_time = round(target_calculation_time,3)
-                            costmap_save_time = round(costmap_save_time,3)
-                            distances_time = round(distances_time,3)
-                            regressor_time = round(regressor_time,3)
-
-                            # write measured times to .csv file
-                            myfile.write(str(i) + ',' + str(before_explain_instance_time) + ',' + str(segmentation_time) + ',' + str(classifier_fn_time) + ',' + str(planner_time) + ',' + str(target_calculation_time) + ',' + str(costmap_save_time) + ',' + str(distances_time) + ',' + str(regressor_time) + ',' + str(explain_instance_time) + ',' + str(explanation_pics_time) + ',' + str(plotting_time) + ',')
-                            for k in range(0, len(self.exp)):
-                                for l in range(0, len(self.exp)):
-                                    if k == self.exp[l][0]:
-                                        if k != len(self.exp) - 1:
-                                            myfile.write(str(round(self.exp[l][1], 4)) + ',')
-                                        else:
-                                            myfile.write(str(round(self.exp[l][1], 4)))
-                                        break
-                            myfile.write('\n')
-                        myfile.write('\n')
-            
-        elif self.explanation_algorithm == 'Anchors':
-            pass
 
     def classifier_fn_image_lime_evaluation(self, sampled_instance):
 
@@ -4193,7 +3111,6 @@ class ExplainRobotNavigation:
 
         self.manual_instance_loading = False
         self.manually_make_semantic_map = False
-        self.test_segmentation = False
 
         if self.explanation_algorithm == 'LIME': 
 
@@ -4545,66 +3462,6 @@ class ExplainRobotNavigation:
             devs.append(min(diffs))
 
         return max(devs_x), np.sign(signs_x[devs_x.index(max(devs_x))]), max(devs_y), np.sign(signs_y[devs_y.index(max(devs_y))]), max(devs)    
-
-    # helper function for creating manual semantic maps
-    def costmap2Map(self):
-        # transform global plan from /map to /odom frame
-        # rotation matrix
-        from scipy.spatial.transform import Rotation as R
-        r = R.from_quat([self.tf_odom_map_tmp.iloc[0, 3], self.tf_odom_map_tmp.iloc[0, 4], self.tf_odom_map_tmp.iloc[0, 5], self.tf_odom_map_tmp.iloc[0, 6]])
-        # print('r: ', r.as_matrix())
-        r_array = np.asarray(r.as_matrix())
-        # print('r_array: ', r_array)
-        # print('r_array.shape: ', r_array.shape)
-        
-        # translation vector
-        t = np.array([self.tf_odom_map_tmp.iloc[0, 0], self.tf_odom_map_tmp.iloc[0, 1], self.tf_odom_map_tmp.iloc[0, 2]])
-        # print('t: ', t)
-
-        costmap_segmented = pd.read_csv('costmap_segmented.csv')
-
-        map_sem_1 = np.zeros((304, 201), np.uint8)
-        map_sem_2 = np.zeros((304, 201), np.uint8)
-
-        #indices_x = np.zeros((160, 160), np.uint8)
-        #indices_y = np.zeros((160, 160), np.uint8)
-
-        map_pairs = []
-
-        br_duplikata = 0
-        
-        for i in range(0, 160):
-            for j in range(0, 160):
-                x = j * self.localCostmapResolution + self.localCostmapOriginX
-                y = i * self.localCostmapResolution + self.localCostmapOriginY
-
-                p = np.array([x, y, 0])
-                # print('p: ', p)
-                pnew = p.dot(r_array) + t
-                #print('\n(i, j) = ', (i, j))
-                #print('pnew: ', pnew)
-                x = pnew[0]
-                y = pnew[1]
-
-                j_map = int((x - self.mapOriginX) / self.mapResolution + 0.5)
-                i_map = int((y - self.mapOriginY) / self.mapResolution + 0.5)
-
-                #print('(i_map, j_map) = ', ((y - self.mapOriginY) / self.mapResolution + 0.5, (x - self.mapOriginX) / self.mapResolution + 0.5))
-
-                if (i_map, j_map) not in map_pairs:
-                    map_pairs.append((i_map, j_map))
-                    map_sem_1[i_map, j_map] = costmap_segmented.iloc[i, j]
-                    #print('(i_map, j_map) = ', (i_map, j_map))
-                    #indices_x[i, j] = j_map
-                    #indices_y[i, j] = i_map    
-                else:
-                    map_sem_2[i_map, j_map] = costmap_segmented.iloc[i, j]
-                    #br_duplikata += 1   
-                    #print('(i_map, j_map) = ', (i_map, j_map))
-                    #print('duplikat')    
-
-        pd.DataFrame(map_sem_1).to_csv('semantic_map_1_temporary.csv', index=False, header=False)
-        pd.DataFrame(map_sem_2).to_csv('semantic_map_2_temporary.csv', index=False, header=False)
        
     def ShowImageNoAxis(self, image, boundaries=None, save=None):
         fig = plt.figure()
@@ -4697,105 +3554,7 @@ class ExplainRobotNavigation:
         qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
         
         return [qx, qy, qz, qw]
-
-    def testSegmentation(self, expID):
-
-        print('Test segmentation function beginning')
-
-        if self.manual_instance_loading == False:
-            # Get local costmap
-            index = expID
-            # Original costmap will be saved to self.local_costmap_original
-            local_costmap_original = self.costmap_data.iloc[(index) * self.costmap_size:(index + 1) * self.costmap_size, :]
-
-            # Make image a np.array deepcopy of local_costmap_original
-            image = np.array(copy.deepcopy(local_costmap_original))
-
-        else:
-            image = self.image    
-
-        # Turn inflated area to free space and 100s to 99s
-        for i in range(0, image.shape[0]):
-            for j in range(0, image.shape[1]):
-                if 99 > image[i, j] > 0:
-                    image[i, j] = 0
-                elif image[i, j] == 100:
-                    image[i, j] = 99
-
-        # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-        image = image * 1.0
-
-        # Make image a np.array deepcopy of local_costmap_original
-        img_ = copy.deepcopy(image)
-
-        #'''
-        # Save local costmap as gray image
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(img_, aspect='auto')
-        fig.savefig('costmap.png')
-        fig.clf()
-        #'''
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
-        '''
-        # Save local costmap as rgb image
-        fig = plt.figure(frameon=False)
-        w = 4.8
-        h = 4.8
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(rgb, aspect='auto')
-        fig.savefig('local_costmap_rgb_test_segmentation.png')
-        fig.clf()
-        '''
-
-        # Superpixel segmentation with skimage functions
-
-        # felzenszwalb
-        #segments = felzenszwalb(rgb, scale=100, sigma=5, min_size=1500, multichannel=True)
-        #segments = felzenszwalb(rgb, scale=1, sigma=0.8, min_size=20, multichannel=True)  # default
-
-        # quickshift
-        #segments = quickshift(rgb, ratio=1.0, kernel_size=8, max_dist=800, return_tree=False, sigma=0.0, convert2lab=True, random_seed=42)
-        #segments = quickshift(rgb, ratio=1.0, kernel_size=5, max_dist=10, return_tree=False, sigma=0, convert2lab=True, random_seed=42) # default
-
-        # slic
-        segments = slic(rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False, start_label=None, mask=None)
-        #segments = slic(rgb, n_segments=100, compactness=10.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False, start_label=None, mask=None) # default
-
-        # Turn segments gray image to rgb image
-        #segments_rgb = gray2rgb(segments)
-
-        # Save segments to .csv file
-        #pd.DataFrame(segments).to_csv('~/amar_ws/segments_segmentation_test.csv', index=False, header=False)
-
-        #'''
-        # Save local costmap as rgb image
-        fig = plt.figure(frameon=False)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(segments, aspect='auto')
-        fig.savefig('segments.png')
-        fig.clf()
-        #'''
-
-        print('Test segmentation function ending')    
             
-
     def getSegmentsForGanLimeEval(self, image):
 
         print('Test segmentation function beginning')
