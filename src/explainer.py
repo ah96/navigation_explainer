@@ -15,6 +15,9 @@ explanation_mode = ''
 # tabular explanation modes: 'regression', 'classification'
 underlying_model_mode = ''
 
+import os
+dirCurr = os.getcwd()
+
 import math
 
 def quaternion_to_euler(x, y, z, w):
@@ -277,7 +280,6 @@ def Single():
 
     if choose_random_instance == True:
         # random instance selection
-        #print('\nexpID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
         import random
         expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete)
         print('\nexpID: ', expID)
@@ -292,7 +294,6 @@ def Single():
     end_total_exp_time = time.time()
     print('\nTotal explanation time: ', end_total_exp_time - start_total_exp_time)
     print('\nEND of EXPLANATION!!!')
-    #exp_nav.testSegmentation(expID)
 
 def Evaluate():
     import pandas as pd
@@ -425,12 +426,18 @@ def Evaluate():
     import time
     evaluation_sample_size = 50
     
-    with open("explanations.txt", "a") as myfile:
+    dirName = 'evaluation_results'
+    try:
+        os.mkdir(dirName)
+    except FileExistsError:
+        pass
+
+    with open(dirCurr + '/' + dirName + "/explanations.txt", "a") as myfile:
         myfile.write('explain_instance_time\n')
-    
+
+    choose_random_instance = True
     for i in range(0, evaluation_sample_size):
         print('\ni = ', i)
-        choose_random_instance = True
 
         if choose_random_instance == True:
             # random instance selection
@@ -443,14 +450,14 @@ def Evaluate():
             expID = 75 #DS1: #51 #78 #84 #144, #DS2: #260
             print('\nexpID: ', expID)
 
-        with open('IDs.csv', "a") as myfile:
+        with open(dirCurr + '/' + dirName + '/IDs.csv', "a") as myfile:
             myfile.write(str(expID) + '\n')
         myfile.close() 
 
         total_exp_start = time.time()
         exp_nav.explain_instance_evaluation(expID, i)
         total_exp_end = time.time()
-        with open("explanations.txt", "a") as myfile:
+        with open(dirCurr + '/' + dirName + "/explanations.txt", "a") as myfile:
             myfile.write(str(round(total_exp_end - total_exp_start, 2)) + '\n')
 
 def CreateDataset():
@@ -581,17 +588,23 @@ def CreateDataset():
                                                         underlying_model_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
 
+    dirName = 'dataset_creation_results'
+    try:
+        os.mkdir(dirName)
+    except FileExistsError:
+        pass    
+
     #'''
-    with open('costmap_data.csv', "a") as myfile:
+    with open(dirCurr + '/' + dirName + '/costmap_data.csv', "a") as myfile:
             myfile.write('picture_ID,width,height,origin_x,origin_y,resolution\n')
 
-    with open('local_plan_coordinates.csv', "a") as myfile:
+    with open(dirCurr + '/' + dirName + '/local_plan_coordinates.csv', "a") as myfile:
             myfile.write('picture_ID,position_x,position_y\n')
 
-    with open('global_plan_coordinates.csv', "a") as myfile:
+    with open(dirCurr + '/' + dirName + '/global_plan_coordinates.csv', "a") as myfile:
             myfile.write('picture_ID,position_x,position_y\n')
 
-    with open('robot_coordinates.csv', "a") as myfile:
+    with open(dirCurr + '/' + dirName + '/robot_coordinates.csv', "a") as myfile:
         myfile.write('picture_ID,position_x,position_y\n')
     #''' 
 
@@ -599,17 +612,20 @@ def CreateDataset():
     print('local_costmap_info.shape[0]: ', local_costmap_info.shape[0])
     print('num_of_first_rows_to_delete: ', num_of_first_rows_to_delete)
     print('dataset_size: ', dataset_size)
-    #import random    
-    for i in range(174, dataset_size, 1):
-        # optional instance selection - deterministic
-        expID = i
-        print('expID: ', expID)
 
-        # random instance selection
-        #expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
+    choose_random_instance = True
+    for i in range(174, dataset_size, 1):
+        if choose_random_instance == False:
+            # optional instance selection - deterministic
+            expID = i
+            print('expID: ', expID)
+
+        else:
+            # random instance selection
+            import random    
+            expID = random.randint(0, local_costmap_info.shape[0] - num_of_first_rows_to_delete) 
 
         exp_nav.explain_instance_dataset(expID, i)
-        #exp_nav.testSegmentation(expID)
 
 def RunGAN():
     # Data loading
@@ -689,19 +705,16 @@ def RunGAN():
     # Turn every local costmap entry from int to float, so the segmentation algorithm works okay - here probably not needed
     image = image * 1.0
 
-    gray_shade = 180
-    white_shade = 255
+    free_space_shade = 180
+    obstacle_shade = 255
     from skimage.color import gray2rgb
     image = gray2rgb(image)
     for i in range(0, image.shape[0]):
         for j in range(0, image.shape[1]):
             if image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 0:
-                image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = gray_shade
+                image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = free_space_shade
             elif image[i, j, 0] == image[i, j, 1] == image[i, j, 2] == 99:
-                image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = white_shade
-
-    import os
-    path_core = os.getcwd()
+                image[i, j, 0] = image[i, j, 1] = image[i, j, 2] = obstacle_shade
 
     # plot costmap with plans
     import matplotlib.pyplot as plt
@@ -813,7 +826,13 @@ def RunGAN():
     #ax.quiver(x_odom_index, y_odom_index, yaw_odom_x, yaw_odom_y, color='black')
     # '''
     
-    fig.savefig('input.png', transparent=False)
+    dirName = 'GAN_results'
+    try:
+        os.mkdir(dirName)
+    except FileExistsError:
+        pass
+
+    fig.savefig(dirCurr + '/' + dirName + '/input.png', transparent=False)
     fig.clf()
 
     before_gan_predict_end = time.time()
@@ -906,31 +925,37 @@ def EvaluateLIMEvsGAN():
                                                             current_goal, local_costmap_data, local_costmap_info,
                                                             amcl_pose, tf_odom_map, tf_map_odom, map_data, map_info,
                                                             underlying_model_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
-                                                            X_train, X_test, y_train, y_test, num_samples, plot=False)
+                                                            X_train, X_test, y_train, y_test, num_samples, plot=True)
 
 
+        dirName = 'GANvsLIME_results'
+        import os
+        try:
+            os.mkdir(dirName)
+        except FileExistsError:
+            pass
         
         if new_eval == True:
             if ID == 1:
-                with open("times.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/times.csv", "a") as myfile:
                         myfile.write("lime,gan\n")
 
-                with open("measures_whole_explanation.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/measures_whole_explanation.csv", "a") as myfile:
                         myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
 
-                with open("measures_robot_position.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/measures_robot_position.csv", "a") as myfile:
                         myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
 
-                with open("measures_local_plan.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/measures_local_plan.csv", "a") as myfile:
                         myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
 
-                with open("measures_global_plan.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/measures_global_plan.csv", "a") as myfile:
                         myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
 
-                with open("measures_obstacles.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/measures_obstacles.csv", "a") as myfile:
                         myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
 
-                with open("measures_free_space.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/measures_free_space.csv", "a") as myfile:
                         myfile.write("cie76,cie94,ciede2000,cmc,euc,euc_norm\n")
             
             num_iter = 1
@@ -1084,15 +1109,15 @@ def EvaluateLIMEvsGAN():
                 print('GAN time: ', gan_time_avg / num_iter)
                 print('\n')
 
-                with open("times.csv", "a") as myfile:
+                with open(dirCurr + '/' + dirName + "/times.csv", "a") as myfile:
                     myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
 
                 # evaluation
                 import PIL.Image
                 import os
-                path1 = os.getcwd() + '/explanation.png'
+                path1 = os.getcwd() + '/explanation_results' + '/explanation.png'
                 exp_lime_orig = PIL.Image.open(path1).convert('RGB')
-                path1 = os.getcwd() + '/GAN.png'
+                path1 = os.getcwd() + '/' + 'GAN_results' + '/GAN.png'
                 exp_gan_orig = PIL.Image.open(path1).convert('RGB')
 
                 exp_lime = np.array(exp_lime_orig)
@@ -1103,10 +1128,10 @@ def EvaluateLIMEvsGAN():
                 from PIL import Image
 
                 im = Image.fromarray(exp_lime)
-                im.save("lime_" + str(redni_broj_slike) + ".png")
+                im.save(os.getcwd() + '/' + dirName + "/lime_" + str(redni_broj_slike) + ".png")
 
                 im = Image.fromarray(exp_gan)
-                im.save("gan_" + str(redni_broj_slike) + ".png")
+                im.save(os.getcwd() + '/' + dirName + "/gan_" + str(redni_broj_slike) + ".png")
 
                 redni_broj_slike += 1
                 
@@ -1277,27 +1302,27 @@ def EvaluateLIMEvsGAN():
                 free_space_euc /= free_space_counter
                 free_space_euc_norm /= free_space_counter
 
-                with open("measures_whole_explanation.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/measures_whole_explanation.csv", "a") as myfile:
                     myfile.write(str(whole_explanation_cie76) + ',' + str(whole_explanation_cie94) + ',' + str(whole_explanation_ciede2000) 
                     + ',' + str(whole_explanation_cmc) + ',' + str(whole_explanation_euc) + ',' + str(whole_explanation_euc_norm) + ',' + "\n")
 
-                with open("measures_robot_position.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/measures_robot_position.csv", "a") as myfile:
                     myfile.write(str(robot_position_cie76) + ',' + str(robot_position_cie94) + ',' + str(robot_position_ciede2000) 
                     + ',' + str(robot_position_cmc) + ',' + str(robot_position_euc) + ',' + str(robot_position_euc_norm) + ',' + "\n")
 
-                with open("measures_local_plan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/measures_local_plan.csv", "a") as myfile:
                     myfile.write(str(local_plan_cie76) + ',' + str(local_plan_cie94) + ',' + str(local_plan_ciede2000) 
                     + ',' + str(local_plan_cmc) + ',' + str(local_plan_euc) + ',' + str(local_plan_euc_norm) + ',' + "\n")                    
 
-                with open("measures_global_plan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/measures_global_plan.csv", "a") as myfile:
                     myfile.write(str(global_plan_cie76) + ',' + str(global_plan_cie94) + ',' + str(global_plan_ciede2000) 
                     + ',' + str(global_plan_cmc) + ',' + str(global_plan_euc) + ',' + str(global_plan_euc_norm) + ',' + "\n")
 
-                with open("measures_obstacles.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/measures_obstacles.csv", "a") as myfile:
                     myfile.write(str(obstacles_cie76) + ',' + str(obstacles_cie94) + ',' + str(obstacles_ciede2000) 
                     + ',' + str(obstacles_cmc) + ',' + str(obstacles_euc) + ',' + str(obstacles_euc_norm) + ',' + "\n")
 
-                with open("measures_free_space.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/measures_free_space.csv", "a") as myfile:
                     myfile.write(str(free_space_cie76) + ',' + str(free_space_cie94) + ',' + str(free_space_ciede2000) 
                     + ',' + str(free_space_cmc) + ',' + str(free_space_euc) + ',' + str(free_space_euc_norm) + ',' + "\n")
 
@@ -1312,58 +1337,58 @@ def EvaluateLIMEvsGAN():
             import matplotlib.pyplot as plt
 
             if ID == 1:
-                with open("times.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/times.csv", "a") as myfile:
                         myfile.write("lime,gan\n")
 
-                with open("weights.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/weights.csv", "a") as myfile:
                         myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")        
 
-                with open("segments.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/segments.csv", "a") as myfile:
                         myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-                with open("local_plan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/local_plan.csv", "a") as myfile:
                         myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-                with open("global_plan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/global_plan.csv", "a") as myfile:
                         myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-                with open("obstacles.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/obstacles.csv", "a") as myfile:
                         myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-                with open("free_space.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/free_space.csv", "a") as myfile:
                         myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-                with open("robot_position.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/robot_position.csv", "a") as myfile:
                         myfile.write("color_similarity_percentage,R_abs,G_abs,B_abs,abs_from_RGB,channel_abs\n")
 
-                with open("gan_times.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/gan_times.csv", "a") as myfile:
                         myfile.write("predict_time\n")
 
-                with open("R_avg_lime.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/R_avg_lime.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("R_avg_gan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/R_avg_gan.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("R_diff.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/R_diff.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("G_avg_lime.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/G_avg_lime.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("G_avg_gan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/G_avg_gan.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("G_diff.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/G_diff.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("B_avg_lime.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/B_avg_lime.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("B_avg_gan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/B_avg_gan.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
-                with open("B_diff.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/B_diff.csv", "a") as myfile:
                     myfile.write("w1,w2,w3,w4,w5,w6,w7,w8\n")
 
             num_iter = 1
@@ -1526,7 +1551,7 @@ def EvaluateLIMEvsGAN():
                 print('GAN time: ', gan_time_avg / num_iter)
                 print('\n')
 
-                with open("times.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/times.csv", "a") as myfile:
                     myfile.write(str(lime_time_avg) + "," + str(gan_time_avg) + "\n")
 
                 segments = exp_nav.segments
@@ -1537,9 +1562,9 @@ def EvaluateLIMEvsGAN():
                 # RGB evaluation
                 import PIL.Image
                 import os
-                path1 = os.getcwd() + '/explanation.png'
+                path1 = os.getcwd() + '/explanation_results' + '/explanation.png'
                 exp_lime_orig = PIL.Image.open(path1).convert('RGB')
-                path1 = os.getcwd() + '/GAN.png'
+                path1 = os.getcwd() + '/' + 'GAN_results' + '/GAN.png'
                 exp_gan_orig = PIL.Image.open(path1).convert('RGB')
 
                 exp_lime = np.array(exp_lime_orig)
@@ -1718,57 +1743,57 @@ def EvaluateLIMEvsGAN():
                 print('\ndiff_G_abs_list = ', diff_G_abs_list)
                 print('\ndiff_B_abs_list = ', diff_B_abs_list)
 
-                with open("weights.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/weights.csv", "a") as myfile:
                     for id in range(0, len(weights_raw) - 1):
                         myfile.write(str(weights_raw[id]) + ",")
                     myfile.write(str(weights_raw[-1]) + "\n")
 
-                with open("R_avg_lime.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/R_avg_lime.csv", "a") as myfile:
                     for id in range(0, len(R_abs_list_lime) - 1):
                         myfile.write(str(R_abs_list_lime[id]) + ",")
                     myfile.write(str(R_abs_list_lime[-1]) + "\n")
 
-                with open("G_avg_lime.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/G_avg_lime.csv", "a") as myfile:
                     for id in range(0, len(G_abs_list_lime) - 1):
                         myfile.write(str(G_abs_list_lime[id]) + ",")
                     myfile.write(str(G_abs_list_lime[-1]) + "\n")
 
-                with open("B_avg_lime.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/B_avg_lime.csv", "a") as myfile:
                     for id in range(0, len(B_abs_list_lime) - 1):
                         myfile.write(str(B_abs_list_lime[id]) + ",")
                     myfile.write(str(B_abs_list_lime[-1]) + "\n")
 
-                with open("R_avg_gan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/R_avg_gan.csv", "a") as myfile:
                     for id in range(0, len(R_abs_list_gan) - 1):
                         myfile.write(str(R_abs_list_gan[id]) + ",")
                     myfile.write(str(R_abs_list_gan[-1]) + "\n")
 
-                with open("G_avg_gan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/G_avg_gan.csv", "a") as myfile:
                     for id in range(0, len(G_abs_list_gan) - 1):
                         myfile.write(str(G_abs_list_gan[id]) + ",")
                     myfile.write(str(G_abs_list_gan[-1]) + "\n")
 
-                with open("B_avg_gan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/B_avg_gan.csv", "a") as myfile:
                     for id in range(0, len(B_abs_list_gan) - 1):
                         myfile.write(str(B_abs_list_gan[id]) + ",")
                     myfile.write(str(B_abs_list_gan[-1]) + "\n")
 
-                with open("R_diff.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/R_diff.csv", "a") as myfile:
                     for id in range(0, len( diff_R_abs_list) - 1):
                         myfile.write(str( diff_R_abs_list[id]) + ",")
                     myfile.write(str( diff_R_abs_list[-1]) + "\n")
 
-                with open("G_diff.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/G_diff.csv", "a") as myfile:
                     for id in range(0, len( diff_G_abs_list) - 1):
                         myfile.write(str( diff_G_abs_list[id]) + ",")
                     myfile.write(str( diff_G_abs_list[-1]) + "\n")
 
-                with open("B_diff.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/B_diff.csv", "a") as myfile:
                     for id in range(0, len( diff_B_abs_list) - 1):
                         myfile.write(str( diff_B_abs_list[id]) + ",")
                     myfile.write(str( diff_B_abs_list[-1]) + "\n")
 
-                with open("segments.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/segments.csv", "a") as myfile:
                     myfile.write(str(explanation_saved_percentage) + ",")
                     myfile.write(str(sum(diff_R_abs_list) / len(diff_R_abs_list)) + ",")
                     myfile.write(str(sum(diff_G_abs_list) / len(diff_G_abs_list)) + ",")
@@ -1850,7 +1875,7 @@ def EvaluateLIMEvsGAN():
 
                 channel_avg_diff /= count_avg
 
-                with open("local_plan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/local_plan.csv", "a") as myfile:
                     myfile.write(str(color_coverage_percent) + ",")
                     myfile.write(str(diff_R_abs) + ",")
                     myfile.write(str(diff_G_abs) + ",")
@@ -1932,7 +1957,7 @@ def EvaluateLIMEvsGAN():
 
                 channel_avg_diff /= count_avg
 
-                with open("global_plan.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/global_plan.csv", "a") as myfile:
                     myfile.write(str(color_coverage_percent) + ",")
                     myfile.write(str(diff_R_abs) + ",")
                     myfile.write(str(diff_G_abs) + ",")
@@ -2016,7 +2041,7 @@ def EvaluateLIMEvsGAN():
 
                 channel_avg_diff /= count_avg
 
-                with open("robot_position.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/robot_position.csv", "a") as myfile:
                     myfile.write(str(color_coverage_percent) + ",")
                     myfile.write(str(diff_R_abs) + ",")
                     myfile.write(str(diff_G_abs) + ",")
@@ -2101,7 +2126,7 @@ def EvaluateLIMEvsGAN():
 
                 channel_avg_diff /= count_avg
 
-                with open("obstacles.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/obstacles.csv", "a") as myfile:
                     myfile.write(str(color_coverage_percent) + ",")
                     myfile.write(str(diff_R_abs) + ",")
                     myfile.write(str(diff_G_abs) + ",")
@@ -2185,7 +2210,7 @@ def EvaluateLIMEvsGAN():
 
                 channel_avg_diff /= count_avg
 
-                with open("free_space.csv", "a") as myfile:
+                with open(os.getcwd() + '/' + dirName + "/free_space.csv", "a") as myfile:
                     myfile.write(str(color_coverage_percent) + ",")
                     myfile.write(str(diff_R_abs) + ",")
                     myfile.write(str(diff_G_abs) + ",")
@@ -2194,89 +2219,86 @@ def EvaluateLIMEvsGAN():
                     myfile.write(str(channel_avg_diff) + "\n")
                 # FREE SPACE eval ENDS
 
+def tkinterStart():
+    import tkinter
+    # GUI architecture
+    root = tkinter.Tk()
+    root.title("Navigation Explainer")
 
-###### TKINTER START ######
+    # Dropdown menu options
+    options_exp_alg = [
+        "LIME",
+        "Anchors",
+        "SHAP"
+    ]
+    # datatype of menu text
+    clicked_exp_alg = tkinter.StringVar()  
+    # initial menu text
+    clicked_exp_alg.set( "Choose explanation algorithm" )  
+    # Create Dropdown menu
+    drop = tkinter.OptionMenu( root , clicked_exp_alg , *options_exp_alg )
+    drop.pack()
 
-from tkinter import *
-# GUI architecture
-root = Tk()
-root.title("Navigation Explainer")
+    options_exp_mode = [
+        "image",
+        "tabular",
+        "tabular_costmap"
+    ]
+    # datatype of menu text
+    clicked_exp_mode = tkinter.StringVar()  
+    # initial menu text
+    clicked_exp_mode.set( "Choose explanation method" )  
+    # Create Dropdown menu
+    drop = tkinter.OptionMenu( root , clicked_exp_mode , *options_exp_mode )
+    drop.pack()
 
-# Dropdown menu options
-options_exp_alg = [
-    "LIME",
-    "Anchors",
-    "SHAP"
-]
-# datatype of menu text
-clicked_exp_alg = StringVar()  
-# initial menu text
-clicked_exp_alg.set( "Choose explanation algorithm" )  
-# Create Dropdown menu
-drop = OptionMenu( root , clicked_exp_alg , *options_exp_alg )
-drop.pack()
+    options_model_mode = [
+        "regression",
+        "classification",
+        "regression_normalized_around_deviation",
+        "regression_normalized"
+    ]
+    # datatype of menu text
+    clicked_model_mode = tkinter.StringVar()  
+    # initial menu text
+    clicked_model_mode.set( "Choose underlying model" )  
+    # Create Dropdown menu
+    drop = tkinter.OptionMenu( root , clicked_model_mode , *options_model_mode )
+    drop.pack()
 
-options_exp_mode = [
-    "image",
-    "tabular",
-    "tabular_costmap"
-]
-# datatype of menu text
-clicked_exp_mode = StringVar()  
-# initial menu text
-clicked_exp_mode.set( "Choose explanation method" )  
-# Create Dropdown menu
-drop = OptionMenu( root , clicked_exp_mode , *options_exp_mode )
-drop.pack()
+    def loadToGlobalVars():
+        global explanation_alg, explanation_mode, underlying_model_mode
+        explanation_alg = clicked_exp_alg.get()
+        explanation_mode = clicked_exp_mode.get()
+        underlying_model_mode = clicked_model_mode.get()
+        
+        print('\nexplanation algorithm: ', explanation_alg)
+        print('explanation mode:', explanation_mode)
+        print('underlying_model_mode: ', underlying_model_mode)
 
-options_model_mode = [
-    "regression",
-    "classification",
-    "regression_normalized_around_deviation",
-    "regression_normalized"
-]
-# datatype of menu text
-clicked_model_mode = StringVar()  
-# initial menu text
-clicked_model_mode.set( "Choose underlying model" )  
-# Create Dropdown menu
-drop = OptionMenu( root , clicked_model_mode , *options_model_mode )
-drop.pack()
-
-def loadToGlobalVars():
-    global explanation_alg, explanation_mode, underlying_model_mode
-    explanation_alg = clicked_exp_alg.get()
-    explanation_mode = clicked_exp_mode.get()
-    underlying_model_mode = clicked_model_mode.get()
+    button_load = tkinter.Button( root , text = "Confirm choices" , command = loadToGlobalVars ).pack()
     
-    print('\nexplanation algorithm: ', explanation_alg)
-    print('explanation mode:', explanation_mode)
-    print('underlying_model_mode: ', underlying_model_mode)
+    buttonSingle = tkinter.Button(root, text='Run single', height=3, width=25, command=Single, fg='black', bg='white')
+    #buttonSingle.grid(row=0,column=0)
+    buttonSingle.pack()
 
-button_load = Button( root , text = "Confirm choices" , command = loadToGlobalVars ).pack()
-  
-buttonSingle = Button(root, text='Run single', height=3, width=25, command=Single, fg='black', bg='white')
-#buttonSingle.grid(row=0,column=0)
-buttonSingle.pack()
+    buttonEvaluate = tkinter.Button(root, text='Evaluate', height=3, width=25, command=Evaluate, fg='black', bg='white')
+    #buttonEvaluate.grid(row=2,column=0)
+    buttonEvaluate.pack()
 
-buttonEvaluate = Button(root, text='Evaluate', height=3, width=25, command=Evaluate, fg='black', bg='white')
-#buttonEvaluate.grid(row=2,column=0)
-buttonEvaluate.pack()
+    buttonCreateDataset = tkinter.Button(root, text='Create dataset for GAN', height=3, width=25, command=CreateDataset, fg='black', bg='white')
+    #buttonCreateDataset.grid(row=1,column=0)
+    buttonCreateDataset.pack()
 
-buttonCreateDataset = Button(root, text='Create dataset for GAN', height=3, width=25, command=CreateDataset, fg='black', bg='white')
-#buttonCreateDataset.grid(row=1,column=0)
-buttonCreateDataset.pack()
+    buttonRunGAN = tkinter.Button(root, text='Run GAN', height=3, width=25, command=RunGAN, fg='black', bg='white')
+    #buttonRunGAN.grid(row=3,column=0)
+    buttonRunGAN.pack()
 
-buttonRunGAN = Button(root, text='Run GAN', height=3, width=25, command=RunGAN, fg='black', bg='white')
-#buttonRunGAN.grid(row=3,column=0)
-buttonRunGAN.pack()
+    buttonEvaluateLIMEvsGAN = tkinter.Button(root, text='Evaluate LIME vs GAN', height=3, width=25, command=EvaluateLIMEvsGAN, fg='black', bg='white')
+    #buttonEvaluateLIMEvsGAN.grid(row=4,column=0)
+    buttonEvaluateLIMEvsGAN.pack()
 
-buttonEvaluateLIMEvsGAN = Button(root, text='Evaluate LIME vs GAN', height=3, width=25, command=EvaluateLIMEvsGAN, fg='black', bg='white')
-#buttonEvaluateLIMEvsGAN.grid(row=4,column=0)
-buttonEvaluateLIMEvsGAN.pack()
+    root.mainloop()
 
-root.mainloop()
-
-###### TKINTER END ######
-
+tkinterStart()
 

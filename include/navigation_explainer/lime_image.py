@@ -70,10 +70,78 @@ class ImageExplanation(object):
             return temp, exp
 
         segments_labels = np.unique(self.segments)
+        #print('segments_labels = ', segments_labels)
         
         for f, w in exp:
             #print('(f, w): ', (f, w))
             f = segments_labels[f]
+            #print('segments_labels[f] = ', f)
+
+            if w < 0.0:
+                c = -1
+            elif w > 0.0:
+                c = 1
+            else:
+                c = 0
+            #print('c = ', c)
+            
+            # free space
+            if f == 0:
+                #print('free_space, (f, w) = ', (f, w))
+                if self.color_free_space == False:
+                    temp[self.segments == f, 0] = self.free_space_shade
+                    temp[self.segments == f, 1] = self.free_space_shade
+                    temp[self.segments == f, 2] = self.free_space_shade
+            # obstacle
+            else:
+                if self.color_free_space == False:
+                    if c == 1:
+                        temp[self.segments == f, 0] = 0.0
+                        if self.use_maximum_weight == True:
+                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                        else:
+                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                        temp[self.segments == f, 2] = 0.0
+                    elif c == 0:
+                        temp[self.segments == f, 0] = 0.0
+                        temp[self.segments == f, 1] = 0.0
+                        temp[self.segments == f, 2] = 0.0
+                    elif c == -1:
+                        if self.use_maximum_weight == True:
+                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                        else:
+                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                        temp[self.segments == f, 1] = 0.0
+                        temp[self.segments == f, 2] = 0.0
+                                        
+        return temp, exp
+
+    def get_image_and_mask_evaluation(self, label):
+        if label not in self.local_exp:
+            raise KeyError('Label not in explanation')
+        
+        exp = self.local_exp[label]
+
+        temp = np.zeros(self.image.shape)
+
+        w_sum = 0.0
+        w_s = []
+        for f, w in exp:
+            w_sum += abs(w)
+            w_s.append(abs(w))
+        max_w = max(w_s)
+        if max_w == 0:
+            self.all_weights_zero = True
+            temp[self.image == 0] = self.free_space_shade
+            temp[self.image != 0] = 0.0
+            return temp, exp
+
+        segments_labels = np.unique(self.segments)
+        #print('segments_labels = ', segments_labels)
+        
+        for f, w in exp:
+            #print('(f, w): ', (f, w))
+            f = segments_labels[f-1]
             #print('segments_labels[f] = ', f)
 
             if w < 0.0:
@@ -157,7 +225,8 @@ class LimeImageExplainer(object):
         self.base = lime_base.LimeBase(kernel_fn, verbose, random_state=self.random_state)
 
         self.dirCurr = os.getcwd()
-
+    
+    # SINGLE INSTANCE
     def explain_instance(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_samples=1000,
@@ -1880,7 +1949,7 @@ class LimeImageExplainer(object):
         return segments
 
 
-    
+    # EVALUATION    
     def explain_instance_evaluation(self, image, classifier_fn, costmap_info, map_info, tf_odom_map, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list, labels=(1,),
                          hide_color=None,
                          top_labels=5, num_features=100000, num_segments=1,
@@ -1908,8 +1977,10 @@ class LimeImageExplainer(object):
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
             start = time.time()
-            #segments = self.mySlic(image)
-            segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            segments = self.sm_slic_custom(image_orig, image)
+            #segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_only_obstacles_new(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            #segments = self.sm_semantic(image, x_odom, y_odom)
             end = time.time()
             segmentation_time = end - start
             #segmentation_time = round(end - start, 3)

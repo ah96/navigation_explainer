@@ -1,9 +1,15 @@
 def predict():
     import os
-    path = os.getcwd() + '/src/navigation_explainer/include/GAN'
+    dirCurr = os.getcwd()
+    path = dirCurr + '/src/navigation_explainer/include/GAN'
     import sys
     sys.path.insert(1, path)
 
+    dirName = 'GAN_results'
+    try:
+        os.mkdir(dirName)
+    except FileExistsError:
+        pass
 
     from options.test_options import TestOptions
     from models import create_model
@@ -17,8 +23,12 @@ def predict():
     #rgb_image = rgba_image.convert('RGB')
     #plt.imshow(rgb_image)
 
-    path = os.getcwd() + '/input.png'
-    input = PIL.Image.open(path).convert('RGB')
+    try:
+        path = dirCurr + '/' + dirName + '/input.png'
+        input = PIL.Image.open(path).convert('RGB')
+    except:
+        path = dirCurr + '/' + 'explanation_results' + '/input.png'
+        input = PIL.Image.open(path).convert('RGB')
     #plt.imshow(input)
     #plt.savefig('input_main.png')
 
@@ -60,7 +70,7 @@ def predict():
 
     gan_predict_end = time.time()
     gan_predict_time = gan_predict_end - gan_predict_start
-    with open("gan_times.csv", "a") as myfile:
+    with open(dirCurr + '/' + dirName + "/gan_times.csv", "a") as myfile:
             myfile.write(str(gan_predict_time) + "\n")
 
     fig = plt.figure(frameon=False)
@@ -71,5 +81,5 @@ def predict():
     ax.set_axis_off()
     fig.add_axes(ax)
     ax.imshow(output, aspect='auto')
-    fig.savefig('GAN.png')
+    fig.savefig(dirCurr + '/' + dirName + '/GAN.png')
     fig.clf()
