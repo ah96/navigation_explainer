@@ -4252,7 +4252,6 @@ class ExplainRobotNavigation:
                 myfile.write(str(iteration_ID) + ',' + str(self.odom_x) + ',' + str(self.odom_y) + '\n')       
         
 
-
     # HELPER CALCULATION FUNCTIONS     
     # flip matrix horizontally or vertically
     def matrixFlip(self, m, d):
@@ -4293,93 +4292,6 @@ class ExplainRobotNavigation:
         qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
         
         return [qx, qy, qz, qw]
-
-
-
-    # GAN and GANvsLIME
-    def getSegmentsForGanLimeEval(self, image):
-
-        print('Test segmentation function beginning')
-
-        # Make image a np.array deepcopy of local_costmap_original
-        img_ = copy.deepcopy(image)
-
-        # Turn gray image to rgb image
-        rgb = gray2rgb(img_)
-
-        # Generate segments - superpixels with my slic function
-        segments = self.mySlicGanLimeEval(rgb)
-
-        print('Test segmentation function ending')
-
-        return segments
-
-    def mySlicGanLimeEval(self, img_rgb):
-
-        print('mySlic for evaluation starts')
-
-        img = img_rgb[:, :, 0]
-
-        # import needed libraries
-        from skimage.segmentation import slic
-
-        # segments_1 - good obstacles
-        # Find segments_1
-        segments_1 = slic(img_rgb, n_segments=6, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.01, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        # find segments_unique_1
-        segments_unique_1 = np.unique(segments_1)
-        print('segments_unique_1: ', segments_unique_1)
-        print('segments_unique_1.shape: ', segments_unique_1.shape)
-
-        
-        segments_2 = slic(img_rgb, n_segments=10, compactness=100.0, max_iter=1000, sigma=0, spacing=None,
-                          multichannel=True, convert2lab=True,
-                          enforce_connectivity=True, min_size_factor=0.3, max_size_factor=5, slic_zero=False,
-                          start_label=1, mask=None)
-        # find segments_unique_2
-        segments_unique_2 = np.unique(segments_2)
-        print('segments_unique_2: ', segments_unique_2)
-        print('segments_unique_2.shape: ', segments_unique_2.shape)
-
-        # Creating segments using segments_1 and segments_2
-        #'''
-        # Add/Sum segments_1 and segments_2
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                if img[i, j] == 0.0:  # and segments_1[i, j] != segments_unique_1[max_index_1]:
-                    segments_1[i, j] = segments_2[i, j] + segments_unique_2.shape[0]
-                else:
-                    segments_1[i, j] = 2 * segments_1[i, j] + 2 * segments_unique_2.shape[0]
-        #'''
-        # find segments_unique before nice segment numbering
-        segments_unique = np.unique(segments_1)
-        print('segments_unique: ', segments_unique)
-        print('segments_unique.shape: ', segments_unique.shape)
-
-        # Get nice segments' numbering
-        for i in range(0, segments_1.shape[0]):
-            for j in range(0, segments_1.shape[1]):
-                for k in range(0, segments_unique.shape[0]):
-                    if segments_1[i, j] == segments_unique[k]:
-                        segments_1[i, j] = k
-                        break
-        # find segments_unique after nice segment numbering
-        segments_unique = np.unique(segments_1)
-        print('segments_unique (with nice numbering): ', segments_unique)
-        print('segments_unique.shape (with nice numbering): ', segments_unique.shape)
-        
-        # print explanation
-        #print('self.exp: ', self.exp)
-        #print('len(self.exp): ', len(self.exp))
-
-        print('mySlic for evaluation ends')
-
-        return segments_1
-
-
 
 
 '''
