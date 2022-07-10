@@ -41,7 +41,7 @@ class ImageExplanation(object):
         self.score = {}
 
         self.color_free_space = False
-        self.use_maximum_weight = False
+        self.use_maximum_weight = True
         self.all_weights_zero = False
 
 
@@ -290,9 +290,9 @@ class LimeImageExplainer(object):
                                                     random_seed=random_seed)
             segments = segmentation_fn(image)
         elif segmentation_fn == 'custom_segmentation':
-            segments = self.sm_slic_custom(image_orig, image)
+            #segments = self.sm_slic_custom(image_orig, image)
             #segments = self.sm_only_obstacles(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
-            #segments = self.sm_only_obstacles_new(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
+            segments = self.sm_only_obstacles_new(image_orig, image, x_odom, y_odom, devDistance_x, sum_x, devDistance_y, sum_y, devDistance, plan_x_list, plan_y_list)
             #segments = self.sm_semantic(image, x_odom, y_odom)
         else:
             segments = segmentation_fn(image)

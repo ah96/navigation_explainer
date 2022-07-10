@@ -127,7 +127,7 @@ class ExplainRobotNavigation:
         self.expID = expID
         self.index = self.expID
 
-        self.manual_instance_loading = False        
+        self.manual_instance_loading = True        
 
         if self.explanation_algorithm == 'LIME':    
             # if explanation_mode is 'image'
@@ -154,36 +154,41 @@ class ExplainRobotNavigation:
                     #print('self.image.size = ', self.image.size)
 
                 elif self.manual_instance_loading == True:
+                    manual_case_names = ['big_deviation','big_deviation_without_wall','no_deviation','rotate_in_place','small_deviation','stop']
+                    idx = 3
+                    manual_case_name = manual_case_names[idx]
+                    path_to_files = self.dirCurr + '/manual_instances/' + manual_case_name + '/'
+
                     # Load costmap
-                    self.image = np.array(pd.read_csv('costmap_new.csv')) * 1.0
+                    self.image = np.array(pd.read_csv(path_to_files + 'costmap_new.csv')) * 1.0
 
                     # Load footprint
-                    self.footprint_tmp = pd.read_csv('footprint_new.csv')
+                    self.footprint_tmp = pd.read_csv(path_to_files + 'footprint_new.csv')
                     #print(self.footprint_tmp)
                     
                     # Load local plan
-                    self.local_plan_tmp = pd.read_csv('local_plan_new.csv')
+                    self.local_plan_tmp = pd.read_csv(path_to_files + 'local_plan_new.csv')
 
                     # Load plan (from global planner)
-                    self.plan_tmp = pd.read_csv('global_plan_new.csv')
+                    self.plan_tmp = pd.read_csv(path_to_files + 'global_plan_new.csv')
 
                     # Load global plan
-                    self.global_plan_tmp = pd.read_csv('global_plan_new.csv')
+                    self.global_plan_tmp = pd.read_csv(path_to_files + 'global_plan_new.csv')
 
                     # Load costmap_info
-                    self.costmap_info_tmp = pd.read_csv('costmap_info_new.csv')
+                    self.costmap_info_tmp = pd.read_csv(path_to_files + 'costmap_info_new.csv')
 
                     # Load amcl_pose
-                    self.amcl_pose_tmp = pd.read_csv('amcl_pose_new.csv')
+                    self.amcl_pose_tmp = pd.read_csv(path_to_files + 'amcl_pose_new.csv')
 
                     # Load tf_odom_map
-                    self.tf_odom_map_tmp = pd.read_csv('tf_odom_map_new.csv')
+                    self.tf_odom_map_tmp = pd.read_csv(path_to_files + 'tf_odom_map_new.csv')
 
                     # Load tf_map_odom
-                    self.tf_map_odom_tmp = pd.read_csv('tf_map_odom_new.csv')
+                    self.tf_map_odom_tmp = pd.read_csv(path_to_files + 'tf_map_odom_new.csv')
 
                     # Load odometry
-                    self.odom_tmp = pd.read_csv('odom_new.csv')
+                    self.odom_tmp = pd.read_csv(path_to_files + 'odom_new.csv')
                 
                 #save_data_for_local_planner_start = time.time()
                 # Saving data to .csv files for C++ node - local navigation planner
@@ -225,11 +230,11 @@ class ExplainRobotNavigation:
 
                 #self.plot = True
                 if self.plot == True:
-                    #plotting_time_start = time.time()
+                    plotting_time_start = time.time()
                     self.plotExplanation()
-                    #plotting_time_end = time.time()
-                    #plotting_time_start = plotting_time_end - plotting_time_start
-                    #print('\nPlotting time = ', plotting_time_start)
+                    plotting_time_end = time.time()
+                    plotting_time_start = plotting_time_end - plotting_time_start
+                    print('\nPlotting time = ', plotting_time_start)
 
             elif self.explanation_mode == 'tabular':
                 # search for instance queue index (original instance queue name in almost (haman) input data frames)
@@ -594,6 +599,31 @@ class ExplainRobotNavigation:
 
     # plot explanation picture and segments
     def plotExplanation(self):
+        try:
+            if self.transformed_plan_xs == [] or self.transformed_plan_ys == []:
+                # fill the list of transformed plan coordinates
+                self.transformed_plan_xs = []
+                self.transformed_plan_ys = []
+                for i in range(0, self.transformed_plan.shape[0]):
+                    x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                    y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                    if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                        self.transformed_plan_xs.append(x_temp)
+                        self.transformed_plan_ys.append(y_temp)
+        except:
+            # if transformed_plan variables do not exist
+            # fill the list of transformed plan coordinates
+                self.transformed_plan_xs = []
+                self.transformed_plan_ys = []
+                for i in range(0, self.transformed_plan.shape[0]):
+                    x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                    y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                    if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                        self.transformed_plan_xs.append(x_temp)
+                        self.transformed_plan_ys.append(y_temp)
+
         dirName = 'explanation_results'
         try:
             os.mkdir(dirName)
@@ -769,6 +799,7 @@ class ExplainRobotNavigation:
 
         #print('\nC++ node ended')
 
+        # GETTING OUTPUT
         #output_start = time.time()
         # load command velocities - output from local planner
         self.cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
@@ -790,22 +821,7 @@ class ExplainRobotNavigation:
         #output_end = time.time()
         #output_time = output_end - output_start
         #print('\noutput time: ', output_time)
-
-        # fill the list of transformed plan coordinates
-        #start_transformed = time.time()
-        self.transformed_plan_xs = []
-        self.transformed_plan_ys = []
-        for i in range(0, self.transformed_plan.shape[0]):
-            x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
-
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                self.transformed_plan_xs.append(x_temp)
-                self.transformed_plan_ys.append(y_temp)
-        #end_transformed = time.time()
-        #transformed_time = end_transformed - start_transformed
-        #print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
-        
+  
         # calculate original deviation - sum of minimal point-to-point distances
         calculate_original_deviation = False
         if calculate_original_deviation == True:
@@ -829,7 +845,7 @@ class ExplainRobotNavigation:
             # original_deviation for rotate_in_place = 307.4962940090125
             print('\noriginal_deviation = ', original_deviation)
 
-        plot_perturbations = False
+        plot_perturbations = True
         if plot_perturbations == True:
             # only needed for classifier_fn_image_plot() function
             self.sampled_instance = sampled_instance
@@ -879,9 +895,10 @@ class ExplainRobotNavigation:
             print('\ndeviation_type: ', deviation_type)
   
         mode = self.underlying_model_mode # 'regression' or 'classification' or 'regression_normalized_around_deviation' or 'regression_normalized'
-        print('\nmode = ', mode)
+        #print('\nmode = ', mode)
 
         # TARGET CALCULATION
+        target_calculation_start = time.time()
         my_distance_fun = True
         if my_distance_fun == True:
             # deviation of local plan from global plan dataframe
@@ -895,37 +912,203 @@ class ExplainRobotNavigation:
             #start_main = time.time()
 
             if mode == 'regression':
-                # fill in deviation dataframe
-                dev_original = 0
-                for i in range(0, self.sample_size):
-                    #print('\ni = ', i)
-                    local_plan_xs = []
-                    local_plan_ys = []
-                    
-                    # find if there is local plan
-                    self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
-                    for j in range(0, self.local_plans_local.shape[0]):
-                            x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                            y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                local_deviation_frame = 'costmap'
+                local_deviation_metric = 'L1'
+                
+                if local_deviation_frame == 'pixels' and local_deviation_metric == 'L2':
+                    # transform transformed_plan to pixel locations
+                    #start_transformed = time.time()
+                    self.transformed_plan_xs = []
+                    self.transformed_plan_ys = []
+                    #print('len(TRANSFORMED_PLAN_BEFORE) = ', self.transformed_plan.shape[0])
+                    for i in range(0, self.transformed_plan.shape[0]):
+                        x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                        y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-                            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                        #if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                        self.transformed_plan_xs.append(x_temp)
+                        self.transformed_plan_ys.append(y_temp)
+                    #end_transformed = time.time()
+                    #transformed_time = end_transformed - start_transformed
+                    #print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
+                    #print('len(TRANSFORMED_PLAN_AFTER) = ', len(self.transformed_plan_xs))                    
+
+                    # fill in deviation dataframe
+                    for i in range(0, self.sample_size):
+                        #print('\ni = ', i)
+                        local_plan_xs = []
+                        local_plan_ys = []
+                        
+                        # transform local_plan to pixel locations
+                        self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                        #print('len(LOCAL_PLAN_BEFORE) = ', self.local_plans_local.shape[0])
+                        for j in range(0, self.local_plans_local.shape[0]):
+                                x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                                y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                                #if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                                 local_plan_xs.append(x_temp)
                                 local_plan_ys.append(y_temp)
-                    
-                    # find deviation as a sum of minimal point-to-point differences
-                    diff_x = 0
-                    diff_y = 0
-                    devs = []
-                    for j in range(0, len(local_plan_xs)):
-                        local_diffs = []
-                        for k in range(0, len(self.transformed_plan_xs)):
-                            diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
-                            diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
-                            diff = math.sqrt(diff_x + diff_y)
-                            local_diffs.append(diff)                        
-                        devs.append(min(local_diffs))   
+                        #print('len(LOCAL_PLAN_AFTER) = ', len(local_plan_xs))
 
-                    self.local_plan_deviation.iloc[i, 0] = sum(devs)
+                        # find deviation as a sum of minimal point-to-point differences
+                        diff_x = 0
+                        diff_y = 0
+                        devs = []
+                        for j in range(0, len(local_plan_xs)):
+                            local_diffs = []
+                            for k in range(0, len(self.transformed_plan_xs)):
+                                diff_x = (local_plan_xs[j] - self.transformed_plan_xs[k]) ** 2
+                                diff_y = (local_plan_ys[j] - self.transformed_plan_ys[k]) ** 2
+                                diff = math.sqrt(diff_x + diff_y)
+                                local_diffs.append(diff)                        
+                            devs.append(min(local_diffs))   
+
+                        self.local_plan_deviation.iloc[i, 0] = sum(devs)
+                
+                elif local_deviation_frame == 'costmap' and local_deviation_metric == 'L2':
+                    # fill in deviation dataframe
+                    # transform transformed_plan to list
+                    start_transformed = time.time()
+                    transformed_plan_xs = []
+                    transformed_plan_ys = []
+                    for i in range(0, self.transformed_plan.shape[0]):
+                        transformed_plan_xs.append(self.transformed_plan.iloc[i, 0])
+                        transformed_plan_ys.append(self.transformed_plan.iloc[i, 1])
+                    end_transformed = time.time()
+                    transformed_time = end_transformed - start_transformed
+                    print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
+                        
+                    for i in range(0, self.sample_size):
+                        #print('\ni = ', i)
+                        
+                        # find if there is local plan
+                        self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                        #print('len(LOCAL_PLAN) = ', self.local_plans_local.shape[0])
+
+                        local_plan_xs = []
+                        local_plan_ys = []
+                        
+                        # transform local_plan to list
+                        self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                        for j in range(0, self.local_plans_local.shape[0]):
+                                local_plan_xs.append(self.local_plans_local.iloc[j, 0])
+                                local_plan_ys.append(self.local_plans_local.iloc[j, 1])
+                        
+                        # find deviation as a sum of minimal point-to-point differences
+                        diff_x = 0
+                        diff_y = 0
+                        devs = []
+                        for j in range(0, self.local_plans_local.shape[0]):
+                            local_diffs = []
+                            for k in range(0, len(self.transformed_plan)):
+                                #diff_x = (self.local_plans_local.iloc[j, 0] - self.transformed_plan.iloc[k, 0]) ** 2
+                                #diff_y = (self.local_plans_local.iloc[j, 1] - self.transformed_plan.iloc[k, 1]) ** 2
+                                diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
+                                diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                                diff = math.sqrt(diff_x + diff_y)
+                                local_diffs.append(diff)                        
+                            devs.append(min(local_diffs))   
+
+                        self.local_plan_deviation.iloc[i, 0] = sum(devs)
+
+                elif local_deviation_frame == 'pixels' and local_deviation_metric == 'L1':
+                    # transform transformed_plan to pixel locations
+                    #start_transformed = time.time()
+                    self.transformed_plan_xs = []
+                    self.transformed_plan_ys = []
+                    #print('len(TRANSFORMED_PLAN_BEFORE) = ', self.transformed_plan.shape[0])
+                    for i in range(0, self.transformed_plan.shape[0]):
+                        x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                        y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                        #if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                        self.transformed_plan_xs.append(x_temp)
+                        self.transformed_plan_ys.append(y_temp)
+                    #end_transformed = time.time()
+                    #transformed_time = end_transformed - start_transformed
+                    #print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
+                    #print('len(TRANSFORMED_PLAN_AFTER) = ', len(self.transformed_plan_xs))                    
+
+                    # fill in deviation dataframe
+                    for i in range(0, self.sample_size):
+                        #print('\ni = ', i)
+                        local_plan_xs = []
+                        local_plan_ys = []
+                        
+                        # transform local_plan to pixel locations
+                        self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                        #print('len(LOCAL_PLAN_BEFORE) = ', self.local_plans_local.shape[0])
+                        for j in range(0, self.local_plans_local.shape[0]):
+                                x_temp = int((self.local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                                y_temp = int((self.local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                                #if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                                local_plan_xs.append(x_temp)
+                                local_plan_ys.append(y_temp)
+                        #print('len(LOCAL_PLAN_AFTER) = ', len(local_plan_xs))
+
+                        # find deviation as a sum of minimal point-to-point differences
+                        diff_x = 0
+                        diff_y = 0
+                        devs = []
+                        for j in range(0, len(local_plan_xs)):
+                            local_diffs = []
+                            for k in range(0, len(self.transformed_plan_xs)):
+                                diff_x = abs(local_plan_xs[j] - self.transformed_plan_xs[k])
+                                diff_y = abs(local_plan_ys[j] - self.transformed_plan_ys[k])
+                                diff = diff_x + diff_y
+                                local_diffs.append(diff)                        
+                            devs.append(min(local_diffs))   
+
+                        self.local_plan_deviation.iloc[i, 0] = sum(devs)
+                
+                elif local_deviation_frame == 'costmap' and local_deviation_metric == 'L1':
+                    # fill in deviation dataframe
+                    # transform transformed_plan to list
+                    start_transformed = time.time()
+                    transformed_plan_xs = []
+                    transformed_plan_ys = []
+                    for i in range(0, self.transformed_plan.shape[0]):
+                        transformed_plan_xs.append(self.transformed_plan.iloc[i, 0])
+                        transformed_plan_ys.append(self.transformed_plan.iloc[i, 1])
+                    end_transformed = time.time()
+                    transformed_time = end_transformed - start_transformed
+                    print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)
+                        
+                    for i in range(0, self.sample_size):
+                        #print('\ni = ', i)
+                        
+                        # find if there is local plan
+                        self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                        #print('len(LOCAL_PLAN) = ', self.local_plans_local.shape[0])
+
+                        local_plan_xs = []
+                        local_plan_ys = []
+                        
+                        # transform local_plan to list
+                        self.local_plans_local = self.local_plans.loc[self.local_plans['ID'] == i]
+                        for j in range(0, self.local_plans_local.shape[0]):
+                                local_plan_xs.append(self.local_plans_local.iloc[j, 0])
+                                local_plan_ys.append(self.local_plans_local.iloc[j, 1])
+                        
+                        # find deviation as a sum of minimal point-to-point differences
+                        diff_x = 0
+                        diff_y = 0
+                        devs = []
+                        for j in range(0, self.local_plans_local.shape[0]):
+                            local_diffs = []
+                            for k in range(0, len(self.transformed_plan)):
+                                #diff_x = abs(self.local_plans_local.iloc[j, 0] - self.transformed_plan.iloc[k, 0]
+                                #diff_y = abs(self.local_plans_local.iloc[j, 1] - self.transformed_plan.iloc[k, 1]
+                                diff_x = abs(local_plan_xs[j] - transformed_plan_xs[k])
+                                diff_y = abs(local_plan_ys[j] - transformed_plan_ys[k])
+                                diff = diff_x + diff_y
+                                local_diffs.append(diff)                        
+                            devs.append(min(local_diffs))   
+
+                        self.local_plan_deviation.iloc[i, 0] = sum(devs)
+
 
             elif mode == 'classification':
                 if deviation_type == 'stop':
@@ -1501,14 +1684,13 @@ class ExplainRobotNavigation:
                     #self.local_plan_deviation.iloc[i, 0] = math.sqrt(dist[0,0]**2+dist[1,1]**2)
                     #print('\ndist = ', self.local_plan_deviation.iloc[i, 0])
 
-        #print(self.local_plan_deviation)
-
         self.cmd_vel_perturb['deviate'] = self.local_plan_deviation
+        #print('self.local_plan_deviation = ', self.local_plan_deviation)
         #self.cmd_vel_perturb['deviate'].to_csv('deviations.csv')
 
-        #end_main = time.time()
-        #main_time = end_main - start_main
-        #print('\ntarget calculation runtime = ', main_time)
+        target_calculation_end = time.time()
+        target_calculation_time = target_calculation_end - target_calculation_start
+        print('\ntarget calculation runtime = ', target_calculation_time)
 
         # if more outputs wanted
         more_outputs = False
@@ -1644,8 +1826,8 @@ class ExplainRobotNavigation:
             # plot perturbed local costmap
             #plt.imshow(self.sampled_instance[i][:, :])
             fig = plt.figure(frameon=True)
-            w = 1.6
-            h = 1.6
+            w = 1.6*3
+            h = 1.6*3
             fig.set_size_inches(w, h)
             ax = plt.Axes(fig, [0., 0., 1., 1.])
             ax.set_axis_off()
@@ -1674,7 +1856,21 @@ class ExplainRobotNavigation:
                         '''
 
             # plot transformed plan
-            #plt.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='x')
+            # fill the list of transformed plan coordinates
+            #start_transformed = time.time()
+            transformed_plan_xs = []
+            transformed_plan_ys = []
+            for i in range(0, self.transformed_plan.shape[0]):
+                x_temp = int((self.transformed_plan.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
+                y_temp = int((self.transformed_plan.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+
+                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                    transformed_plan_xs.append(x_temp)
+                    transformed_plan_ys.append(y_temp)
+            #end_transformed = time.time()
+            #transformed_time = end_transformed - start_transformed
+            #print('\nfill the list of transformed plan coordinates runtime = ', transformed_time)    
+            plt.scatter(transformed_plan_xs, transformed_plan_ys, c='blue', marker='x')
 
             '''
             # plot footprints for first five points of local plan
@@ -1706,7 +1902,7 @@ class ExplainRobotNavigation:
             '''
 
             # plot local plan
-            #plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
+            plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
 
             # plot robot's location and orientation
             #plt.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
@@ -1715,10 +1911,14 @@ class ExplainRobotNavigation:
             # plot command velocities as text
             #plt.text(0.0, -5.0, 'lin_x=' + str(round(self.cmd_vel_perturb.iloc[i, 0], 2)) + ', ' + 'ang_z=' + str(round(self.cmd_vel_perturb.iloc[i, 2], 2)))
 
+            #print('\nPERTURBATION_' + str(i))
+            
             # save figure
-            print('i = ', ctr)
+            #print('i = ', ctr)
             fig.savefig(self.dirCurr + '/' + dirName + '/perturbation_' + str(ctr) + '.png')
             fig.clf()
+
+            
 
 
     # EVALUATION

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Global variables
-ds_id = 16
+ds_id = 1
 ds = 'ds' + str(ds_id)
 
 print('dataset: ', ds)
@@ -273,10 +273,12 @@ def Single():
                                                         underlying_model_mode, explanation_mode, explanation_alg, num_of_first_rows_to_delete, footprints, output_class_name,
                                                         X_train, X_test, y_train, y_test, num_samples)
     
+    print('\n\n\n\nEXPLANATION STARTS!!!')
+
     print('\nexpID range: ', (0, local_costmap_info.shape[0] - num_of_first_rows_to_delete))
     print('\nnum_of_first_rows_to_delete = ', num_of_first_rows_to_delete)    
 
-    choose_random_instance = True
+    choose_random_instance = False
 
     if choose_random_instance == True:
         # random instance selection
@@ -285,7 +287,7 @@ def Single():
         print('\nexpID: ', expID)
     else:     
         # optional instance selection - deterministic
-        expID = 111 #DS1: #51 #78 #84 #144; #DS2: #260
+        expID = 88
         print('\nexpID: ', expID)
 
     import time
