@@ -14,16 +14,76 @@ import pandas as pd
 import os
 from scipy.spatial.transform import Rotation as R
 
+# global variables
+PI = math.PI
+
+# convert orientation quaternion to euler angles
+def quaternion_to_euler(x, y, z, w):
+    # roll (x-axis rotation)
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    # pitch (y-axis rotation)
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+
+    # yaw (z-axis rotation)
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return [yaw, pitch, roll]
+# convert euler angles to orientation quaternion
+def euler_to_quaternion(roll, pitch, yaw):
+  qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+  qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+  qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  return Quaternion(qx, qy, qz, qw)
+
+# path variables
 dirCurr = os.getcwd()
 dirName = 'lime_rt_data'
 
-# publishers
-pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
-pub_semantic_labels_unknown = rospy.Publisher('/semantic_labels_unknown', MarkerArray, queue_size=10)
-pub_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
+# Local costmap class
+class LocalCostmap():
+    def __init__(self):
+        self.resolution = 0.025
+        self.width = 160
+        self.height = 160
+        self.origin_x_odom = 0.0
+        self.origin_y_odom = 0.0
+
+    def printAttributes(self):
+        print('\nlocal_costmap')
+        print('resolution = ', self.resolution)
+        print('width = ', self.width)
+        print('height = ', self.height)
+        print('origin_x_odom = ', self.origin_x_odom)
+        print('origin_y_odom = ', self.origin_y_odom)
+local_costmap = LocalCostmap()
+
+# TF class
+class TF():
+    def __init__(self):
+        self.translation = Point(0.0,0.0,0.0)
+        self.rotation = Quaternion(0.0,0.0,0.0,1.0)
+    def printAttributes(self):
+        print("\ntranslation = ", self.translation)
+        print('rotation = ', self.rotation)
+tf_map_odom = TF() 
 
 # orientations and semantic labels
+pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
 semantic_labels = MarkerArray()
+
+pub_semantic_labels_unknown = rospy.Publisher('/semantic_labels_unknown', MarkerArray, queue_size=10)
+semantic_labels_unknown = MarkerArray()
+
+pub_orientations = rospy.Publisher('/orientations', MarkerArray, queue_size=10)
 orientations = MarkerArray()
 
 # object class
@@ -32,16 +92,14 @@ class Object():
     def __init__(self,ID,label,position_map,centroid_map,distance,known):
         self.ID = ID
         self.name = label
+        
         self.position_map = position_map
         self.centroid_map = centroid_map
+        
         self.distance = distance
         self.known = known
         
-        if 'cabinet' in self.name:
-            self.orientation_map = euler_to_quaternion(0.0,0.0,PI/2)
-        else:
-            self.orientation_map = Quaternion(0.0,0.0,0.0,1.0)
-        
+        self.orientation_map = Quaternion(0.0,0.0,0.0,1.0)
         [self.yaw_map,self.pitch_map,self.roll_map] = quaternion_to_euler(self.orientation_map.x,self.orientation_map.y,self.orientation_map.z,self.orientation_map.w)
         
         self.position_obj = Point(0.0,0.0,0.0)
@@ -54,7 +112,9 @@ class Object():
 
         self.lime_coefficients = []
 
-        self.PI = math.PI
+        self.orientiable = False
+        if 'cabinet' in self.name or 'bookshelf' in self.name or 'chair' in self.name:
+            self.orientable = True
         
         # define intrinsic_qsr for cabinets and bookshelfs
         self.intrinsic_qsr = False
@@ -62,6 +122,8 @@ class Object():
             self.intrinsic_qsr = True
             self.qsr_choice = 1
             self.defineIntrinsicQsrCalculus()
+
+        self.PI = PI
 
     # define intrinsic QSR calculus
     def defineIntrinsicQsrCalculus(self):
@@ -109,22 +171,7 @@ class Object():
 
         return value
 
-    # get QSR value
-    def getIntrinsicQsrValue_(self, angle):
-        value = ''    
-
-        if self.PI/4 <= angle < self.PI/4:
-            value += 'front'
-        elif self.PI/4 <= angle <= 3*self.PI/4:
-            value += 'left'
-        elif -3*self.PI/4 <= angle < -self.PI/4:
-            value += 'right'
-        else:
-            value += 'back'
-
-        return value
-
-# known objects
+# KNOWN OBJECTS
 # [ID, label, cx_map, cy_map, dx, dy, x_map, y_map]
 known_objects = []
 known_objects_names =  []
@@ -149,9 +196,7 @@ for i in range(0, known_objects_pd.shape[0]):
     known_objects_ids.append(ID)
     N_known_objects = len(known_objects_names)
 
-    #print(known_objects[i].position_map.x, known_objects[i].position_map.y)
-
-    # visualize oriented static objects
+    # visualize orientations and semantic labels of known objects
     marker = Marker()
     marker.header.frame_id = 'map'
     marker.id = i
@@ -173,7 +218,7 @@ for i in range(0, known_objects_pd.shape[0]):
     marker.ns = "my_namespace"
     semantic_labels.markers.append(marker)
 
-    if 'cabinet' in known_objects[i].name or 'bookshelf' in known_objects[i].name or 'chair' in known_objects[i].name or 'wardrobe' in known_objects[i].name:
+    if known_objects[i].orientable == True:
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = i
@@ -197,48 +242,19 @@ for i in range(0, known_objects_pd.shape[0]):
         marker.ns = "my_namespace"
         orientations.markers.append(marker)
 
-
-# unknown objects
+# UNKNOWN OBJECTS
 # [ID, label, x_odom, y_odom, x_map, y_map, cx_odom, cy_odom]
 unknown_objects = []
 unknown_objects_names =  []
 unknown_objects_positions =  []
 N_unknown_objects = len(unknown_objects_names)
 
-
-# objects in lc
+# objects in LC (Local Costmap)
 lc_objects = []
 lc_objects_names =  []
 lc_objects_positions =  []
 N_lc_objects = len(lc_objects_names)
 
-
-# convert orientation quaternion to euler angles
-def quaternion_to_euler(x, y, z, w):
-    # roll (x-axis rotation)
-    t0 = +2.0 * (w * x + y * z)
-    t1 = +1.0 - 2.0 * (x * x + y * y)
-    roll = math.atan2(t0, t1)
-
-    # pitch (y-axis rotation)
-    t2 = +2.0 * (w * y - z * x)
-    t2 = +1.0 if t2 > +1.0 else t2
-    t2 = -1.0 if t2 < -1.0 else t2
-    pitch = math.asin(t2)
-
-    # yaw (z-axis rotation)
-    t3 = +2.0 * (w * z + x * y)
-    t4 = +1.0 - 2.0 * (y * y + z * z)
-    yaw = math.atan2(t3, t4)
-
-    return [yaw, pitch, roll]
-# convert euler angles to orientation quaternion
-def euler_to_quaternion(roll, pitch, yaw):
-  qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-  qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
-  qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
-  qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-  return Quaternion(qx, qy, qz, qw)
 
 # lime explanation class
 class LimeExplanation():
@@ -249,8 +265,8 @@ class LimeExplanation():
     def printAttributes(self):
         print("\nLIME explanation = ", self.exp)
         print('LIME original deviation = ', self.original_deviation)
-
 lime_explanation = LimeExplanation()
+
 
 # Robot class
 class Robot():
@@ -269,7 +285,7 @@ class Robot():
         self.intrinsic_qsr_choice = 1
         self.relative_qsr_choice = 2
 
-        self.PI = math.PI
+        self.PI = PI
         
     # print attributes    
     def printAttributes(self):
@@ -556,7 +572,7 @@ class Human():
 
         self.intrinsic_qsr_choice = 1
 
-        self.PI = math.PI
+        self.PI = PI
 
     # print attributes    
     def printAttributes(self):
@@ -564,7 +580,7 @@ class Human():
         print('position_map = ', self.position_map)
         print('orientation_map = ', self.orientation_map)
 
-        # define intrinsic QSR calculus
+    # define intrinsic QSR calculus
     def defineIntrinsicQsrCalculus(self):
         if self.intrinsic_qsr_choice == 0:
             # left -- right dichotomy in a relative refence system
@@ -609,33 +625,6 @@ class Human():
 
         return value
 
-# Local costmap class
-class LocalCostmap():
-    def __init__(self):
-        self.resolution = 0.025
-        self.width = 160
-        self.height = 160
-        self.origin_x_odom = 0.0
-        self.origin_y_odom = 0.0
-
-    def printAttributes(self):
-        print('\nlocal_costmap')
-        print('resolution = ', self.resolution)
-        print('width = ', self.width)
-        print('height = ', self.height)
-        print('origin_x_odom = ', self.origin_x_odom)
-        print('origin_y_odom = ', self.origin_y_odom)
-local_costmap = LocalCostmap()
-
-# TF class
-class TF():
-    def __init__(self):
-        self.translation = Point(0.0,0.0,0.0)
-        self.rotation = Quaternion(0.0,0.0,0.0,1.0)
-    def printAttributes(self):
-        print("\ntranslation = ", self.translation)
-        print('rotation = ', self.rotation)
-tf_map_odom = TF() 
 
 # QSR class
 class qsr_rt():
@@ -648,7 +637,7 @@ class qsr_rt():
         self.human = Human('human')
         self.robot = Robot('tiago')
 
-        # visualize robot
+        # visualize robot label
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects
@@ -670,6 +659,7 @@ class qsr_rt():
         marker.ns = "my_namespace"
         semantic_labels.markers.append(marker) 
 
+        # visualize robot orientation
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects
@@ -693,7 +683,7 @@ class qsr_rt():
         marker.ns = "my_namespace"
         orientations.markers.append(marker)
 
-        # visualize human
+        # visualize human label
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects + 1
@@ -715,6 +705,7 @@ class qsr_rt():
         marker.ns = "my_namespace"
         semantic_labels.markers.append(marker) 
 
+        # visualize human orientation
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects + 1
@@ -741,10 +732,6 @@ class qsr_rt():
         # update robot data from Gazebo?
         self.update_robot_from_gazebo = True
 
-        # semantic label publishers
-        self.pub_semantic_labels_unknown = rospy.Publisher('/semantic_labels_unknown_objects', MarkerArray, queue_size=10)
-        self.semantic_labels_unknown = MarkerArray()
-
         # path variables
         self.file_path_odom = dirName + '/odom_tmp.csv'
         self.file_path_amcl = dirName + '/amcl_pose_tmp.csv'
@@ -755,7 +742,8 @@ class qsr_rt():
 
     # update human and robot variables
     def model_state_callback(self, states_msg):
-        self.pub_semantic_labels_unknown.publish(self.semantic_labels_unknown)
+        # publish semantic labels of the unknown objects
+        pub_semantic_labels_unknown.publish(semantic_labels_unknown)
 
         # update robot map pose from amcl_pose
         if self.update_robot_from_gazebo == True:
@@ -768,7 +756,7 @@ class qsr_rt():
                 if os.path.getsize(self.file_path_amcl) == 0 or os.path.exists(self.file_path_amcl) == False:
                     pass
                 else:
-                    amcl_tmp = pd.read_csv(dirCurr + '/' + self.file_path_amcl)
+                    amcl_tmp = pd.read_csv(dirCurr + '/' + dirName + '/' + self.file_path_amcl)
                     self.robot.position_map = Point(amcl_tmp.iloc[0][0],amcl_tmp.iloc[1][0],0.0)
                     self.robot.orientation_map = Quaternion(0.0,0.0,amcl_tmp.iloc[2][0],amcl_tmp.iloc[3][0])
             except:
@@ -779,10 +767,10 @@ class qsr_rt():
             if os.path.getsize(self.file_path_odom) == 0 or os.path.exists(self.file_path_odom) == False:
                 pass
             else:
-                odom_tmp = pd.read_csv(dirCurr + '/' + self.file_path_odom)
+                odom_tmp = pd.read_csv(dirCurr + '/' + dirName + '/' + self.file_path_odom)
                 self.robot.position_odom = Point(odom_tmp.iloc[0][0],odom_tmp.iloc[1][0],0.0)
                 self.robot.orientation_odom = Quaternion(0.0,0.0,odom_tmp.iloc[2][0],odom_tmp.iloc[3][0])
-                self.robot.velocities = [odom_tmp.iloc[4][0],odom_tmp.iloc[5][0]]
+                self.robot.velocity_vector = [odom_tmp.iloc[4][0],odom_tmp.iloc[5][0]]
                 #robot.printAttributes()
         except:
             pass
@@ -796,8 +784,8 @@ class qsr_rt():
         elif 'citizen_extras_male_03' in states_msg.name:
             human_idx = states_msg.name.index('citizen_extras_male_03')    
         if human_idx != -1:
+            
             self.human.position_map = states_msg.pose[human_idx].position
-
             d_x = self.robot.position_map.x - self.human.position_map.x 
             d_y = self.robot.position_map.y - self.human.position_map.y 
             angle_yaw = np.arctan2(d_y, d_x)
@@ -805,7 +793,7 @@ class qsr_rt():
             #human.orientation_map = states_msg.pose[human_idx].orientation
             #human.printAttributes()
 
-        # visualize robot
+        # visualize robot label
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects
@@ -825,8 +813,9 @@ class qsr_rt():
         #marker.frame_locked = False
         marker.text = self.robot.name
         marker.ns = "my_namespace"
-        semantic_labels.markers[-2] = copy.deepcopy(marker) 
+        semantic_labels.markers[N_known_objects] = copy.deepcopy(marker) 
 
+        # visualize robot orientation
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects
@@ -850,7 +839,7 @@ class qsr_rt():
         marker.ns = "my_namespace"
         orientations.markers[-2] = copy.deepcopy(marker)
 
-        # visualize robot
+        # visualize human label
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects + 1
@@ -870,8 +859,9 @@ class qsr_rt():
         #marker.frame_locked = False
         marker.text = self.human.name
         marker.ns = "my_namespace"
-        semantic_labels.markers[-1] = copy.deepcopy(marker) 
+        semantic_labels.markers[N_known_objects + 1] = copy.deepcopy(marker) 
 
+        # visualize human orientation
         marker = Marker()
         marker.header.frame_id = 'map'
         marker.id = N_known_objects + 1
@@ -1238,6 +1228,8 @@ class qsr_rt():
                                     break
 
 
+
+########--------------- MAIN -------------#############
 qsr_rt_obj = qsr_rt()
 
 # Initialize the ROS Node named 'qsr_rt', allow multiple nodes to be run with this name
