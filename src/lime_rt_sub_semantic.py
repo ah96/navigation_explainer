@@ -100,7 +100,7 @@ class lime_rt_sub(object):
 
         self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
 
-        #self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
+        self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
 
         self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
 
@@ -112,7 +112,7 @@ class lime_rt_sub(object):
         
         # semantic part
         semantic_worlds_names = ['world_movable_chair', 'world_movable_chair_2', 'world_movable_chair_3', 'world_no_openable_door', 'world_openable_door']
-        idx = 3
+        idx = 2
         
         # load semantic tags
         self.semantic_tags = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '_tags.csv')
@@ -671,7 +671,7 @@ class lime_rt_sub(object):
         #print('odom_callback!!!')
         self.odom_x = msg.pose.pose.position.x
         self.odom_y = msg.pose.pose.position.y
-        self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.twist.twist.linear.z, msg.twist.twist.angular.w]
+        self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
         
     # Define a callback for the global plan
     def global_plan_callback(self, msg):
@@ -720,14 +720,14 @@ class lime_rt_sub(object):
 
         except:
             pass
-
+    
     # Define a callback for the footprint
     def footprint_callback(self, msg):
         self.footprint_tmp = []
         for i in range(0,len(msg.polygon.points)):
             self.footprint_tmp.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
         pd.DataFrame(self.footprint_tmp).to_csv(self.dirCurr + '/' + self.dirName + '/footprint_tmp.csv', index=False)#, header=False)
-
+    
     # Define a callback for the amcl pose
     def amcl_callback(self, msg):
         self.amcl_pose_tmp = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]

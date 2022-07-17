@@ -15,7 +15,7 @@ import os
 from scipy.spatial.transform import Rotation as R
 
 # global variables
-PI = math.PI
+PI = math.pi
 
 # convert orientation quaternion to euler angles
 def quaternion_to_euler(x, y, z, w):
@@ -112,7 +112,7 @@ class Object():
 
         self.lime_coefficients = []
 
-        self.orientiable = False
+        self.orientable = False
         if 'cabinet' in self.name or 'bookshelf' in self.name or 'chair' in self.name:
             self.orientable = True
 
@@ -741,16 +741,14 @@ class qsr_rt():
         # path variables
         self.file_path_odom = dirName + '/odom_tmp.csv'
         self.file_path_amcl = dirName + '/amcl_pose_tmp.csv'
+        self.file_path_lc = dirName + '/costmap_info_tmp.csv'
 
         # lime explanation subscribers
         # N_segments * (label, coefficient) + (original_deviation)
-        self.sub_lime = rospy.Subscriber("/lime_exp", Float32MultiArray, self.lime_callback)
+        self.sub_lime = rospy.Subscriber("/lime_rt_exp", Float32MultiArray, self.lime_callback)
 
     # update human and robot variables
     def model_state_callback(self, states_msg):
-        # publish semantic labels of the unknown objects
-        pub_semantic_labels_unknown.publish(semantic_labels_unknown)
-
         # update robot map pose from amcl_pose
         if self.update_robot_from_gazebo == True:
             robot_idx = states_msg.name.index('tiago')
@@ -893,14 +891,14 @@ class qsr_rt():
 
         # publish orientations
         #print('len(marker_array_orientations) = ', len(marker_array_orientations.markers))
-        orientations.publish(orientations)
+        pub_orientations.publish(orientations)
         # publish semantic labels
         #print('len(pub_markers_semantic_labels) = ', len(marker_array_semantic_labels.markers))
-        semantic_labels.publish(semantic_labels)
+        pub_semantic_labels.publish(semantic_labels)
 
     # lime explanation callback
     def lime_callback(self, msg):
-        #print('\n\n\n\n\nlime_callback\n')
+        print('\n\n\n\n\nlime_callback\n')
         print('\n\n\n\n\n')
         
         # N_segments * (label, coefficient) + (original_deviation)
@@ -914,7 +912,7 @@ class qsr_rt():
         # update local costmap
         if os.path.getsize(self.file_path_lc) == 0 or os.path.exists(self.file_path_lc) == False:
             return
-        lc_tmp = pd.read_csv(dirCurr + '/' + dirName + '/' + self.file_path_lc)
+        lc_tmp = pd.read_csv(dirCurr + '/' + self.file_path_lc)
         local_costmap.resolution = lc_tmp.iloc[0][0]
         local_costmap.height = lc_tmp.iloc[1][0]
         local_costmap.width = lc_tmp.iloc[2][0]
@@ -1155,15 +1153,17 @@ class qsr_rt():
                     marker.ns = "my_namespace"
                     semantic_labels_unknown.markers.append(marker)
                     pub_semantic_labels_unknown.publish(semantic_labels_unknown)
+                    
+        # publish semantic labels of the unknown objects
+        pub_semantic_labels_unknown.publish(semantic_labels_unknown)
+
                                     
         
-
-
 ########--------------- MAIN -------------#############
-qsr_rt_obj = qsr_rt()
-
 # Initialize the ROS Node named 'qsr_rt', allow multiple nodes to be run with this name
 rospy.init_node('qsr_rt', anonymous=True)
+
+qsr_rt_obj = qsr_rt()
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():

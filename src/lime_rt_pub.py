@@ -434,7 +434,7 @@ class lime_rt_pub(object):
                 print('self.fudged_image.shape = ', self.fudged_image.shape)
 
             # if anything is empty or not of the right shape do not explain
-            if self.footprint_tmp.empty or self.plan_tmp.empty or self.global_plan_tmp.empty or self.costmap_info_tmp.empty or self.amcl_pose_tmp.empty or self.tf_odom_map_tmp.empty or self.tf_map_odom_tmp.empty or self.odom_tmp.empty or self.local_plan_tmp_fixed.empty:
+            if self.plan_tmp.empty or self.global_plan_tmp.empty or self.costmap_info_tmp.empty or self.amcl_pose_tmp.empty or self.tf_odom_map_tmp.empty or self.tf_map_odom_tmp.empty or self.odom_tmp.empty or self.local_plan_tmp_fixed.empty or self.footprint_tmp.empty: 
                 return False
 
             if self.local_plan_x_list_fixed.size == 0 or self.local_plan_y_list_fixed.size == 0 or self.segments.size == 0 or self.data.size == 0 or self.image.size == 0 or self.fudged_image.size == 0:
@@ -634,7 +634,7 @@ class lime_rt_pub(object):
         # try to load lime_rt_sub data
         # if data not loaded do not explain
         if self.load_data() == False:
-            #print('\nData not loaded!')
+            print('\nData not loaded!')
             return
 
         # turn grayscale image to rgb image
