@@ -115,10 +115,14 @@ class Object():
         self.orientiable = False
         if 'cabinet' in self.name or 'bookshelf' in self.name or 'chair' in self.name:
             self.orientable = True
+
+        self.openable = False
+        if 'door' in self.name:
+            self.openable = True
         
         # define intrinsic_qsr for cabinets and bookshelfs
         self.intrinsic_qsr = False
-        if 'cabinet' in self.name or 'bookshelf' in self.name:
+        if 'cabinet' in self.name or 'bookshelf' in self.name or 'chair' in self.name:
             self.intrinsic_qsr = True
             self.qsr_choice = 1
             self.defineIntrinsicQsrCalculus()
@@ -637,6 +641,8 @@ class qsr_rt():
         self.human = Human('human')
         self.robot = Robot('tiago')
 
+        self.PI = PI
+
         # visualize robot label
         marker = Marker()
         marker.header.frame_id = 'map'
@@ -784,7 +790,7 @@ class qsr_rt():
         elif 'citizen_extras_male_03' in states_msg.name:
             human_idx = states_msg.name.index('citizen_extras_male_03')    
         if human_idx != -1:
-            
+
             self.human.position_map = states_msg.pose[human_idx].position
             d_x = self.robot.position_map.x - self.human.position_map.x 
             d_y = self.robot.position_map.y - self.human.position_map.y 
@@ -896,8 +902,9 @@ class qsr_rt():
     def lime_callback(self, msg):
         #print('\n\n\n\n\nlime_callback\n')
         print('\n\n\n\n\n')
-        # [v-ID, coeff]*N_FEATURES + ORIGINAL_DEVIATION
-        #print('msg = ', msg)
+        
+        # N_segments * (label, coefficient) + (original_deviation)
+        # print('msg = ', msg)
         lime_explanation.exp = []
         for i in range(0, int((len(msg.data)-1)/2)): # not taking free-space weight, which is always 0
             lime_explanation.exp.append([msg.data[2*i],msg.data[2*i+1]])
@@ -907,19 +914,19 @@ class qsr_rt():
         # update local costmap
         if os.path.getsize(self.file_path_lc) == 0 or os.path.exists(self.file_path_lc) == False:
             return
-        lc_tmp = pd.read_csv(dirCurr + '/' + self.file_path_lc)
+        lc_tmp = pd.read_csv(dirCurr + '/' + dirName + '/' + self.file_path_lc)
         local_costmap.resolution = lc_tmp.iloc[0][0]
         local_costmap.height = lc_tmp.iloc[1][0]
         local_costmap.width = lc_tmp.iloc[2][0]
         local_costmap.origin_x_odom = lc_tmp.iloc[3][0]
         local_costmap.origin_y_odom = lc_tmp.iloc[4][0] 
-        #local_costmap.printAttributes()
+        local_costmap.printAttributes()
 
         # update tf_map_odom
         '''
         if os.path.getsize(file_path_tf_map_odom) == 0 or os.path.exists(file_path_tf_map_odom) == False:
             return
-        tf_msg = pd.read_csv(dirCurr + '/' + file_path_tf_map_odom)
+        tf_msg = pd.read_csv(dirCurr + '/' + dirName + '/' + file_path_tf_map_odom)
         tf_map_odom.translation = Point(tf_msg.iloc[0][0],tf_msg.iloc[1][0],tf_msg.iloc[2][0])
         tf_map_odom.rotation = Quaternion(tf_msg.iloc[3][0],tf_msg.iloc[4][0],tf_msg.iloc[5][0],tf_msg.iloc[6][0])
         #tf_map_odom.printAttributes()
@@ -961,7 +968,7 @@ class qsr_rt():
                     lime_coeffs_string += unknown_objects_pd.iloc[j, 1] + ' has a LIME coefficient ' + str(coeff) + '\n'
                     found_unknown = True
             if found_unknown == False:
-                # then check unknown objects
+                # then check known objects
                 for j in range(0, N_known_objects):
                     if v == known_objects_ids[j]:
                         lime_coeffs_string += known_objects_names[j] + ' has a LIME coefficient ' + str(coeff) + '\n'
@@ -970,7 +977,6 @@ class qsr_rt():
 
 
         # how a robot passes relative to the objects in the local costmap
-        #print('')
         objects_intrinsic_string = ''
         for i in range(0, len(objects_in_lc)):
             if objects_in_lc[i].intrinsic_qsr == False:
@@ -988,7 +994,6 @@ class qsr_rt():
             qsr_value = objects_in_lc[i].getIntrinsicQsrValue(angle)
             #print(robot.name + ' passes ' + qsr_value + ' of the ' + objects_in_lc[i].name)
             objects_intrinsic_string += self.robot.name + ' is to the ' + qsr_value + ' of the ' + objects_in_lc[i].name + '\n'
-
         print('\nRobot relative to the immediate objects:')
         print(objects_intrinsic_string)
 
@@ -1125,108 +1130,33 @@ class qsr_rt():
                     #marker.frame_locked = False
                     marker.text = unknown_objects_pd.iloc[i, 1]
                     marker.ns = "my_namespace"
-                    self.semantic_labels_unknown.markers.append(marker)
-                    self.pub_semantic_labels_unknown.publish(self.semantic_labels_unknown)
+                    semantic_labels_unknown.markers.append(marker)
+                    pub_semantic_labels_unknown.publish(self.semantic_labels_unknown)
                 elif 'chair' in unknown_objects_pd.iloc[i, 1]: 
-                    #print(unknown_objects_pd.iloc[i, 1])   
-                    for j in range(0, len(objects_in_lc)):
-                        if objects_in_lc[j].intrinsic_qsr == True:
-                            d_x = unknown_objects_pd.iloc[i, 2] - objects_in_lc[j].position_map.x 
-                            d_y = unknown_objects_pd.iloc[i, 3] - objects_in_lc[j].position_map.y 
-                            r = math.sqrt(d_x**2+d_y**2) 
-                            angle = np.arctan2(d_y, d_x)
-                            [angle_ref,pitch,roll] = quaternion_to_euler(objects_in_lc[j].orientation_map.x,objects_in_lc[j].orientation_map.y,objects_in_lc[j].orientation_map.z,objects_in_lc[j].orientation_map.w)
-                            angle = angle - angle_ref
-                            if angle >= self.PI:
-                                angle -= 2*self.PI
-                            elif angle < -self.PI:
-                                angle += 2*self.PI
-                            qsr_value = objects_in_lc[j].getIntrinsicQsrValue_(angle)
-                            r_unknown_object = copy.deepcopy(r)
-                            angle_unknown_object = copy.deepcopy(angle)
-                            qsr_unknown_object = copy.deepcopy(qsr_value)
-
-                            d_x = self.robot.position_map.x - objects_in_lc[j].position_map.x 
-                            d_y = self.robot.position_map.y - objects_in_lc[j].position_map.y 
-                            r = math.sqrt(d_x**2+d_y**2) 
-                            angle = np.arctan2(d_y, d_x)
-                            [angle_ref,pitch,roll] = quaternion_to_euler(objects_in_lc[j].orientation_map.x,objects_in_lc[j].orientation_map.y,objects_in_lc[j].orientation_map.z,objects_in_lc[j].orientation_map.w)
-                            angle = angle - angle_ref
-                            if angle >= self.PI:
-                                angle -= 2*self.PI
-                            elif angle < -self.PI:
-                                angle += 2*self.PI
-                            qsr_value = objects_in_lc[j].getIntrinsicQsrValue(angle)
-                            if 'left' in qsr_value:
-                                robot_dir = 'left'                                        
-                            else:
-                                robot_dir = 'right'
-                            qsr_vals = []    
-                            for k in range(0, len(objects_in_lc)):
-                                if k != j:
-                                    d_x = objects_in_lc[k].position_map.x - objects_in_lc[j].position_map.x 
-                                    d_y = objects_in_lc[k].position_map.y - objects_in_lc[j].position_map.y 
-                                    r = math.sqrt(d_x**2+d_y**2) 
-                                    angle = np.arctan2(d_y, d_x)
-                                    [angle_ref,pitch,roll] = quaternion_to_euler(objects_in_lc[j].orientation_map.x,objects_in_lc[j].orientation_map.y,objects_in_lc[j].orientation_map.z,objects_in_lc[j].orientation_map.w)
-                                    angle = angle - angle_ref
-                                    if angle >= self.PI:
-                                        angle -= 2*self.PI
-                                    elif angle < -self.PI:
-                                        angle += 2*self.PI
-                                    qsr_value = objects_in_lc[j].getIntrinsicQsrValue_(angle)            
-                                    qsr_vals.append(qsr_value)
-                            if robot_dir == 'left':
-                                if 'right' not in qsr_vals:
-                                    print('\nPlease move the ' + unknown_objects_pd.iloc[i, 1] + ' to the ' + 'right' + ' of the ' + objects_in_lc[j].name + ' so I can proceed!')
-                                    marker = Marker()
-                                    marker.header.frame_id = 'map'
-                                    marker.id = i
-                                    marker.type = marker.TEXT_VIEW_FACING
-                                    marker.action = marker.ADD
-                                    marker.pose = Pose()
-                                    marker.pose.position.x = unknown_objects_pd.iloc[i, 2]
-                                    marker.pose.position.y = unknown_objects_pd.iloc[i, 3]
-                                    marker.pose.position.z = 2.0
-                                    marker.color.r = 1.0
-                                    marker.color.g = 0.0
-                                    marker.color.b = 0.0
-                                    marker.color.a = 1.0
-                                    marker.scale.x = 0.5
-                                    marker.scale.y = 0.5
-                                    marker.scale.z = 0.5
-                                    #marker.frame_locked = False
-                                    marker.text = unknown_objects_pd.iloc[i, 1]
-                                    marker.ns = "my_namespace"
-                                    self.semantic_labels_unknown.markers.append(marker)
-                                    self.pub_semantic_labels_unknown.publish(self.semantic_labels_unknown)
-                                    break
-                            else:
-                                if 'left' not in qsr_vals:
-                                    marker = Marker()
-                                    marker.header.frame_id = 'map'
-                                    marker.id = i
-                                    marker.type = marker.TEXT_VIEW_FACING
-                                    marker.action = marker.ADD
-                                    marker.pose = Pose()
-                                    marker.pose.position.x = unknown_objects_pd.iloc[i, 2]
-                                    marker.pose.position.y = unknown_objects_pd.iloc[i, 3]
-                                    marker.pose.position.z = 2.0
-                                    marker.color.r = 1.0
-                                    marker.color.g = 0.0
-                                    marker.color.b = 0.0
-                                    marker.color.a = 1.0
-                                    marker.scale.x = 0.5
-                                    marker.scale.y = 0.5
-                                    marker.scale.z = 0.5
-                                    #marker.frame_locked = False
-                                    marker.text = unknown_objects_pd.iloc[i, 1]
-                                    marker.ns = "my_namespace"
-                                    self.semantic_labels_unknown.markers.append(marker)
-                                    self.pub_semantic_labels_unknown.publish(self.semantic_labels_unknown)
-                                    print('\nPlease move the ' + unknown_objects_pd.iloc[i, 1] + ' to the ' + 'left' + ' of the ' + objects_in_lc[j].name + ' so I can proceed!')
-                                    break
-
+                    print('\nPlease move the ' + unknown_objects_pd.iloc[i, 1] + ' so I can proceed!')
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.TEXT_VIEW_FACING
+                    marker.action = marker.ADD
+                    marker.pose = Pose()
+                    marker.pose.position.x = unknown_objects_pd.iloc[i, 2]
+                    marker.pose.position.y = unknown_objects_pd.iloc[i, 3]
+                    marker.pose.position.z = 2.0
+                    marker.color.r = 1.0
+                    marker.color.g = 0.0
+                    marker.color.b = 0.0
+                    marker.color.a = 1.0
+                    marker.scale.x = 0.5
+                    marker.scale.y = 0.5
+                    marker.scale.z = 0.5
+                    #marker.frame_locked = False
+                    marker.text = unknown_objects_pd.iloc[i, 1]
+                    marker.ns = "my_namespace"
+                    semantic_labels_unknown.markers.append(marker)
+                    pub_semantic_labels_unknown.publish(semantic_labels_unknown)
+                                    
+        
 
 
 ########--------------- MAIN -------------#############
