@@ -17,6 +17,7 @@ from gazebo_msgs.msg import ModelStates
 
 from typing import NamedTuple
 from point2d import Point2D
+# obstacle point class
 class obstaclePoints(NamedTuple):
     c: Point2D
     tl: Point2D
@@ -92,10 +93,53 @@ class lime_rt_sub(object):
         self.gazebo_names = []
         self.gazebo_poses = []
 
+    # Declare subscribers
+    def main_(self):
+        # subscribers
+        self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
+
+        self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
+
+        #self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
+
+        self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
+
+        self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
+
+        self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
+
+        self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
+        
+        # semantic part
+        semantic_worlds_names = ['world_movable_chair', 'world_movable_chair_2', 'world_movable_chair_3', 'world_no_openable_door', 'world_openable_door']
+        idx = 3
+        
+        # load semantic tags
+        self.semantic_tags = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '_tags.csv')
+        
+        # populate static_names
+        for i in range(0, self.semantic_tags.shape[0]):
+            self.static_names.append(self.semantic_tags.iloc[i][1])
+
+        # load semantic_global_map
+        self.semantic_global_map = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '.csv', index_col=None, header=None))
+        
+        # load semantic_global_info
+        self.semantic_global_map_info = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '_info.csv', index_col=None, header=None)
+        self.semantic_global_map_info = self.semantic_global_map_info.transpose()
+       
+        # populate some semantic_global_map variables
+        self.semantic_global_map_resolution = float(self.semantic_global_map_info.iloc[1][1])
+        print(self.semantic_global_map_resolution)
+        self.semantic_global_map_origin_x = float(self.semantic_global_map_info.iloc[4][1])
+        print(self.semantic_global_map_origin_x)
+        self.semantic_global_map_origin_y = float(self.semantic_global_map_info.iloc[5][1])
+        print(self.semantic_global_map_origin_y)
+
     # Create data based on segments
     def create_data(self):
         # create data -- N+1 perturbations
-        self.n_features = np.unique(self.segments).shape[0]
+        self.n_features = np.unique(self.segments).shape[0] # (N+1) - probably includes N normal segments + 1 free space segment
         self.num_samples = self.n_features
         lst = [[1]*self.n_features]
         for i in range(1, self.num_samples):
@@ -131,7 +175,7 @@ class lime_rt_sub(object):
             if 'citizen' in self.gazebo_names[i] or 'plane' in self.gazebo_names[i]:
                 continue
 
-            # if an object is not in the list of static objects and it is not a ground_plane
+            # if an object is not in the list of static objects
             if self.gazebo_names[i] not in self.static_names:
                 #print('found - ' + self.gazebo_names[i])
 
@@ -165,11 +209,10 @@ class lime_rt_sub(object):
 
         # save unknown objects to the
         # [ID, label, x_map, y_map]
-        #pd.DataFrame(unknown_obstacles).to_csv(self.dirCurr + '/' + self.dirName + '/unknown_objects.csv', index=False)#, header=False)
+        pd.DataFrame(unknown_obstacles).to_csv(self.dirCurr + '/' + self.dirName + '/unknown_objects.csv', index=False)#, header=False)
         
         # known obstacles
-        for i in range(0, self.semantic_tags.shape[0]):
-            
+        for i in range(0, self.semantic_tags.shape[0]):   
             # centroids of a known object in a /map frame
             cx = float(self.semantic_tags.iloc[i][3])
             cy = float(self.semantic_tags.iloc[i][2])
@@ -205,7 +248,7 @@ class lime_rt_sub(object):
         N_centroids_all = len(labels_static)
 
         # save labels of objects in the local costmap
-        #pd.DataFrame(labels_in_lc).to_csv(self.dirCurr + '/' + self.dirName + '/lc_labels.csv', index=False)#, header=False)
+        pd.DataFrame(labels_in_lc).to_csv(self.dirCurr + '/' + self.dirName + '/lc_labels.csv', index=False)#, header=False)
 
         # segmentation part
         start = time.time()
@@ -248,7 +291,7 @@ class lime_rt_sub(object):
         return self.segments    
 
     # Segmentation algorithm
-    # Map the objects to the LC and append remaining points to the closes centroid
+    # Map the objects to the LC and append remaining points to the closest centroid
     def segment_local_costmap_semantic_2(self):
         # tf from map to odom
         t_mo = np.asarray([self.tf_map_odom_tmp[0],self.tf_map_odom_tmp[1],self.tf_map_odom_tmp[2]])
@@ -313,7 +356,6 @@ class lime_rt_sub(object):
         
         # known obstacles
         for i in range(0, self.semantic_tags.shape[0]):
-            
             # centroids of a known object in a /map frame
             px = float(self.semantic_tags.iloc[i][6])
             py = float(self.semantic_tags.iloc[i][7])
@@ -340,8 +382,7 @@ class lime_rt_sub(object):
                 centroids_in_lc.append([cx_odom, cy_odom])
                 values_in_lc.append(v)
                 labels_in_lc.append(label)
-
-        
+       
         # find unknown objects from gazebo
         for i in range(0, len(self.gazebo_names)):
             # human is not an unknown object -- only observer
@@ -392,7 +433,7 @@ class lime_rt_sub(object):
         # save labels of objects in the local costmap
         pd.DataFrame(labels_in_lc).to_csv(self.dirCurr + '/' + self.dirName + '/lc_labels.csv', index=False)#, header=False)
 
-        # segmentation part
+        ###### SEGMENTATION PART ######
         start = time.time()
         # first segment image is a lc with 99s and 100s
         self.segments = copy.deepcopy(self.image_99s_100s)
@@ -458,37 +499,20 @@ class lime_rt_sub(object):
         #'''
         #print('len(LC_centroids_objects_indices) = ', len(LC_centroids_objects_indices))
         #print('LC_centroids_objects_indices = ', LC_centroids_objects_indices)
-        if len(LC_centroids_objects_indices) > 10:
-            for i in range(0, self.costmap_size):
-                for j in range(0, self.costmap_size):
-                    if self.segments[i, j] >= 99:
-                        distances_to_centroids = []
-                        distances_indices = []
-                        for k in range(0, N_centroids_in_lc):
-                            #if k in LC_centroids_objects_indices:
-                            dx = abs(j - centroids_in_lc[k][0])
-                            dy = abs(i - centroids_in_lc[k][1])
-                            distances_to_centroids.append(dx + dy)
-                            distances_indices.append(k)
-                        idx = distances_to_centroids.index(min(distances_to_centroids))
-                        #self.segments[i, j] = values_static[distances_indices[idx]]
-                        self.segments[i, j] = values_in_lc[idx]
-        #'''
-        else:
-            for i in range(0, self.costmap_size):
-                for j in range(0, self.costmap_size):
-                    if self.segments[i, j] >= 99:
-                        distances_to_centroids = []
-                        distances_indices = []
-                        for k in range(0, N_centroids_all):
-                            #if k in LC_centroids_objects_indices:
-                            dx = abs(j - centroids_static[k][0])
-                            dy = abs(i - centroids_static[k][1])
-                            distances_to_centroids.append(dx + dy)
-                            distances_indices.append(k)
-                        idx = distances_to_centroids.index(min(distances_to_centroids))
-                        #self.segments[i, j] = values_static[distances_indices[idx]]
-                        self.segments[i, j] = values_static[idx]
+        for i in range(0, self.costmap_size):
+            for j in range(0, self.costmap_size):
+                if self.segments[i, j] >= 99:
+                    distances_to_centroids = []
+                    distances_indices = []
+                    for k in range(0, N_centroids_all):
+                        #if k in LC_centroids_objects_indices:
+                        dx = abs(j - centroids_static[k][0])
+                        dy = abs(i - centroids_static[k][1])
+                        distances_to_centroids.append(dx + dy)
+                        distances_indices.append(k)
+                    idx = distances_to_centroids.index(min(distances_to_centroids))
+                    #self.segments[i, j] = values_static[distances_indices[idx]]
+                    self.segments[i, j] = values_static[idx]
         
         if self.plot_segments == True:
             fig = plt.figure(frameon=False)
@@ -526,8 +550,8 @@ class lime_rt_sub(object):
 
             transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
 
-            self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
             self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
+            self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
         # if tf not catched do not go further
         except:
             print('tf except!!!')
@@ -647,12 +671,11 @@ class lime_rt_sub(object):
         #print('odom_callback!!!')
         self.odom_x = msg.pose.pose.position.x
         self.odom_y = msg.pose.pose.position.y
-        self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+        self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.twist.twist.linear.z, msg.twist.twist.angular.w]
         
     # Define a callback for the global plan
     def global_plan_callback(self, msg):
         #print('\nglobal_plan_callback!')
-
         self.global_plan_xs = [] 
         self.global_plan_ys = []
         self.global_plan_tmp = []
@@ -673,8 +696,7 @@ class lime_rt_sub(object):
         
     # Define a callback for the local plan
     def local_plan_callback(self, msg):
-        #print('\nlocal_plan_callback')
-        
+        #print('\nlocal_plan_callback')  
         try:
             self.local_plan_x_list = [] 
             self.local_plan_y_list = [] 
@@ -715,51 +737,6 @@ class lime_rt_sub(object):
     def model_state_callback(self, states_msg):
         self.gazebo_names = states_msg.name
         self.gazebo_poses = states_msg.pose
-
-    # Declare subscribers
-    def main_(self):
-        # subscribers
-        self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
-
-        self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
-
-        self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
-
-        self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
-
-        self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
-
-        self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
-
-        self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
-        
-
-        # semantic part
-        semantic_worlds_names = ['world_movable_chair', 'world_movable_chair_2', 'world_movable_chair_3', 'world_no_openable_door', 'world_openable_door']
-        idx = 3
-        
-        # load semantic tags
-        self.semantic_tags = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '_tags.csv')
-        
-        # populate static_names
-        for i in range(0, self.semantic_tags.shape[0]):
-            self.static_names.append(self.semantic_tags.iloc[i][1])
-
-        # load semantic_global_map
-        self.semantic_global_map = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '.csv', index_col=None, header=None))
-        
-        # load semantic_global_info
-        self.semantic_global_map_info = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '_info.csv', index_col=None, header=None)
-        self.semantic_global_map_info = self.semantic_global_map_info.transpose()
-       
-        # populate some semantic_global_map variables
-        self.semantic_global_map_resolution = float(self.semantic_global_map_info.iloc[1][1])
-        print(self.semantic_global_map_resolution)
-        self.semantic_global_map_origin_x = float(self.semantic_global_map_info.iloc[4][1])
-        print(self.semantic_global_map_origin_x)
-        self.semantic_global_map_origin_y = float(self.semantic_global_map_info.iloc[5][1])
-        print(self.semantic_global_map_origin_y)
-
 
 
 # ----------main-----------
