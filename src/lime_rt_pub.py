@@ -745,7 +745,7 @@ class lime_rt_pub(object):
         self.pub_exp_image = rospy.Publisher('/lime_explanation_image', Image, queue_size=10)
         self.br = CvBridge()
 
-        self.pub_exp_pointcloud = rospy.Publisher("/local_explanation_layer", PointCloud2)
+        self.pub_exp_pointcloud = rospy.Publisher("/lime_explanation_layer", PointCloud2)
 
         # N_segments * (label, coefficient) + (original_deviation)
         self.pub_lime = rospy.Publisher("/lime_rt_exp", Float32MultiArray, queue_size=10)
