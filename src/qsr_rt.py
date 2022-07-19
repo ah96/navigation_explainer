@@ -76,7 +76,7 @@ class TF():
         print('rotation = ', self.rotation)
 tf_map_odom = TF() 
 
-# orientations and semantic labels
+# semantic labels and orientations
 pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
 semantic_labels = MarkerArray()
 
@@ -177,16 +177,16 @@ class Object():
 
 # KNOWN OBJECTS
 # [ID, label, cx_map, cy_map, dx, dy, x_map, y_map]
+# semantic part
+semantic_worlds_names = ['world_movable_chair_1', 'world_movable_chair_2', 'world_movable_chair_3', 'world_no_openable_door', 'world_openable_door']
+idx = 2
+known_objects_pd = pd.read_csv(dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '_tags.csv')
+# fill in known objects
 known_objects = []
 known_objects_names =  []
 known_objects_positions =  []
 known_objects_ids =  []
 N_known_objects = len(known_objects_names)
-# semantic part
-semantic_worlds_names = ['world_movable_chair', 'world_movable_chair_2', 'world_movable_chair_3', 'world_no_openable_door', 'world_openable_door']
-idx = 3
-known_objects_pd = pd.read_csv(dirCurr + '/src/navigation_explainer/src/worlds/' + semantic_worlds_names[idx] + '/' + semantic_worlds_names[idx] + '_tags.csv')
-# fill in known objects
 for i in range(0, known_objects_pd.shape[0]):
     ID = known_objects_pd.iloc[i,0]
     label = known_objects_pd.iloc[i,1]
@@ -194,6 +194,7 @@ for i in range(0, known_objects_pd.shape[0]):
     distance = Point(known_objects_pd.iloc[i,4],known_objects_pd.iloc[i,5],0.0)
     known = True
     position_map = Point(known_objects_pd.iloc[i,6],known_objects_pd.iloc[i,7],0.0)
+    
     known_objects.append(Object(ID,label,position_map,centroid_map,distance,known))
     known_objects_names.append(label)
     known_objects_positions.append(position_map)
@@ -251,14 +252,11 @@ for i in range(0, known_objects_pd.shape[0]):
 unknown_objects = []
 unknown_objects_names =  []
 unknown_objects_positions =  []
-N_unknown_objects = len(unknown_objects_names)
 
-# objects in LC (Local Costmap)
+# OBJECTS IN LC (Local Costmap)
 lc_objects = []
 lc_objects_names =  []
 lc_objects_positions =  []
-N_lc_objects = len(lc_objects_names)
-
 
 # lime explanation class
 class LimeExplanation():
@@ -270,7 +268,6 @@ class LimeExplanation():
         print("\nLIME explanation = ", self.exp)
         print('LIME original deviation = ', self.original_deviation)
 lime_explanation = LimeExplanation()
-
 
 # Robot class
 class Robot():
@@ -629,7 +626,6 @@ class Human():
 
         return value
 
-
 # QSR class
 class qsr_rt():
     # initialization
@@ -735,7 +731,7 @@ class qsr_rt():
         marker.ns = "my_namespace"
         orientations.markers.append(marker)
 
-        # update robot data from Gazebo?
+        # update robot data from Gazebo or not
         self.update_robot_from_gazebo = True
 
         # path variables
@@ -745,7 +741,7 @@ class qsr_rt():
 
         # lime explanation subscribers
         # N_segments * (label, coefficient) + (original_deviation)
-        self.sub_lime = rospy.Subscriber("/lime_rt_exp", Float32MultiArray, self.lime_callback)
+        #self.sub_lime = rospy.Subscriber("/lime_rt_exp", Float32MultiArray, self.lime_callback)
 
     # update human and robot variables
     def model_state_callback(self, states_msg):
@@ -788,12 +784,11 @@ class qsr_rt():
         elif 'citizen_extras_male_03' in states_msg.name:
             human_idx = states_msg.name.index('citizen_extras_male_03')    
         if human_idx != -1:
-
             self.human.position_map = states_msg.pose[human_idx].position
             d_x = self.robot.position_map.x - self.human.position_map.x 
             d_y = self.robot.position_map.y - self.human.position_map.y 
             angle_yaw = np.arctan2(d_y, d_x)
-            self.human.orientation_map = euler_to_quaternion(0.0,0.0,angle_yaw)
+            self.human.orientation_map = euler_to_quaternion(0.0, 0.0, angle_yaw)
             #human.orientation_map = states_msg.pose[human_idx].orientation
             #human.printAttributes()
 
@@ -898,18 +893,18 @@ class qsr_rt():
 
     # lime explanation callback
     def lime_callback(self, msg):
-        print('\n\n\n\n\nlime_callback\n')
-        print('\n\n\n\n\n')
-        
+        print('\n\n\n\nlime_callback\n')
+
+        # get the LIME explanations
         # N_segments * (label, coefficient) + (original_deviation)
-        # print('msg = ', msg)
         lime_explanation.exp = []
         for i in range(0, int((len(msg.data)-1)/2)): # not taking free-space weight, which is always 0
             lime_explanation.exp.append([msg.data[2*i],msg.data[2*i+1]])
         lime_explanation.original_deviation = msg.data[-1]
+        print('\nnumber of lime weights = ', len(lime_explanation.exp))
         lime_explanation.printAttributes()
 
-        # update local costmap
+        # update local costmap variables
         if os.path.getsize(self.file_path_lc) == 0 or os.path.exists(self.file_path_lc) == False:
             return
         lc_tmp = pd.read_csv(dirCurr + '/' + self.file_path_lc)
@@ -918,9 +913,9 @@ class qsr_rt():
         local_costmap.width = lc_tmp.iloc[2][0]
         local_costmap.origin_x_odom = lc_tmp.iloc[3][0]
         local_costmap.origin_y_odom = lc_tmp.iloc[4][0] 
-        local_costmap.printAttributes()
+        #local_costmap.printAttributes()
 
-        # update tf_map_odom
+        # update tf_map_odom - currently is not needed
         '''
         if os.path.getsize(file_path_tf_map_odom) == 0 or os.path.exists(file_path_tf_map_odom) == False:
             return
@@ -933,20 +928,29 @@ class qsr_rt():
         r_ = np.asarray(r.as_matrix())
         '''
 
-        # find objects in the current local costmap
+        # load unknown_objects and lc_labels
         # [ID, label, x_odom, y_odom, x_map, y_map, cx_odom, cy_odom]
-        unknown_objects_pd = pd.read_csv(dirCurr + '/' + dirName + '/unknown_objects.csv')
-        #print('\nunknown_objects_pd = ', unknown_objects_pd)
-        N_unknown_objects = unknown_objects_pd.shape[0]
-        lc_labels_pd = np.array(pd.read_csv(dirCurr + '/' + dirName + '/lc_labels.csv'))
-        #print('lc_labels_pd = ', lc_labels_pd)
-        #print('lc_labels_pd.shape = ', lc_labels_pd.shape)
-        N_objects_in_lc = lc_labels_pd.shape[0]
+        N_unknown_objects = 0
+        N_objects_in_lc = 0
+        try:
+            unknown_objects_pd = pd.read_csv(dirCurr + '/' + dirName + '/unknown_objects.csv')
+            #print('\nunknown_objects_pd = ', unknown_objects_pd)
+            N_unknown_objects = unknown_objects_pd.shape[0]
+
+            lc_labels_pd = np.array(pd.read_csv(dirCurr + '/' + dirName + '/lc_labels.csv'))
+            print('\nlabels in LC = ', lc_labels_pd)
+            N_objects_in_lc = lc_labels_pd.shape[0]
+            print('\nnumber of objects with centroids in LC = ', N_objects_in_lc)
+        except:
+            pass    
+
+        # populate objects_in_lc with known objects from LC
         objects_in_lc = []
         for i in range(0, N_objects_in_lc):
             if lc_labels_pd[i, 0] in known_objects_names:
                 idx = known_objects_names.index(lc_labels_pd[i, 0])
                 objects_in_lc.append(known_objects[idx])
+        print('\nnumber of known objects with centroids in LC = ', len(objects_in_lc))
 
         # append LIME coefficients to the objects in the current local costmap
         N_coefficients = len(lime_explanation.exp)
@@ -1157,8 +1161,7 @@ class qsr_rt():
         # publish semantic labels of the unknown objects
         pub_semantic_labels_unknown.publish(semantic_labels_unknown)
 
-                                    
-        
+                                            
 ########--------------- MAIN -------------#############
 # Initialize the ROS Node named 'qsr_rt', allow multiple nodes to be run with this name
 rospy.init_node('qsr_rt', anonymous=True)
