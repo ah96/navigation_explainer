@@ -8,6 +8,10 @@ from sensor_msgs.msg import CameraInfo, Image
 import pandas as pd
 import time
 import torch
+import mediapipe as mp
+mp_drawing = mp.solutions.drawing_utils
+mp_objectron = mp.solutions.objectron
+
 
 def bb_intersection_over_union(boxA, boxB):
     # determine the (x, y)-coordinates of the intersection rectangle
@@ -34,8 +38,8 @@ def bb_intersection_over_union(boxA, boxB):
     return iou
 
 # Load YOLO model
-#net = cv2.dnn.readNet("./yolo_data/yolov3.weights", "./yolo_data/yolov3.cfg")
-net = cv2.dnn.readNet("./yolo_data/yolov3-tiny.weights", "./yolo_data/yolov3-tiny.cfg")
+net = cv2.dnn.readNet("./yolo_data/yolov3.weights", "./yolo_data/yolov3.cfg")
+#net = cv2.dnn.readNet("./yolo_data/yolov3-tiny.weights", "./yolo_data/yolov3-tiny.cfg")
 
 # load the global list of labels
 labels_global = np.array(pd.read_csv('./yolo_data/labels_coco.csv'))
@@ -43,7 +47,7 @@ labels_global = np.array(pd.read_csv('./yolo_data/labels_coco.csv'))
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom
 
 # callback function
-def callback(img, camera_info):
+def callback(img, depth_img):
     # these two links should help:
     # 1. this procedure done with yolov3: https://medium.com/@mkadric/how-to-use-yolo-object-detection-model-1604cf9bbaed 
     # 2. yolov5 detect.py file from where you should be able to derive which input image format yolov5 needs, how to call feedforward/predict function, etc.: https://github.com/ultralytics/yolov5/blob/master/detect.py 
@@ -52,11 +56,32 @@ def callback(img, camera_info):
 
     # image from robot's camera to np.array
     image = np.frombuffer(img.data, dtype=np.uint8).reshape(img.height, img.width, -1)
+    depth_image = np.frombuffer(depth_img.data, dtype=np.uint8).reshape(depth_img.height, depth_img.width, -1)
 
-    image = cv2.imread("./yolo_data/image.png")
+    image = cv2.imread("./yolo_data/slika1.jpg")
 
     # Get image dimensions
     (height, width) = image.shape[:2]
+
+    # For static images:
+    with mp_objectron.Objectron(static_image_mode=True,
+                                max_num_objects=5,
+                                min_detection_confidence=0.5,
+                                model_name='Shoe') as objectron:
+        
+        # Convert the BGR image to RGB and process it with MediaPipe Objectron.
+        results = objectron.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        if results.detected_objects:
+            # Draw box landmarks.
+            annotated_image = image.copy()
+            idx = 0
+            for detected_object in results.detected_objects:
+                mp_drawing.draw_landmarks(
+                    annotated_image, detected_object.landmarks_2d, mp_objectron.BOX_CONNECTIONS)
+                mp_drawing.draw_axis(annotated_image, detected_object.rotation,
+                                    detected_object.translation)
+                cv2.imwrite('annotated_image' + str(idx) + '.png', annotated_image)
+                idx += 1
 
     start = time.time()
     # Define the neural network input
@@ -122,12 +147,17 @@ def callback(img, camera_info):
                     detections.append((x, y, w, h))
                     labels.append(label)
 
+    depths_avg = [] #[0.0]*detections.shape[0]
+
     # Draw bounding boxes around the detections
     ctr = 0
     for (x, y, w, h) in detections:
+        depths_avg.append(np.average(depth_image[y:y+h, x:x+w]))
         cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
         cv2.putText(image, labels[ctr], (x, y + 30), 0, 2, (0, 255, 0), 3)
         ctr += 1
+
+    print('depths_avg = ', depths_avg)
 
     # Using cv2.imwrite() method
     # Saving the image
@@ -136,7 +166,8 @@ def callback(img, camera_info):
 if __name__ == '__main__':
     rospy.init_node('my_node', anonymous=True)
     image_sub = message_filters.Subscriber('/xtion/rgb/image_raw', Image)
-    info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
-    ts = message_filters.ApproximateTimeSynchronizer([image_sub, info_sub], 10, 0.2)
+    #info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
+    depth_sub = message_filters.Subscriber('/xtion/depth_registered/image_raw', Image) #"32FC1"
+    ts = message_filters.ApproximateTimeSynchronizer([image_sub, depth_sub], 10, 0.2)
     ts.registerCallback(callback)
     rospy.spin()
