@@ -8,8 +8,12 @@ from sensor_msgs.msg import CameraInfo, Image
 import pandas as pd
 import time
 import torch
+import os
 
-path_prefix = '/home/amar/amar_ws/yolo_data/'
+dirCurr = os.getcwd()
+path_prefix = dirCurr + '/yolo_data/'
+
+print('torch.cuda.is_available() = ',torch.cuda.is_available())
 
 def bb_intersection_over_union(boxA, boxB):
     # determine the (x, y)-coordinates of the intersection rectangle
@@ -118,7 +122,7 @@ def yolov3(image, path_prefix):
         print(str(e))
 
 def yolov5(image):
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s-seg')  # or yolov5n - yolov5x6, custom, yolov5s(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
     #model = torch.hub.load('ultralytics/yolov5', 'custom', 'path/to/best.pt')  # custom trained model
 
     start = time.time()
@@ -134,9 +138,15 @@ def yolov5(image):
     #results.pandas() #[xmin ymin xmax ymax confidence class name]
     #print('type(results) = ', type(results))
 
-    #res = np.array(results.pandas().xyxy[0])
+    res = np.array(results.pandas().xyxy[0])
     #print(res)
     print(results.pandas().xyxy[0])
+
+    labels = list(set(res[:,-1]))
+    print('labels: ', labels)
+
+    explanation = 'I see ' + ', '.join(labels[:-1]) + ', and ' + labels[-1] + '.'
+    print(explanation)
 
 def yolov7(image):
     # Load fine-tuned custom model
