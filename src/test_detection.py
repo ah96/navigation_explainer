@@ -118,7 +118,7 @@ def yolov3(image, path_prefix):
         print(str(e))
 
 def yolov5(image):
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5n6')  # or yolov5n - yolov5x6, custom, yolov5s(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5s-seg')  # or yolov5n - yolov5x6, custom, yolov5s(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
     #model = torch.hub.load('ultralytics/yolov5', 'custom', 'path/to/best.pt')  # custom trained model
 
     start = time.time()
@@ -129,7 +129,7 @@ def yolov5(image):
     # Results
     results.print()  # or .show(), .save(), .crop(), .pandas(), etc.
     #results.show()
-    #results.save()
+    results.save()
     #results.crop()
     #results.pandas() #[xmin ymin xmax ymax confidence class name]
     #print('type(results) = ', type(results))
@@ -140,20 +140,17 @@ def yolov5(image):
 
 def yolov7(image):
     # Load fine-tuned custom model
-    #model = torch.hub.load('WongKinYiu/yolov7', 'custom', '/path/to/custom_model.pt', force_reload=True, trust_repo=True)
-
-    model = torch.hub.load('WongKinYiu/yolov7', 'yolov7')  # or yolov5n - yolov5x6, custom, yolov5s(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
-    #model = torch.hub.load('ultralytics/yolov5', 'custom', 'path/to/best.pt')  # custom trained model
-
+    model = torch.hub.load('WongKinYiu/yolov7', 'custom', 'yolov7-d6.pt')
+    
     start = time.time()
     # Inference
     results = model(image)
     end = time.time()
-    print('yolov5 runtime: ', end-start)
+    print('yolov7 runtime: ', end-start)
     # Results
     results.print()  # or .show(), .save(), .crop(), .pandas(), etc.
     #results.show()
-    #results.save()
+    results.save()
     #results.crop()
     #results.pandas() #[xmin ymin xmax ymax confidence class name]
     #print('type(results) = ', type(results))
@@ -169,5 +166,5 @@ image = cv2.imread(path_prefix + "icml1.jpg")
 #image = cv2.imread(path_prefix + "ki.png")
 
 #yolov3(image, path_prefix)
-#yolov5(image)
-yolov7(image)
+yolov5(image)
+#yolov7(image)
