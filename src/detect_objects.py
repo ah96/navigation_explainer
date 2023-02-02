@@ -20,21 +20,15 @@ print('torch.cuda.is_available() = ',torch.cuda.is_available())
 
 # Load YOLO model
 #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
-model = torch.hub.load('/home/robolab/.cache/torch/hub/ultralytics_yolov5_master/', 'custom', dirCurr + '/yolov5s.pt', source='local')  # custom trained model
+model = torch.hub.load(path_prefix + '/yolov5/', 'custom', path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
 
 # load the global list of labels
-#labels_global = np.array(pd.read_csv('./yolo_data/labels_coco.csv'))
+#labels_global = np.array(pd.read_csv(path_prefix + '/labels/labels_coco.csv'))
 
+# some global variables
 image = []
 callback_ctr = 0
-
-fig = plt.figure(frameon=False)
-w = 1.6 * 3
-h = 1.6 * 3
-fig.set_size_inches(w, h)
-ax = plt.Axes(fig, [0., 0., 1., 1.])
-ax.set_axis_off()
-fig.add_axes(ax)
+yolo_ctr = 0
 
 # callback function
 def callback(img):
@@ -48,64 +42,54 @@ def callback(img):
 
     # image from robot's camera to np.array
     image = np.frombuffer(img.data, dtype=np.uint8).reshape(img.height, img.width, -1)
-    #depth_image = np.frombuffer(depth_img.data, dtype=np.uint8).reshape(depth_img.height, depth_img.width, -1)
-
-    #image = cv2.imread("./yolo_data/slika1.jpg")
-
+    #image = np.array(cv2.imread(path_prefix + "/images/icml1.jpg"))
     # Get image dimensions
     #(height, width) = image.shape[:2]
 
+    # depth image stuff
+    #depth_image = np.frombuffer(depth_img.data, dtype=np.uint8).reshape(depth_img.height, depth_img.width, -1)
     #depths_avg = [] #[0.0]*detections.shape[0]
     #print('depths_avg = ', depths_avg)
 
     callback_ctr = callback_ctr + 1
     if callback_ctr == 1:
         callback_ctr = 0
-        yolo()
+        yolo(image)
 
-def yolo():
+def yolo(image):
+    global yolo_ctr
+
     start = time.time()
+    
     # Inference
     results = model(image)
     end = time.time()
     print('yolov5 runtime: ', end-start)
+    
     # Results
     #results.print()  # or .show(), .save(), .crop(), .pandas(), etc.
-    #print('type(results.show()) = ', type(results.show()))
-    #results.save()
-    #results.crop()
-    results.show()
     #results.pandas() #[xmin ymin xmax ymax confidence class name]
-    #print('type(results) = ', type(results))
-
     res = np.array(results.pandas().xyxy[0])
-    #print(res)
     print(results.pandas().xyxy[0])
 
-    labels = list((res[:,-1]))
+    # labels and confidences
+    labels = list(res[:,-1])
     print('labels: ', labels)
-
     confidences = list((res[:,-3]))
     print('confidences: ', confidences)
-
-    #data = results.ims[0]
-    #data.swapaxes(0, 2)
-    #cv2.imshow('Results', results.ims[0].astype(np.uint8))
-    #print(results.ims[0].shape)
-    #ax = plt.Axes(fig, [0., 0., 1., 1.])
-    #ax.set_axis_off()
-    #fig.add_axes(ax)
-    #ax.imshow(data.astype('uint8'), aspect='auto')
-    #plt.show()
-    #fig.savefig(dirCurr + '/' + 'results' + '.png', transparent=False)
-
+    x_y_min_max = np.array(res[:,0:4])
+    
     labels_ = []
     for i in range(len(labels)):
-        if confidences[i] >= 0.4:
+        if confidences[i] < 0.4:
+            np.delete(x_y_min_max, i, 0)
+        else:
             labels_.append(labels[i])
+    labels = labels_
 
-    labels=labels_ 
-    
+    print('labels_after: ', labels)
+
+    # creating and plotting textual explanation
     explanation = ' '
     if len(labels) > 2:
         explanation = 'I detect ' + ', '.join(labels[:-1]) + ', and ' + labels[-1] + '.'
@@ -118,7 +102,23 @@ def yolo():
     elif len(labels) == 1:
         explanation = 'I detect ' + labels[-1] + '.'
         print(explanation)
-        test_exp_pub.publish(explanation)    
+        test_exp_pub.publish(explanation)
+
+
+    # plot with detected objects and labels
+    # with cv2
+    for i in range(0, len(labels)):    
+        p1, p2 = (int(x_y_min_max[i,2]), int(x_y_min_max[i,3])), (int(x_y_min_max[i,0]), int(x_y_min_max[i,1]))
+        cv2.rectangle(image, p1, p2, (0,255,0), thickness=2, lineType=cv2.LINE_AA)
+        if p2[1] < 10:
+            cv2.putText(image, labels[i], (p2[0], p2[1]+40), 0, 2, (0,255,0), thickness=3, lineType=cv2.LINE_AA)
+        else:
+            cv2.putText(image, labels[i], (p2[0], p2[1]-10), 0, 2, (0,255,0), thickness=3, lineType=cv2.LINE_AA)
+    cv2.imwrite(dirCurr + '/' + 'results_' + str(yolo_ctr) + '.png', image)
+    cv2.imshow("Image Window", image)
+    cv2.waitKey(1)
+
+    yolo_ctr += 1    
 
 if __name__ == '__main__':
     rospy.init_node('my_node', anonymous=True)

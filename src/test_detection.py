@@ -122,8 +122,8 @@ def yolov3(image, path_prefix):
         print(str(e))
 
 def yolov5(image):
-    model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
-    #model = torch.hub.load('ultralytics/yolov5', 'custom', 'path/to/best.pt')  # custom trained model
+    #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
+    model = torch.hub.load(path_prefix + '/yolov5/', 'custom', path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
 
     start = time.time()
     # Inference
@@ -142,11 +142,20 @@ def yolov5(image):
     #print(res)
     print(results.pandas().xyxy[0])
 
-    labels = list(set(res[:,-1]))
+    labels = list((res[:,-1]))
     print('labels: ', labels)
 
-    explanation = 'I see ' + ', '.join(labels[:-1]) + ', and ' + labels[-1] + '.'
-    print(explanation)
+    # creating and plotting textual explanation
+    explanation = ' '
+    if len(labels) > 2:
+        explanation = 'I detect ' + ', '.join(labels[:-1]) + ', and ' + labels[-1] + '.'
+        print(explanation)
+    elif len(labels) == 2:
+        explanation = 'I detect ' + labels[-2] + ' and ' + labels[-1] + '.'
+        print(explanation)
+    elif len(labels) == 1:
+        explanation = 'I detect ' + labels[-1] + '.'
+        print(explanation)
 
 def yolov7(image):
     # Load fine-tuned custom model
