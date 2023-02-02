@@ -200,19 +200,19 @@ class lime_rt_sub(object):
         self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
         
         # semantic part
-        world_name = 'hri'
+        world_name = 'ont1' #ont1-4
 
         # load semantic_global_info
-        #self.semantic_global_map_info = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + world_name + '/' + 'info.csv', index_col=None, header=None)
+        #self.semantic_global_map_info = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + world_name + '/' + 'info.csv', index_col=None, header=None)
         #self.semantic_global_map_info = self.semantic_global_map_info.transpose()
         #print('self.semantic_global_map_info = ', self.semantic_global_map_info)
     
         # load gazebo tags
-        self.gazebo_tags = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + world_name + '/' + 'gazebo_tags.csv'))
+        self.gazebo_tags = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + world_name + '/' + 'gazebo_tags.csv'))
         #print('self.gazebo_tags = ', self.gazebo_tags)
  
         # load ontology
-        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/worlds/' + world_name + '/' + 'ontology.csv'))
+        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + world_name + '/' + 'ontology.csv'))
         #print('self.ontology = ', self.ontology)
         self.openability_state_changed_objs_ont_indices = []
          

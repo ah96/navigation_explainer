@@ -1,5 +1,0 @@
-debljina zidova: 0.15
-
-Sources for diffent objects:
-table - tl
-wardrobe (cabinet) - tr
