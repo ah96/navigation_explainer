@@ -58,159 +58,6 @@ def euler_to_quaternion(roll, pitch, yaw):
   qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
   return Quaternion(qx, qy, qz, qw)
 
-class QSR(object):
-    # constructor
-    def __init__(self):
-        self.binary_qsr_choice = 1
-        self.ternary_qsr_choice = 3
-        self.PI = PI
-        self.R = 1    
-
-    # define binary QSR calculus
-    def defineBinaryQsrCalculus(self):
-        if self.binary_qsr_choice == 0:
-            self.binary_qsr_dict = {
-                'left': 0,
-                'right': 1
-            }
-
-        elif self.binary_qsr_choice == 1:
-            self.binary_qsr_dict = {
-                'left': 0,
-                'right': 1,
-                'front': 2,
-                'back': 3
-            }
-
-        elif self.binary_qsr_choice == 2:
-            self.binary_qsr_dict = {
-                'left/front': 0,
-                'right/front': 1,
-                'left/back': 2,
-                'right/back': 3
-            }
-
-        # used for deriving NLP annotations
-        self.binary_qsr_dict_inv = {v: k for k, v in self.binary_qsr_dict.items()}
-
-    # get binary QSR value
-    def getBinaryQsrValue(self, angle):
-        value = ''    
-
-        if self.binary_qsr_choice == 0:
-            if -self.PI/2 <= angle < self.PI/2:
-                value += 'right'
-            elif self.PI/2 <= angle < self.PI or -self.PI <= angle < -self.PI/2:
-                value += 'left'
-
-        elif self.binary_qsr_choice == 1:
-            if 3*self.PI/4 <= angle < self.PI or -self.PI <= angle < -3*self.PI/4:
-                value += 'left'
-            elif -self.PI/4 <= angle < self.PI/4:
-                value += 'right'
-            elif self.PI/4 <= angle < 3*self.PI/4:
-                value += 'front'
-            elif -3*self.PI/4 <= angle < -self.PI/4:
-                value += 'back'
-
-        elif self.binary_qsr_choice == 2:
-            if 0 <= angle < self.PI/2:
-                value += 'left/front'
-            elif self.PI/2 <= angle <= self.PI:
-                value += 'left/back'
-            elif -self.PI/2 <= angle < 0:
-                value += 'right/front'
-            elif -self.PI <= angle < -self.PI/2:
-                value += 'right/back'
-
-        return value
-
-    # define ternary QSR calculus
-    def defineTernaryQsrCalculus(self):
-        if self.ternary_qsr_choice == 0:
-            self.ternary_qsr_dict = {
-                'left': 0,
-                'right': 1
-            }
-
-        elif self.ternary_qsr_choice == 1:
-            self.ternary_qsr_dict = {
-                'left': 0,
-                'right': 1,
-                'front': 2,
-                'back': 3
-            }
-
-        elif self.ternary_qsr_choice == 2:
-            self.ternary_qsr_dict = {
-                'left/front': 0,
-                'right/front': 1,
-                'left/back': 2,
-                'right/back': 3
-            }
-
-        elif self.ternary_qsr_choice == 3:
-            self.ternary_qsr_dict = {
-                'cl': 0,
-                'dl': 1,
-                'cr': 2,
-                'dr': 3,
-                'cb': 4,
-                'db': 5,
-                'cf': 6,
-                'df': 7
-                }
-
-        # used for deriving NLP annotations
-        self.ternary_qsr_dict_inv = {v: k for k, v in self.ternary_qsr_dict.items()}
-
-    # get ternary QSR value
-    def getTernaryQsrValue(self, r, angle, R):
-        value = ''    
-
-        if self.ternary_qsr_choice == 0:
-            if -self.PI <= angle < 0:
-                value += 'right'
-            else:
-                value += 'left'
-
-        elif self.ternary_qsr_choice == 1:
-            if -self.PI/4 <= angle <= self.PI/4:
-                value += 'front'
-            elif self.PI/4 < angle < 3*self.PI/4:
-                value += 'left'
-            elif 3*self.PI/4 <= angle or angle <= -3*self.PI/4:
-                value += 'back'
-            elif -3*self.PI/4 < angle < -self.PI/4:
-                value += 'right'     
-
-        elif self.ternary_qsr_choice == 2:
-            if 0 <= angle < self.PI/2:
-                value += 'left/front'
-            elif self.PI/2 <= angle <= self.PI:
-                value += 'left/back'
-            elif -self.PI/2 <= angle < 0:
-                value += 'right/front'
-            elif -self.PI <= angle < -self.PI/2:
-                value += 'right/back'
-
-        elif self.ternary_qsr_choice == 3:
-            if r<=R:
-                value += 'c'
-            else:
-                value += 'd'
-
-            if -self.PI/4 <= angle <= self.PI/4:
-                value += 'front'
-            elif self.PI/4 < angle < 3*self.PI/4:
-                value += 'left'
-            elif 3*self.PI/4 <= angle or angle <= -3*self.PI/4:
-                value += 'back'
-            elif -3*self.PI/4 < angle < -self.PI/4:
-                value += 'right' 
-
-        return value
-
 
 class LimeBase(object):
     def __init__(self,
@@ -434,59 +281,23 @@ class ImageExplanation(object):
 
             # color the obstacle-affordance pair with green or red
             if w > 0:
-                temp[self.segments == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
-                rgb_values.append(self.val_high * w / max_w)
+                if self.use_maximum_weight:
+                    temp[self.segments == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                    rgb_values.append(self.val_high * w / max_w)
+                else:
+                    temp[self.segments == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum
+                    rgb_values.append(self.val_high * w / w_sum)
             elif w < 0:
-                temp[self.segments == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
-                rgb_values.append(self.val_high * abs(w) / max_w)
+                if self.use_maximum_weight:
+                    temp[self.segments == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                    rgb_values.append(self.val_high * abs(w) / max_w)
+                else:
+                    temp[self.segments == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum
+                    rgb_values.append(self.val_high * abs(w) / w_sum)
 
             imgs[f] = temp    
 
         print('weights = ', w_s)
-
-        """
-        for f, w in exp:
-            #print('(f, w): ', (f, w))
-            f = segments_labels[f]
-            #print('segments_labels[f] = ', f)
-
-            if w < 0.0:
-                c = -1
-            elif w > 0.0:
-                c = 1
-            else:
-                c = 0
-            #print('c = ', c)
-            
-            # free space
-            if f == 0:
-                #print('free_space, (f, w) = ', (f, w))
-                if self.color_free_space == False:
-                    temp[segments == f, 0] = self.free_space_shade
-                    temp[segments == f, 1] = self.free_space_shade
-                    temp[segments == f, 2] = self.free_space_shade
-            # obstacle
-            else:
-                if self.color_free_space == False:
-                    if c == 1:
-                        temp[segments == f, 0] = 0.0
-                        if self.use_maximum_weight == True:
-                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
-                        else:
-                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
-                        temp[segments == f, 2] = 0.0
-                    elif c == 0:
-                        temp[segments == f, 0] = 0.0
-                        temp[segments == f, 1] = 0.0
-                        temp[segments == f, 2] = 0.0
-                    elif c == -1:
-                        if self.use_maximum_weight == True:
-                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
-                        else:
-                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
-                        temp[segments == f, 1] = 0.0
-                        temp[segments == f, 2] = 0.0
-        """
 
         print('GET IMAGE AND MASK ENDING!!!!')
 
@@ -499,7 +310,7 @@ class lime_rt_pub(object):
 
         self.counter_global = 0
 
-        self.plot_perturbations = False 
+        self.plot_perturbations = True 
         self.plot_classification = False
         self.plot_explanation = False
 
@@ -836,17 +647,23 @@ class lime_rt_pub(object):
     # call local planner
     def create_labels(self, classifier_fn):
         try:
+            # load ontology
+            # ontology is updated in the subscriber as the robot moves (in real-world case, when the new detected objects are not already in the ontology)
             self.ontology = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv'))
             
+            # load object-affordance pairs
+            # object-affordance pairs are updated in the subscriber as the robot is moving
             self.object_affordance_pairs = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs.csv'))
-            print('self.object_affordance_pairs = ', self.object_affordance_pairs)
+            #print('self.object_affordance_pairs = ', self.object_affordance_pairs)
             
+            # load inflated segments (changes the traditional local costmap)
+            # segments and inflated segments are also updated in the subscriber as the robot is moving
             self.segments_inflated = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/segments_inflated.csv'))
             #print('self.segments_inflated.shape = ', self.segments_inflated.shape)
 
-            # create data (encoded perturbations)
 
-            # 2**N segments
+            # create data (encoded perturbations)
+            # 2**N segments -- explore all object-affordance perturbations
             n_features = self.object_affordance_pairs.shape[0]
             num_samples = 2**n_features
             lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
@@ -855,8 +672,8 @@ class lime_rt_pub(object):
             #print('self.data.shape = ', self.data.shape)
             #print('type(self.data) = ', type(self.data))
             
-
-            # N+1 segments
+            # N+1 or X=O(n) segments
+            # explore arbitrary number of object-affordance perturbations with linear complexity in the numver of object-affordance pairs
             #self.num_samples = self.n_features + 1
             #lst = [[1]*self.n_features]
             #for i in range(1, self.num_samples):
@@ -864,41 +681,49 @@ class lime_rt_pub(object):
             #    lst[i][i-1] = 0    
             #self.data = np.array(lst).reshape((self.num_samples, self.n_features))
 
+
+            # create perturbation semantic maps and get labels
             self.labels = []
             imgs = []
 
-            # add distinction between perturbed segments, costmap and inflated_segments (self.hard_obstacle vs label)
-            # add also a self.free_space as variable
             for i in range(0, num_samples):
                 temp = copy.deepcopy(self.segments_inflated)
                 temp[temp > 0] = self.hard_obstacle
                 
-                indices_zero = np.where(self.data[i] == 0)[0]
-                #print('indices_zero = ', indices_zero)
-
-                moved_open_ban = False
+                # find the indices of features (obj.-aff. pairs) which are in their alternative state
+                zero_indices = np.where(self.data[i] == 0)[0]
+                #print('zero_indices = ', zero_indices)
                 
-                for j in range(0, indices_zero.shape[0]):
-                    # if feature has 0 in self.data it either not there or opened --> original semantic map must be modified
-                    idx = indices_zero[j]
+                for j in range(0, zero_indices.shape[0]):
+                    # if feature has 0 in self.data it is in its alternative affordance state (currently: either not there or opened) --> original semantic map must be modified
+                    idx = zero_indices[j]
                     #print('idx = ', idx)
 
-                    # movability affordance
+                    # the object movability affordance is in its alternative state
+                    # the object must be moved
                     if self.object_affordance_pairs[idx][2] == 'movability':
+
                         #print(self.object_affordance_pairs[idx])
                         temp[self.segments_inflated == self.object_affordance_pairs[idx][0]] = 0
 
-                        if idx+1 < self.object_affordance_pairs.shape[0] and self.object_affordance_pairs[idx+1][1] == self.object_affordance_pairs[idx][1] and self.object_affordance_pairs[idx+1][2] == 'openability':
-                            moved_open_ban = True
-
                     # openability affordance                
                     elif self.object_affordance_pairs[idx][2] == 'openability':
+
+                        # if the previous obj.-aff. pair was the same object with movability affordance, then do not draw it
+                        # if this is the first obj.-aff. pair then this object does not have movability affordance, because it goes before other affordances
+                        if j > 0:
+                            idx_previous = zero_indices[j-1]
+                            if self.object_affordance_pairs[idx_previous][2] == 'movability' and self.object_affordance_pairs[idx_previous][1] == self.object_affordance_pairs[idx][1]:
+                                continue
                     
+                        # objects are immediately inflated when opened
                         if self.object_affordance_pairs[idx][1] == 'door':
                             label = self.object_affordance_pairs[idx][0]
 
                             temp[self.segments_inflated == label] = 0
                             
+                            # WRITE AN INDEPENDENT CODE FOR OPENING/CLOSING DOORS
+                            # otvara se preko manje/krace strane - pogledaj malu svesku
                             # object"s vertices from /map frame to /odom and /lc frames
                             door_tl_map_x = self.ontology[-1][2] + 0.5*self.ontology[-1][4]
                             door_tl_map_y = self.ontology[-1][3] + 0.5*self.ontology[-1][5]
@@ -918,7 +743,9 @@ class lime_rt_pub(object):
                             inflation_y = int((max(23, y_size) - y_size) / 2)                 
                             temp[max(0, door_tl_pixel_y-inflation_x):min(self.costmap_size-1, door_tl_pixel_y+x_size+inflation_x), max(0,door_tl_pixel_x-inflation_y):min(self.costmap_size-1, door_tl_pixel_x+y_size+inflation_y)] = self.hard_obstacle
 
-                        elif self.object_affordance_pairs[idx][1] == 'cabinet' and moved_open_ban == False:                       
+                        # MORAS DODATI U  ONTOLOGY SA KOJE SE STRANE VRATA OD ORMARA OTVARAJU: TOP, LEFT, RIGHT, BOTTOM 
+                        # I OVO IMPLEMENTIRATI U OVOM KODU
+                        elif self.object_affordance_pairs[idx][1] == 'cabinet':                       
                             label = self.object_affordance_pairs[idx][0]
                             
                             # tl
@@ -950,20 +777,6 @@ class lime_rt_pub(object):
                             if (0 <= cab_tl_pixel_x < self.costmap_size and 0 <= cab_tl_pixel_y < self.costmap_size):                            
                                 temp[max(0,cab_tl_pixel_y-inflation_y):min(self.costmap_size-1, cab_tl_pixel_y+y_size+inflation_y), max(0,cab_tl_pixel_x-inflation_x):min(self.costmap_size-1, cab_tl_pixel_x+x_size+inflation_x)] = self.hard_obstacle
 
-        
-        
-        
-                            # width and height
-                            #x_size = int(0.2 * self.ontology[label - 1][4] / self.localCostmapResolution)
-                            #y_size = int(1.5 * self.ontology[label - 1][5] / self.localCostmapResolution)
-                            #print('(x_size, y_size) = ', (x_size, y_size))
-
-                            #if (0 <= cab_tl_pixel_x < self.costmap_size and 0 <= cab_tl_pixel_y < self.costmap_size):                            
-                            #    temp[cab_tl_pixel_y:min(self.costmap_size-1, cab_tl_pixel_y+y_size), max(0, cab_tl_pixel_x-x_size):cab_tl_pixel_x] = self.hard_obstacle
-
-                            #if (0 <= cab_tr_pixel_x < self.costmap_size and 0 <= cab_tl_pixel_y < self.costmap_size):
-                            #    temp[cab_tr_pixel_y:min(self.costmap_size-1, cab_tr_pixel_y+y_size), max(0, cab_tr_pixel_x-x_size):cab_tr_pixel_x] = self.hard_obstacle
-
                 imgs.append(temp)                        
 
 
@@ -983,9 +796,12 @@ class lime_rt_pub(object):
                     ax = plt.Axes(fig, [0., 0., 1., 1.])
                     ax.set_axis_off()
                     fig.add_axes(ax)
-                    ax.imshow(np.flipud(imgs[i]).astype('float64'), aspect='auto')
+                    pert_img = np.flipud(imgs[i]) 
+                    ax.imshow(pert_img.astype('float64'), aspect='auto')
                     fig.savefig(dirCurr + '/perturbation_' + str(i) + '.png', transparent=False)
                     fig.clf()
+                    
+                    pd.DataFrame(pert_img).to_csv(dirCurr + '/perturbation_' + str(i) + '.csv', index=False)#, header=False)
             
             # call predictor and store labels
             if len(imgs) > 0:
@@ -1043,13 +859,16 @@ class lime_rt_pub(object):
 
 
             fig.add_axes(ax)
-            ax.imshow(np.flipud(sampled_instance[ctr]).astype(np.uint8))
+            img = np.flipud(sampled_instance[ctr])
+            ax.imshow(img.astype(np.uint8))
             plt.scatter(transformed_plan_xs, transformed_plan_ys, c='blue', marker='x')
             plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
             ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
             ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
             fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png')
             fig.clf()
+
+            pd.DataFrame(img).to_csv(dirCurr + '/perturbation_' + str(ctr) + '.csv', index=False)#, header=False)
 
     # classifier function for the explanation algorithm (LIME)
     def classifier_fn(self, sampled_instance):

@@ -781,6 +781,7 @@ class lime_rt_sub(object):
 
             self.fig.savefig(dirCurr + '/' + 'segments_without_labels' + '.png', transparent=False)
             #self.fig.clf()
+            pd.DataFrame(segs).to_csv(dirCurr + '/segments.csv', index=False)#, header=False)
 
             #fig = plt.figure(frameon=False)
             #w = 1.6 * 3
@@ -794,8 +795,8 @@ class lime_rt_sub(object):
 
             self.fig.savefig(dirCurr + '/' + 'segments_inflated_without_labels' + '.png', transparent=False)
             #self.fig.clf()
-
-
+            pd.DataFrame(segs).to_csv(dirCurr + '/segments_inflated.csv', index=False)#, header=False)
+            
             #fig = plt.figure(frameon=False)
             #w = 1.6 * 3
             #h = 1.6 * 3
