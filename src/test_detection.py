@@ -40,14 +40,14 @@ def bb_intersection_over_union(boxA, boxB):
     return iou
 
 
-def yolov3(image, path_prefix):
+def yolov3(image):
     try:
         # Load YOLOv3 model
         #net = cv2.dnn.readNet(path_prefix + "yolov3.weights", path_prefix + "yolov3.cfg")
-        net = cv2.dnn.readNet(path_prefix + "yolov3-tiny.weights", path_prefix + "yolov3-tiny.cfg")
+        net = cv2.dnn.readNet(path_prefix + "weights/yolov3-tiny.weights", path_prefix + "cfg/yolov3-tiny.cfg")
 
         # load the global list of labels
-        labels_global = np.array(pd.read_csv(path_prefix + 'labels_coco.csv'))
+        labels_global = np.array(pd.read_csv(path_prefix + 'datasets/labels_coco.csv'))
 
         start = time.time()
         # Define the neural network input
@@ -123,7 +123,7 @@ def yolov3(image, path_prefix):
 
 def yolov5(image):
     #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
-    model = torch.hub.load(path_prefix + '/yolov5/', 'custom', path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
+    model = torch.hub.load(path_prefix + 'yolov5_master/', 'custom', path_prefix + 'models/yolov5s.pt', source='local')  # custom trained model
 
     start = time.time()
     # Inference
@@ -159,7 +159,7 @@ def yolov5(image):
 
 def yolov7(image):
     # Load fine-tuned custom model
-    model = torch.hub.load('WongKinYiu/yolov7', 'custom', 'yolov7-d6.pt')
+    model = torch.hub.load('WongKinYiu/yolov7', 'custom', path_prefix + 'models/yolov7-d6.pt')
     
     start = time.time()
     # Inference
@@ -179,11 +179,11 @@ def yolov7(image):
     print(results.pandas().xyxy[0])
 
 
-#image = cv2.imread(path_prefix + "indo.jpg")
-image = cv2.imread(path_prefix + "icml1.jpg")
-#image = cv2.imread(path_prefix + "icml2.jpg")
-#image = cv2.imread(path_prefix + "ki.png")
+#image = cv2.imread(path_prefix + "images/indo.jpg")
+image = cv2.imread(path_prefix + "images/icml1.jpg")
+#image = cv2.imread(path_prefix + "images/icml2.jpg")
+#image = cv2.imread(path_prefix + "images/ki.png")
 
-#yolov3(image, path_prefix)
-yolov5(image)
+yolov3(image)
+#yolov5(image)
 #yolov7(image)
