@@ -16,6 +16,8 @@ from gazebo_msgs.msg import ModelStates
 import math
 from skimage.measure import regionprops
 from geometry_msgs.msg import Pose, Twist, Point, Quaternion
+from sensor_msgs.msg import CameraInfo, Image
+import message_filters
 
 # lc -- local costmap
 
@@ -137,7 +139,7 @@ class lime_rt_sub(object):
         self.tf_odom_map_tmp = [] 
         self.tf_map_odom_tmp = [] 
 
-        # costmap variables
+        # variables
         self.segments = np.array([])
         self.data = np.array([]) 
         self.image = np.array([])
@@ -146,6 +148,9 @@ class lime_rt_sub(object):
         self.localCostmapResolution = 0
         self.costmap_size = 160
         self.costmap_info_tmp = []
+        self.camera_feed = np.array([])
+        self.depth_image = np.array([]) 
+        self.P = np.array([])
 
         # deviation
         self.local_costmap_empty = True
@@ -178,6 +183,12 @@ class lime_rt_sub(object):
 
         self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
 
+        self.image_sub = message_filters.Subscriber('/xtion/rgb/image_raw', Image)
+        self.depth_sub = message_filters.Subscriber('/xtion/depth_registered/image_raw', Image) #"32FC1"
+        self.info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.image_sub, self.depth_sub, self.info_sub], 10, 1.0)
+        self.ts.registerCallback(self.camera_feed_callback)
+
         # semantic part
         world_name = 'ont1' #'ont1-4'
 
@@ -197,7 +208,27 @@ class lime_rt_sub(object):
         #print('self.ontology = ', self.ontology)
         
         self.openability_state_changed_objs_ont_indices = []
-         
+        
+    # callback function
+    def camera_feed_callback(self, img, depth_img, info):
+        print('\ncamera_feed_callback')
+
+        # RGB IMAGE
+        # image from robot's camera to np.array
+        self.camera_feed = np.frombuffer(img.data, dtype=np.uint8).reshape(img.height, img.width, -1)
+        #image = np.array(cv2.imread(path_prefix + "/images/icml1.jpg"))
+        # Get image dimensions
+        #(height, width) = image.shape[:2]
+
+        # DEPTH IMAGE
+        # convert depth image to np array
+        self.depth_image = np.frombuffer(depth_img.data, dtype=np.float32).reshape(depth_img.height, depth_img.width, -1)    
+        # fill missing values with negative distance
+        self.depth_image = np.nan_to_num(self.depth_image, nan=-1.0)
+        
+        # get projection matrix
+        self.P = info.P
+
     # Define a callback for the local plan
     def odom_callback(self, msg):
         #print('odom_callback!!!')
