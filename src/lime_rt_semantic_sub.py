@@ -18,6 +18,7 @@ from skimage.measure import regionprops
 from geometry_msgs.msg import Pose, Twist, Point, Quaternion
 from sensor_msgs.msg import CameraInfo, Image
 import message_filters
+import torch
 
 # lc -- local costmap
 
@@ -71,6 +72,8 @@ class lime_rt_sub(object):
         
         # data directories
         self.dirCurr = os.getcwd()
+
+        self.path_prefix = self.dirCurr + '/yolo_data/'
         
         self.dirMain = 'explanation_data'
         try:
@@ -180,6 +183,11 @@ class lime_rt_sub(object):
         self.camera_info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
         self.ts = message_filters.ApproximateTimeSynchronizer([self.local_map_sub, self.depth_sub, self.camera_info_sub], 10, 1.0)
         self.ts.registerCallback(self.camera_feed_callback)
+
+        if self.simulation == False:
+            # Load YOLO model
+            #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
+            self.model = torch.hub.load(self.path_prefix + '/yolov5_master/', 'custom', self.path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
 
         # semantic part
         ontology_name = 'ont1' #'ont1-4'
@@ -489,10 +497,61 @@ class lime_rt_sub(object):
                             self.ontology[i][2] = self.gazebo_poses[obj_idx].position.x
                             self.ontology[i][3] = self.gazebo_poses[obj_idx].position.y 
 
-            # real world or simulation relying on object detection
-            else:
-                # in object detection the center of mass is always the object's centroid
-                pass
+        # real world or simulation relying on object detection
+        else:
+            # in object detection the center of mass is always the object's centroid
+            start = time.time()
+    
+            # Inference
+            results = self.model(self.camera_image)
+            end = time.time()
+            print('yolov5 inference runtime: ' + str(round(1000*(end-start), 2)) + ' ms')
+            
+            # Results
+            res = np.array(results.pandas().xyxy[0])
+            
+            # labels, confidences and bounding boxes
+            labels = list(res[:,-1])
+            #print('original_labels: ', labels)
+            confidences = list((res[:,-3]))
+            #print('confidences: ', confidences)
+            x_y_min_max = np.array(res[:,0:4])
+            
+            labels_ = []
+            for i in range(len(labels)):
+                if confidences[i] < 0.0:
+                    np.delete(x_y_min_max, i, 0)
+                else:
+                    labels_.append(labels[i])
+            labels = labels_
+            #print('filtered_labels: ', labels)
+
+            coordinates_3d = []
+
+            fx = self.P[0]
+            cx = self.P[2]
+            fy = self.P[5]
+            cy = self.P[6]
+            for i in range(0, len(labels)):
+                u = int((x_y_min_max[i,0]+x_y_min_max[i,2])/2)
+                v = int((x_y_min_max[i,1]+x_y_min_max[i,3])/2)
+                depth = self.depth_image[v, u][0]
+                # get the 3D positions
+                z = depth
+                x = (u - cx) * z / fx
+                y = (v - cy) * z / fy
+                centroid = [x,y,z]
+                u = x_y_min_max[0,0]
+                v = x_y_min_max[0,1]
+                x = (u - cx) * z / fx
+                y = (v - cy) * z / fy
+                top_left = [x,y,z]
+                u = x_y_min_max[0,2]
+                v = x_y_min_max[0,3]
+                x = (u - cx) * z / fx
+                y = (v - cy) * z / fy
+                bottom_right = [x,y,z]
+                coordinates_3d.append([top_left, centroid, bottom_right])
 
     # create semantic map
     def create_semantic_map(self):
