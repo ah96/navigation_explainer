@@ -343,92 +343,14 @@ class lime_rt_sub(object):
             self.local_map.resize((self.local_map_size,self.local_map_size))
 
             if self.plot_costmaps == True:
-                start = time.time()
-
-                dirCurr = self.costmap_dir + '/' + str(self.counter_global)
-                try:
-                    os.mkdir(dirCurr)
-                except FileExistsError:
-                    pass
-                
-                local_map_99s_100s = copy.deepcopy(self.local_map)
-                local_map_99s_100s[local_map_99s_100s < 99] = 0        
-                #self.fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                self.ax.set_axis_off()
-                self.fig.add_axes(self.ax)
-                local_map_99s_100s = np.flip(local_map_99s_100s, 0)
-                self.ax.imshow(local_map_99s_100s.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
-                #self.fig.clf()
-                
-                local_map_original = copy.deepcopy(self.local_map)
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(ax)
-                local_map_original = np.flip(local_map_original, 0)
-                self.ax.imshow(local_map_original.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_original.png', transparent=False)
-                #self.fig.clf()
-                
-                local_map_100s = copy.deepcopy(self.local_map)
-                local_map_100s[local_map_100s != 100] = 0
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(ax)
-                local_map_100s = np.flip(local_map_100s, 0)
-                self.ax.imshow(local_map_100s.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
-                #self.fig.clf()
-                
-                local_map_99s = copy.deepcopy(self.local_map)
-                local_map_99s[local_map_99s != 99] = 0
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(self.ax)
-                local_map_99s = np.flip(local_map_99s, 0)
-                self.ax.imshow(local_map_99s.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
-                #self.fig.clf()
-                
-                local_map_less_than_99 = copy.deepcopy(self.local_map)
-                local_map_less_than_99[local_map_less_than_99 >= 99] = 0
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(self.ax)
-                local_map_less_than_99 = np.flip(local_map_less_than_99, 0)
-                self.ax.imshow(local_map_less_than_99.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_less_than_99.png', transparent=False)
-                self.fig.clf()
-                
-                end = time.time()
-                print('COSTMAPS PLOTTING TIME = ' + str(end-start) + ' seconds')
+                self.plot_costmaps()
                 
             # Turn inflated area to free space and 100s to 99s
             self.local_map[self.local_map == 100] = 99
             self.local_map[self.local_map <= 98] = 0
 
             # create semantic map
-            self.create_semantic_map()
+            self.create_semantic_data()
 
             # increase the global counter
             self.counter_global += 1
@@ -436,6 +358,88 @@ class lime_rt_sub(object):
         except Exception as e:
             print('exception = ', e)
             return
+
+    # plot costmaps
+    def plot_costmaps(self):
+        start = time.time()
+
+        dirCurr = self.costmap_dir + '/' + str(self.counter_global)
+        try:
+            os.mkdir(dirCurr)
+        except FileExistsError:
+            pass
+        
+        local_map_99s_100s = copy.deepcopy(self.local_map)
+        local_map_99s_100s[local_map_99s_100s < 99] = 0        
+        #self.fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        local_map_99s_100s = np.flip(local_map_99s_100s, 0)
+        self.ax.imshow(local_map_99s_100s.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
+        #self.fig.clf()
+        
+        local_map_original = copy.deepcopy(self.local_map)
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(ax)
+        local_map_original = np.flip(local_map_original, 0)
+        self.ax.imshow(local_map_original.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_original.png', transparent=False)
+        #self.fig.clf()
+        
+        local_map_100s = copy.deepcopy(self.local_map)
+        local_map_100s[local_map_100s != 100] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(ax)
+        local_map_100s = np.flip(local_map_100s, 0)
+        self.ax.imshow(local_map_100s.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
+        #self.fig.clf()
+        
+        local_map_99s = copy.deepcopy(self.local_map)
+        local_map_99s[local_map_99s != 99] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        local_map_99s = np.flip(local_map_99s, 0)
+        self.ax.imshow(local_map_99s.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
+        #self.fig.clf()
+        
+        local_map_less_than_99 = copy.deepcopy(self.local_map)
+        local_map_less_than_99[local_map_less_than_99 >= 99] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        local_map_less_than_99 = np.flip(local_map_less_than_99, 0)
+        self.ax.imshow(local_map_less_than_99.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_less_than_99.png', transparent=False)
+        self.fig.clf()
+        
+        end = time.time()
+        print('COSTMAPS PLOTTING TIME = ' + str(end-start) + ' seconds')
 
     # update ontology
     def update_ontology(self):
@@ -485,9 +489,6 @@ class lime_rt_sub(object):
 
                             self.ontology[i][2] = self.gazebo_poses[obj_idx].position.x
                             self.ontology[i][3] = self.gazebo_poses[obj_idx].position.y 
-
-                            if i not in self.openability_state_changed_objs_ont_indices:
-                                self.openability_state_changed_objs_ont_indices.append(i)
                     else:
                         # check whether the (centroid) coordinates of the object are changed (enough)
                         diff_x = abs(self.gazebo_poses[obj_idx].position.x - obj_x)
@@ -566,21 +567,29 @@ class lime_rt_sub(object):
                         if abs(x_o_new - x_o_curr) > 0.1 and abs(y_o_new - y_o_curr) > 0.1:
                             self.ontology[i][2] = x_o_new
                             self.ontology[i][3] = y_o_new
-                            print(labels[i] + ' POMJERENA!!!!!!!!!!!')                                
+                            print('\nThe object ' + labels[i] + ' has changed its position!')
+                            print('\nOld position: x = ' + str(x_o_curr) + ', y = ' + str(y_o_curr))
+                            print('\nNew position: x = ' + str(x_o_new) + ', y = ' + str(y_o_new))                                
 
         # save ontology for publisher
         pd.DataFrame(self.ontology).to_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv', index=False)#, header=False)
-
-    # create semantic map
-    def create_semantic_map(self):
-        self.openability_state_changed_objs_ont_indices = []
-
+        
+    # create semantic data
+    def create_semantic_data(self):
         # update ontology
         self.update_ontology()
 
-        if self.openability_state_changed_objs_ont_indices >= 0:
-            print('openability_state_changed_objs_ont_indices_name: ', self.ontology[self.openability_state_changed_objs_ont_indices][1])
+        self.create_semantic_map()
 
+        # plot segments
+        if self.plot_segments == True:
+            self.plot_segments()
+
+        # create interpretable features
+        self.create_interpretable_features()
+
+    # create semantic map
+    def create_semantic_map(self):
         # GET transformations between coordinate frames
         # tf from map to odom
         t_mo = np.asarray([self.tf_map_odom[0],self.tf_map_odom[1],self.tf_map_odom[2]])
@@ -592,18 +601,7 @@ class lime_rt_sub(object):
         r_om = R.from_quat([self.tf_odom_map[3],self.tf_odom_map[4],self.tf_odom_map[5],self.tf_odom_map[6]])
         r_om = np.asarray(r_om.as_matrix())
 
-
-        # GET local costmap points in the map frame
         # convert LC points from /odom to /map
-        #'''
-        #lc_c_odom_x = self.local_map_origin_x + 0.5 * self.local_map_size * self.local_map_resolution
-        #lc_c_odom_y = self.local_map_origin_y + 0.5 * self.local_map_size * self.local_map_resolution
-        #lc_p_odom = np.array([lc_c_odom_x, lc_c_odom_y, 0.0])
-        #lc_p_map = lc_p_odom.dot(r_om) + t_om
-        #lc_c_map_x = lc_p_map[0]
-        #lc_c_map_y = lc_p_map[1]
-        #print('(lc_c_map_x, lc_c_map_y) = ', (lc_c_map_x, lc_c_map_y))
-        #'''
         # LC origin is a bottom-left point
         lc_bl_odom_x = self.local_map_origin_x
         lc_bl_odom_y = self.local_map_origin_y
@@ -618,41 +616,34 @@ class lime_rt_sub(object):
         lc_p_map = lc_p_odom.dot(r_om) + t_om
         lc_map_tr_x = lc_p_map[0]
         lc_map_tr_y = lc_p_map[1]
-        # LC sides in the map frame
+        # LC sides coordinates in the /map frame
         lc_map_left = lc_map_bl_x
         lc_map_right = lc_map_tr_x
         lc_map_bottom = lc_map_bl_y
         lc_map_top = lc_map_tr_y
         #print('(lc_map_left, lc_map_right, lc_map_bottom, lc_map_top) = ', (lc_map_left, lc_map_right, lc_map_bottom, lc_map_top))
 
-        ###### SEGMENTATION PART ######
         start = time.time()
         self.semantic_map = np.zeros(self.local_map.shape)
         self.semantic_map_inflated = np.zeros(self.local_map.shape)
         widening_factor = 0
         for i in range(0, self.ontology.shape[0]):
+            # object's vertices from /map to /odom and /lc
+            # top left vertex
             x_size = self.ontology[i][4]
             y_size = self.ontology[i][5]
-
             c_map_x = self.ontology[i][2]
             c_map_y = self.ontology[i][3]
-            # transform centroids from /map to /odom frame
-            #p_map = np.array([c_map_x, c_map_y, 0.0])
-            #p_odom = p_map.dot(r_mo) + t_mo
-            # centroids of a known object in /lc frame
-            #c_pixel_x = int((p_odom[0] - self.local_map_origin_x) / self.local_map_resolution)
-            #c_pixel_y = int((p_odom[1] - self.local_map_origin_y) / self.local_map_resolution)
 
-            # object"s vertices from /map to /odom and /lc
+            # top left vertex
             tl_map_x = c_map_x - 0.5*x_size
             tl_map_y = c_map_y + 0.5*y_size
-            #p_map = np.array([tl_map_x, tl_map_y, 0.0])
-            #p_odom = p_map.dot(r_mo) + t_mo
-            #tl_odom_x = p_odom[0]
-            #tl_odom_y = p_odom[1]
-            #tl_pixel_x = int((tl_odom_x - self.local_map_origin_x) / self.local_map_resolution)
-            #tl_pixel_y = int((tl_odom_y - self.local_map_origin_y) / self.local_map_resolution)
+
+            # bottom right vertex
+            br_map_x = c_map_x + 0.5*x_size
+            br_map_y = c_map_y - 0.5*y_size
             
+            # top right vertex
             tr_map_x = c_map_x + 0.5*x_size
             tr_map_y = c_map_y + 0.5*y_size
             p_map = np.array([tr_map_x, tr_map_y, 0.0])
@@ -662,6 +653,7 @@ class lime_rt_sub(object):
             tr_pixel_x = int((tr_odom_x - self.local_map_origin_x) / self.local_map_resolution)
             tr_pixel_y = int((tr_odom_y - self.local_map_origin_y) / self.local_map_resolution)
 
+            # bottom left vertex
             bl_map_x = c_map_x - 0.5*x_size
             bl_map_y = c_map_y - 0.5*y_size
             p_map = np.array([bl_map_x, bl_map_y, 0.0])
@@ -671,15 +663,7 @@ class lime_rt_sub(object):
             bl_pixel_x = int((bl_odom_x - self.local_map_origin_x) / self.local_map_resolution)
             bl_pixel_y = int((bl_odom_y - self.local_map_origin_y) / self.local_map_resolution)
 
-            br_map_x = c_map_x + 0.5*x_size
-            br_map_y = c_map_y - 0.5*y_size
-            #p_map = np.array([br_map_x, br_map_y, 0.0])
-            #p_odom = p_map.dot(r_mo) + t_mo
-            #br_odom_x = p_odom[0]
-            #br_odom_y = p_odom[1]
-            #br_pixel_x = int((br_odom_x - self.local_map_origin_x) / self.local_map_resolution)
-            #br_pixel_y = int((br_odom_y - self.local_map_origin_y) / self.local_map_resolution)
-        
+            # object's sides coordinates
             object_left = bl_pixel_x
             object_top = tr_pixel_y
             object_right = tr_pixel_x
@@ -747,10 +731,10 @@ class lime_rt_sub(object):
                 obstacle_in_lc = True
 
             if obstacle_in_lc == True:
-                #print('at least 1 obstacle_in_lc')    
+                # semantic map
                 self.semantic_map[max(0, y_1-widening_factor):min(self.local_map_size-1, y_2+widening_factor), max(0,x_1-widening_factor):min(self.local_map_size-1, x_2+widening_factor)] = i+1
                 
-                # inflate using heuristics
+                # inflate semantic map using heuristics
                 inflation_x = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
                 inflation_y = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2)                 
                 self.semantic_map_inflated[max(0, y_1-inflation_y):min(self.local_map_size-1, y_2+inflation_y), max(0,x_1-inflation_x):min(self.local_map_size-1, x_2+inflation_x)] = i+1
@@ -758,144 +742,143 @@ class lime_rt_sub(object):
         end = time.time()
         print('semantic_segmentation_time = ' + str(end-start) + ' seconds!')
 
-        # find centroids_in_LC of the objects' areas
+
+        # find centroids of the objects in the semantic map
         lc_regions = regionprops(self.semantic_map.astype(int))
         #print('\nlen(lc_regions) = ', len(lc_regions))
-        centroids_segments = []
+        self.centroids_semantic_map = []
         for lc_region in lc_regions:
             v = lc_region.label
             cy, cx = lc_region.centroid
-            centroids_segments.append([v,cx,cy,self.ontology[v-1][1]])
+            self.centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
 
-        # inflate using the remaining obstacle points of the local costmap
-        for i in range(self.semantic_map.shape[0]):
-            for j in range(0, self.semantic_map.shape[1]):
-                if self.local_map[i, j] > 98 and self.semantic_map_inflated[i, j] == 0:
-                    distances_to_centroids = []
-                    distances_indices = []
-                    for k in range(0, len(centroids_segments)):
-                        dx = abs(j - centroids_segments[k][1])
-                        dy = abs(i - centroids_segments[k][2])
-                        distances_to_centroids.append(dx + dy) # L1
-                        #distances_to_centroids.append(math.sqrt(dx**2 + dy**2)) # L2
-                        distances_indices.append(k)
-                    idx = distances_to_centroids.index(min(distances_to_centroids))
-                    self.semantic_map_inflated[i, j] = centroids_segments[idx][0]
+        if self.use_local_costmap == True:
+            # inflate using the remaining obstacle points of the local costmap
+            for i in range(self.semantic_map.shape[0]):
+                for j in range(0, self.semantic_map.shape[1]):
+                    if self.local_map[i, j] > 98 and self.semantic_map_inflated[i, j] == 0:
+                        distances_to_centroids = []
+                        distances_indices = []
+                        for k in range(0, len(self.centroids_semantic_map)):
+                            dx = abs(j - self.centroids_semantic_map[k][1])
+                            dy = abs(i - self.centroids_semantic_map[k][2])
+                            distances_to_centroids.append(dx + dy) # L1
+                            #distances_to_centroids.append(math.sqrt(dx**2 + dy**2)) # L2
+                            distances_indices.append(k)
+                        idx = distances_to_centroids.index(min(distances_to_centroids))
+                        self.semantic_map_inflated[i, j] = self.centroids_semantic_map[idx][0]
 
-        # turn pixels in the inflated segments, which are zero in the local costmap, to zero
-        self.semantic_map_inflated[self.local_map == 0] = 0
-
-        # plot segments
-        if self.plot_segments == True:
-            start = time.time()
-
-            # find centroids_in_LC of the objects' areas
-            lc_regions = regionprops(self.semantic_map_inflated.astype(int))
-            #print('\nlen(lc_regions) = ', len(lc_regions))
-            centroids_segments_inflated = []
-            for lc_region in lc_regions:
-                v = lc_region.label
-                cy, cx = lc_region.centroid
-                centroids_segments_inflated.append([v,cx,cy,self.ontology[v-1][1]])
-
-            dirCurr = self.segmentation_dir + '/' + str(self.counter_global)            
-            try:
-                os.mkdir(dirCurr)
-            except FileExistsError:
-                pass
-
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
-            segs = np.flip(self.semantic_map, axis=0)
-            self.ax.imshow(segs.astype('float64'), aspect='auto')
-
-            self.fig.savefig(dirCurr + '/' + 'segments_without_labels' + '.png', transparent=False)
-            #self.fig.clf()
-            pd.DataFrame(segs).to_csv(dirCurr + '/segments.csv', index=False)#, header=False)
-
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            #self.ax.set_axis_off()
-            #self.fig.add_axes(self.ax)
-            segs = np.flip(self.semantic_map_inflated, axis=0)
-            self.ax.imshow(segs.astype('float64'), aspect='auto')
-
-            self.fig.savefig(dirCurr + '/' + 'segments_inflated_without_labels' + '.png', transparent=False)
-            #self.fig.clf()
-            pd.DataFrame(segs).to_csv(dirCurr + '/semantic_map_inflated.csv', index=False)#, header=False)
-            
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            #self.ax.set_axis_off()
-            #self.fig.add_axes(self.ax)
-            segs = np.flip(self.semantic_map, axis=0)
-            self.ax.imshow(segs.astype('float64'), aspect='auto')
-
-            for i in range(0, len(centroids_segments)):
-                self.ax.scatter(centroids_segments[i][1], self.local_map_size - centroids_segments[i][2], c='white', marker='o')   
-                self.ax.text(centroids_segments[i][1], self.local_map_size - centroids_segments[i][2], centroids_segments[i][3], c='white')
-
-            self.fig.savefig(dirCurr + '/' + 'segments_with_labels' + '.png', transparent=False)
-            self.fig.clf()
-
-            pd.DataFrame(centroids_segments).to_csv(dirCurr + '/centroids_segments.csv', index=False)#, header=False)
-            
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
-            segs = np.flip(self.semantic_map_inflated, axis=0)
-            self.ax.imshow(segs.astype('float64'), aspect='auto')
-
-            for i in range(0, len(centroids_segments_inflated)):
-                self.ax.scatter(centroids_segments_inflated[i][1], self.local_map_size - centroids_segments_inflated[i][2], c='white', marker='o')   
-                self.ax.text(centroids_segments_inflated[i][1], self.local_map_size - centroids_segments_inflated[i][2], centroids_segments_inflated[i][3], c='white')
-
-            self.fig.savefig(dirCurr + '/' + 'segments_inflated_with_labels' + '.png', transparent=False)
-            self.fig.clf()
-
-            pd.DataFrame(centroids_segments_inflated).to_csv(dirCurr + '/centroids_segments_inflated.csv', index=False)#, header=False)
-            
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
-            img = np.flip(self.local_map, axis=0)
-            self.ax.imshow(img.astype('float64'), aspect='auto')
-
-            self.fig.savefig(dirCurr + '/' + 'local_costmap' + '.png', transparent=False)
-            self.fig.clf()
-
-            pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
-
-            end = time.time()
-            print('SEGMENTS PLOTTING TIME = ' + str(end-start) + ' seconds')
-
-        # create interpretable features
-        self.create_interpretable_features()
+            # turn pixels in the inflated segments, which are zero in the local costmap, to zero
+            self.semantic_map_inflated[self.local_map == 0] = 0
 
         # save local and semantic maps data
         pd.DataFrame(self.local_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/local_map_info.csv', index=False)#, header=False)
         pd.DataFrame(self.local_map).to_csv(self.dirCurr + '/' + self.dirData + '/local_map.csv', index=False) #, header=False)
         pd.DataFrame(self.semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map.csv', index=False)#, header=False)
         pd.DataFrame(self.semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map_inflated.csv', index=False)#, header=False)
+
+    # plot segments
+    def plot_segments(self):
+        start = time.time()
+
+        # find centroids_in_LC of the objects' areas
+        lc_regions = regionprops(self.semantic_map_inflated.astype(int))
+        #print('\nlen(lc_regions) = ', len(lc_regions))
+        centroids_semantic_map_inflated = []
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            centroids_semantic_map_inflated.append([v,cx,cy,self.ontology[v-1][1]])
+
+        dirCurr = self.segmentation_dir + '/' + str(self.counter_global)            
+        try:
+            os.mkdir(dirCurr)
+        except FileExistsError:
+            pass
+
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        segs = np.flip(self.semantic_map, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        self.fig.savefig(dirCurr + '/' + 'segments_without_labels' + '.png', transparent=False)
+        #self.fig.clf()
+        pd.DataFrame(segs).to_csv(dirCurr + '/segments.csv', index=False)#, header=False)
+
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #self.ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        segs = np.flip(self.semantic_map_inflated, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        self.fig.savefig(dirCurr + '/' + 'segments_inflated_without_labels' + '.png', transparent=False)
+        #self.fig.clf()
+        pd.DataFrame(segs).to_csv(dirCurr + '/semantic_map_inflated.csv', index=False)#, header=False)
+        
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #self.ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        segs = np.flip(self.semantic_map, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        for i in range(0, len(self.centroids_semantic_map)):
+            self.ax.scatter(self.centroids_semantic_map[i][1], self.local_map_size - self.centroids_semantic_map[i][2], c='white', marker='o')   
+            self.ax.text(self.centroids_semantic_map[i][1], self.local_map_size - self.centroids_semantic_map[i][2], self.centroids_semantic_map[i][3], c='white')
+
+        self.fig.savefig(dirCurr + '/' + 'segments_with_labels' + '.png', transparent=False)
+        self.fig.clf()
+
+        pd.DataFrame(self.centroids_semantic_map).to_csv(dirCurr + '/centroids_semantic_map.csv', index=False)#, header=False)
+        
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        segs = np.flip(self.semantic_map_inflated, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        for i in range(0, len(centroids_semantic_map_inflated)):
+            self.ax.scatter(centroids_semantic_map_inflated[i][1], self.local_map_size - centroids_semantic_map_inflated[i][2], c='white', marker='o')   
+            self.ax.text(centroids_semantic_map_inflated[i][1], self.local_map_size - centroids_semantic_map_inflated[i][2], centroids_semantic_map_inflated[i][3], c='white')
+
+        self.fig.savefig(dirCurr + '/' + 'segments_inflated_with_labels' + '.png', transparent=False)
+        self.fig.clf()
+
+        pd.DataFrame(centroids_semantic_map_inflated).to_csv(dirCurr + '/centroids_semantic_map_inflated.csv', index=False)#, header=False)
+        
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        img = np.flip(self.local_map, axis=0)
+        self.ax.imshow(img.astype('float64'), aspect='auto')
+
+        self.fig.savefig(dirCurr + '/' + 'local_costmap' + '.png', transparent=False)
+        self.fig.clf()
+
+        pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
+
+        end = time.time()
+        print('SEGMENTS PLOTTING TIME = ' + str(end-start) + ' seconds')
 
     # create interpretable features
     def create_interpretable_features(self):
