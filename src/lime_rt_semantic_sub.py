@@ -515,43 +515,61 @@ class lime_rt_sub(object):
             #print('original_labels: ', labels)
             confidences = list((res[:,-3]))
             #print('confidences: ', confidences)
+            # boundix boxes coordinates
             x_y_min_max = np.array(res[:,0:4])
             
-            labels_ = []
-            for i in range(len(labels)):
-                if confidences[i] < 0.0:
-                    np.delete(x_y_min_max, i, 0)
-                else:
-                    labels_.append(labels[i])
-            labels = labels_
-            #print('filtered_labels: ', labels)
+            confidence_threshold = 0.0
+            if confidence_threshold > 0.0:
+                labels_ = []
+                for i in range(len(labels)):
+                    if confidences[i] < confidence_threshold:
+                        np.delete(x_y_min_max, i, 0)
+                    else:
+                        labels_.append(labels[i])
+                labels = labels_
+                #print('filtered_labels: ', labels)
 
-            coordinates_3d = []
+            # get the 3D coordinates of the detected objects in the /map dataframe 
+            objects_coordinates_3d = []
 
+            # camera intrinsic parameters
             fx = self.P[0]
             cx = self.P[2]
-            fy = self.P[5]
-            cy = self.P[6]
+            #fy = self.P[5]
+            #cy = self.P[6]
             for i in range(0, len(labels)):
+                # get the depth of the detected object's centroid
                 u = int((x_y_min_max[i,0]+x_y_min_max[i,2])/2)
                 v = int((x_y_min_max[i,1]+x_y_min_max[i,3])/2)
                 depth = self.depth_image[v, u][0]
-                # get the 3D positions
-                z = depth
-                x = (u - cx) * z / fx
-                y = (v - cy) * z / fy
-                centroid = [x,y,z]
-                u = x_y_min_max[0,0]
-                v = x_y_min_max[0,1]
-                x = (u - cx) * z / fx
-                y = (v - cy) * z / fy
-                top_left = [x,y,z]
-                u = x_y_min_max[0,2]
-                v = x_y_min_max[0,3]
-                x = (u - cx) * z / fx
-                y = (v - cy) * z / fy
-                bottom_right = [x,y,z]
-                coordinates_3d.append([top_left, centroid, bottom_right])
+                # get the 3D positions relative to the robot
+                x = depth
+                y = (u - cx) * z / fx
+                z = 0 #(v - cy) * z / fy
+                t_ro_R = [x,y,z]
+                
+                t_wr_W = [self.robot_position_map.x, self.robot_position_map.y, self.robot_position_map.z]
+                r_RW = R.from_quat([self.robot_orientation_map.x, self.robot_orientation_map.y, self.robot_orientation_map.z, self.robot_orientation_map.w]).inv
+
+                t_ro_W = r_RW * t_ro_R
+                t_wo_W = t_wr_W + t_ro_W
+                
+                x_o_new = t_wo_W[0]
+                y_o_new = t_wo_W[1]
+
+                for j in range(0, self.ontology.shape[0]):
+                    if labels[i] == self.ontology[j][1]:
+
+                        x_o_curr = self.ontology[i][2]
+                        y_o_curr = self.ontology[i][3]
+
+                        if abs(x_o_new - x_o_curr) > 0.1 and abs(y_o_new - y_o_curr) > 0.1:
+                            self.ontology[i][2] = x_o_new
+                            self.ontology[i][3] = y_o_new
+                            print(labels[i] + ' POMJERENA!!!!!!!!!!!')                                
+
+        # save ontology for publisher
+        pd.DataFrame(self.ontology).to_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv', index=False)#, header=False)
 
     # create semantic map
     def create_semantic_map(self):
@@ -872,9 +890,6 @@ class lime_rt_sub(object):
 
         # create interpretable features
         self.create_interpretable_features()
-
-        # save ontology for publisher
-        pd.DataFrame(self.ontology).to_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv', index=False)#, header=False)
 
         # save local and semantic maps data
         pd.DataFrame(self.local_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/local_map_info.csv', index=False)#, header=False)
