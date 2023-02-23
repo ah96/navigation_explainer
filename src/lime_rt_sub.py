@@ -18,8 +18,8 @@ class lime_rt_sub(object):
     # constructor
     def __init__(self):
         # plot segments and costmaps
-        self.plot_segments = True
-        self.plot_costmaps = True
+        self.plot_segments_bool = False
+        self.plot_costmaps_bool = False
         # global counter for plotting
         self.counter_global = 0
     
@@ -38,14 +38,14 @@ class lime_rt_sub(object):
         except FileExistsError:
             pass
 
-        if self.plot_segments == True:
+        if self.plot_segments_bool == True:
             self.dir_segmentation = self.dir_main + '/segmentation_images'
             try:
                 os.mkdir(self.dir_segmentation)
             except FileExistsError:
                 pass
 
-        if self.plot_costmaps == True:
+        if self.plot_costmaps_bool == True:
             self.dir_costmap = self.dir_main + '/costmap_images'
             try:
                 os.mkdir(self.dir_costmap)
@@ -53,8 +53,6 @@ class lime_rt_sub(object):
                 pass
 
         # plans' variables
-        #self.global_plan_xs = []
-        #self.global_plan_ys = []
         self.global_plan = []
         self.local_plan_xs = [] 
         self.local_plan_ys = []
@@ -70,8 +68,6 @@ class lime_rt_sub(object):
         # pose variables
         self.amcl_pose = [] 
         self.odom = []
-        self.odom_x = 0
-        self.odom_y = 0
   
         # costmap variables
         self.local_costmap_info = [] 
@@ -91,7 +87,7 @@ class lime_rt_sub(object):
 
     # define subscribers
     def main_(self):
-        if self.plot_costmaps == True or self.plot_segments == True:
+        if self.plot_costmaps_bool == True or self.plot_segments_bool == True:
             self.fig = plt.figure(frameon=False)
             self.w = 1.6 * 3
             self.h = 1.6 * 3
@@ -129,6 +125,7 @@ class lime_rt_sub(object):
         except FileExistsError:
             pass
 
+
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -139,9 +136,10 @@ class lime_rt_sub(object):
         segs = np.flip(self.segments, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        self.fig.savefig(dirCurr + '/' + 'segments_without_labels_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'segments_without_labels.png', transparent=False)
         #self.fig.clf()
         pd.DataFrame(segs).to_csv(dirCurr + '/segments_without_labels.csv', index=False)#, header=False)
+
 
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -157,11 +155,12 @@ class lime_rt_sub(object):
             self.ax.scatter(self.centroids_segments[i][1], self.costmap_size - self.centroids_segments[i][2], c='white', marker='o')   
             self.ax.text(self.centroids_segments[i][1], self.costmap_size - self.centroids_segments[i][2], self.centroids_segments[i][0], c='white')
 
-        self.fig.savefig(dirCurr + '/' + 'segments_with_labels_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'segments_with_labels.png', transparent=False)
         self.fig.clf()
         pd.DataFrame(segs).to_csv(dirCurr + '/segments_with_labels.csv', index=False)#, header=False)
         pd.DataFrame(segs).to_csv(dirCurr + '/centroids_segments.csv', index=False)#, header=False)
-        
+
+
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -172,7 +171,7 @@ class lime_rt_sub(object):
         img = np.flip(self.local_costmap, axis=0)
         self.ax.imshow(img.astype('float64'), aspect='auto')
 
-        self.fig.savefig(dirCurr + '/' + 'local_costmap_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'local_costmap.png', transparent=False)
         self.fig.clf()
         pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
 
@@ -220,7 +219,7 @@ class lime_rt_sub(object):
             self.centroids_segments.append([v,cx,cy])
         
         # plot segments
-        if self.plot_segments == True:
+        if self.plot_segments_bool == True:
             self.plot_segments()
 
         return self.segments
@@ -320,6 +319,7 @@ class lime_rt_sub(object):
 
     # local costmap callback
     def local_costmap_callback(self, msg):
+        print('\nlocal_costmap_callback')
         # if you can get tf proceed
         try:
             # catch transform from /map to /odom and vice versa
@@ -342,7 +342,7 @@ class lime_rt_sub(object):
             self.local_costmap = np.asarray(msg.data)
             self.local_costmap.resize((msg.info.height,msg.info.width))
 
-            if self.plot_costmaps == True:
+            if self.plot_costmaps_bool == True:
                 self.plot_costmaps()
             
             # Turn non-lethal inflated area (< 99) to free space and 100s to 99s
@@ -379,13 +379,9 @@ class lime_rt_sub(object):
         
     # global plan callback
     def global_plan_callback(self, msg):
-        #self.global_plan_xs = [] 
-        #self.global_plan_ys = []
         self.global_plan = []
         
         for i in range(0,len(msg.poses)):
-            #self.global_plan_xs.append(msg.poses[i].pose.position.x) 
-            #self.global_plan_ys.append(msg.poses[i].pose.position.y)
             self.global_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
 
         pd.DataFrame(self.global_plan).to_csv(self.dir_curr + '/' + self.dir_data + '/global_plan.csv', index=False)#, header=False)
@@ -427,9 +423,7 @@ class lime_rt_sub(object):
     # odometry callback
     # odometry is received very often, and it is saved (to a variable) in the "local_plan_callback' function to save computing resources
     def odom_callback(self, msg):
-        self.odom_x = msg.pose.pose.position.x
-        self.odom_y = msg.pose.pose.position.y
-        self.odom = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+        self.odom = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
 
     # amcl callback
     def amcl_callback(self, msg):
@@ -441,8 +435,6 @@ class lime_rt_sub(object):
 # main function
 # define lime_rt_sub object
 lime_rt_obj = lime_rt_sub()
-# call main to initialize subscribers
-lime_rt_obj.main_()
 
 # Initialize the ROS Node named 'lime_rt_sub', allow multiple nodes to be run with this name
 rospy.init_node('lime_rt_sub', anonymous=True)
@@ -450,6 +442,9 @@ rospy.init_node('lime_rt_sub', anonymous=True)
 # declare tf2 transformation buffer
 lime_rt_obj.tfBuffer = tf2_ros.Buffer()
 lime_rt_obj.tf_listener = tf2_ros.TransformListener(lime_rt_obj.tfBuffer)
+
+# call main to initialize subscribers
+lime_rt_obj.main_()
 
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
