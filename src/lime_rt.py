@@ -117,29 +117,29 @@ class lime_rt_sub(object):
         self.gazebo_poses = []
 
         # directory
-        self.dirCurr = os.getcwd()
+        self.dir_curr = os.getcwd()
         
-        self.dirMain = 'explanation_data'
+        self.dir_main = 'explanation_data'
         try:
-            os.mkdir(self.dirMain)
+            os.mkdir(self.dir_main)
         except FileExistsError:
             pass
 
-        self.dirData = self.dirMain + '/lime_rt_data'
+        self.dirData = self.dir_main + '/lime_rt_data'
         try:
             os.mkdir(self.dirData)
         except FileExistsError:
             pass
 
         if self.plot_segments == True:
-            self.segmentation_dir = self.dirMain + '/segmentation_images'
+            self.segmentation_dir = self.dir_main + '/segmentation_images'
             try:
                 os.mkdir(self.segmentation_dir)
             except FileExistsError:
                 pass
 
         if self.plot_costmaps == True:
-            self.costmap_dir = self.dirMain + '/costmap_images'
+            self.costmap_dir = self.dir_main + '/costmap_images'
             try:
                 os.mkdir(self.costmap_dir)
             except FileExistsError:
@@ -159,40 +159,34 @@ class lime_rt_sub(object):
         self.global_plan_ys = []
         self.transformed_plan_xs = [] 
         self.transformed_plan_ys = []
-        self.local_plan_x_list = [] 
-        self.local_plan_y_list = []
-        self.local_plan_tmp = [] 
-        #self.plan_tmp = [] 
-        self.global_plan_tmp = [] 
-        self.global_plan_empty = True
-        self.local_plan_empty = True
+        self.local_plan_xs = [] 
+        self.local_plan_ys = []
+        self.local_plan = [] 
+        self.global_plan = [] 
         
         # poses' variables
-        self.footprint_tmp = []  
-        self.amcl_pose_tmp = [] 
-        self.odom_tmp = []
+        self.footprint = []  
+        self.amcl_pose = [] 
+        self.odom = []
         self.odom_x = 0
         self.odom_y = 0
 
         # tf variables
-        self.tf_odom_map_tmp = [] 
-        self.tf_map_odom_tmp = [] 
+        self.tf_odom_map = [] 
+        self.tf_map_odom = [] 
 
         # costmap variables
         self.segments = np.array([])
         self.data = np.array([]) 
         self.image = np.array([])
-        self.localCostmapOriginX = 0 
-        self.localCostmapOriginY = 0 
-        self.localCostmapResolution = 0
+        self.local_costmap_origin_x = 0 
+        self.local_costmap_origin_y = 0 
+        self.local_costmap_resolution = 0
         self.costmap_size = 160
-        self.costmap_info_tmp = []
-
-        # deviation
-        self.local_costmap_empty = True
+        self.costmap_info = []
 
         # samples        
-        self.num_samples = 0
+        self.n_samples = 0
         self.n_features = 0
 
     # Declare subscribers
@@ -226,7 +220,7 @@ class lime_rt_sub(object):
         #print('odom_callback!!!')
         self.odom_x = msg.pose.pose.position.x
         self.odom_y = msg.pose.pose.position.y
-        self.odom_tmp = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+        self.odom = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
         self.robot_position_odom = msg.pose.pose.position
         self.robot_orientation_odom = msg.pose.pose.orientation
         
@@ -234,44 +228,34 @@ class lime_rt_sub(object):
     def global_plan_callback(self, msg):
         #print('\nglobal_plan_callback!')
         
-        self.global_plan_xs = [] 
-        self.global_plan_ys = []
-        self.global_plan_tmp = []
+        self.global_plan = []
         #self.plan_tmp = []
         #self.transformed_plan_xs = []
         #self.transformed_plan_ys = []
 
         for i in range(0,len(msg.poses)):
-            self.global_plan_xs.append(msg.poses[i].pose.position.x) 
-            self.global_plan_ys.append(msg.poses[i].pose.position.y)
-            self.global_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+            self.global_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
             #self.plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
 
-        #pd.DataFrame(self.global_plan_tmp).to_csv(self.dirCurr + '/' + self.dirData + '/global_plan_tmp.csv', index=False)#, header=False)
-        #pd.DataFrame(self.plan_tmp).to_csv(self.dirCurr + '/' + self.dirData + '/plan_tmp.csv', index=False)#, header=False)
-        
-        # it is not so important in which iteration this variable is set to False
-        self.global_plan_empty = False
+        #pd.DataFrame(self.global_plan).to_csv(self.dir_curr + '/' + self.dirData + '/global_plan_tmp.csv', index=False)#, header=False)
+        #pd.DataFrame(self.plan_tmp).to_csv(self.dir_curr + '/' + self.dirData + '/plan_tmp.csv', index=False)#, header=False)
         
     # Define a callback for the local plan
     def local_plan_callback(self, msg):
         #print('\nlocal_plan_callback')  
         try:
-            self.local_plan_tmp = []
-            self.local_plan_x_list = [] 
-            self.local_plan_y_list = [] 
+            self.local_plan = []
+            self.local_plan_xs = [] 
+            self.local_plan_ys = [] 
 
             for i in range(0,len(msg.poses)):
-                self.local_plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+                self.local_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
 
-                x_temp = int((msg.poses[i].pose.position.x - self.localCostmapOriginX) / self.localCostmapResolution)
-                y_temp = int((msg.poses[i].pose.position.y - self.localCostmapOriginY) / self.localCostmapResolution)
+                x_temp = int((msg.poses[i].pose.position.x - self.local_costmap_origin_x) / self.local_costmap_resolution)
+                y_temp = int((msg.poses[i].pose.position.y - self.local_costmap_origin_y) / self.local_costmap_resolution)
                 if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                    self.local_plan_x_list.append(x_temp)
-                    self.local_plan_y_list.append(self.costmap_size - y_temp)
-
-            # it is not so important in which iteration this variable is set to False
-            self.local_plan_empty = False
+                    self.local_plan_xs.append(x_temp)
+                    self.local_plan_ys.append(self.costmap_size - y_temp)
 
         except:
             pass
@@ -279,26 +263,26 @@ class lime_rt_sub(object):
     # Define a callback for the footprint
     def footprint_callback(self, msg):
         #print('\nfootprint_callback') 
-        self.footprint_tmp = []
+        self.footprint = []
         for i in range(0,len(msg.polygon.points)):
-            self.footprint_tmp.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
+            self.footprint.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
     
     # Define a callback for the amcl pose
     def amcl_callback(self, msg):
         #print('amcl_callback!!!')
-        self.amcl_pose_tmp = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
+        self.amcl_pose = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
 
     # Define a callback for the local costmap
     def local_costmap_callback(self, msg):
         print('\nlocal_costmap_callback')
 
-        self.global_plan_tmp_copy = copy.deepcopy(self.global_plan_tmp)
-        self.local_plan_x_list_copy = copy.deepcopy(self.local_plan_x_list)
-        self.local_plan_y_list_copy = copy.deepcopy(self.local_plan_y_list)
-        self.local_plan_tmp_copy = copy.deepcopy(self.local_plan_tmp)
-        self.odom_tmp_copy = copy.deepcopy(self.odom_tmp)
-        self.amcl_pose_tmp_copy = copy.deepcopy(self.amcl_pose_tmp)
-        self.footprint_tmp_copy = copy.deepcopy(self.footprint_tmp)
+        self.global_plan_copy = copy.deepcopy(self.global_plan)
+        self.local_plan_xs_copy = copy.deepcopy(self.local_plan_xs)
+        self.local_plan_ys_copy = copy.deepcopy(self.local_plan_ys)
+        self.local_plan_copy = copy.deepcopy(self.local_plan)
+        self.odom_copy = copy.deepcopy(self.odom)
+        self.amcl_pose_copy = copy.deepcopy(self.amcl_pose)
+        self.footprint_copy = copy.deepcopy(self.footprint)
         self.robot_position_map_copy = copy.deepcopy(self.robot_position_map)
         self.robot_orientation_map_copy = copy.deepcopy(self.robot_orientation_map)
         
@@ -311,8 +295,8 @@ class lime_rt_sub(object):
 
             transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
 
-            self.tf_map_odom_tmp = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
-            self.tf_odom_map_tmp = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
+            self.tf_map_odom = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
+            self.tf_odom_map = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
 
             # convert robot positions from /odom to /map
             t_o_m = np.asarray([transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z])
@@ -333,10 +317,10 @@ class lime_rt_sub(object):
             self.robot_orientation_map = rotationMatrixToQuaternion(r_m) #tr.quaternion_from_matrix(r_m)
                 
             # save costmap data
-            self.localCostmapOriginX = msg.info.origin.position.x
-            self.localCostmapOriginY = msg.info.origin.position.y
-            self.localCostmapResolution = msg.info.resolution
-            self.costmap_info_tmp = [self.localCostmapResolution, msg.info.width, msg.info.height, self.localCostmapOriginX, self.localCostmapOriginY, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
+            self.local_costmap_origin_x = msg.info.origin.position.x
+            self.local_costmap_origin_y = msg.info.origin.position.y
+            self.local_costmap_resolution = msg.info.resolution
+            self.costmap_info = [self.local_costmap_resolution, msg.info.width, msg.info.height, self.local_costmap_origin_x, self.local_costmap_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
             # create np.array image object
             self.image = np.asarray(msg.data)
@@ -435,8 +419,8 @@ class lime_rt_sub(object):
             self.fudged_image[:] = 0 #hide_color = 0
 
             # find lc coordinates of robot's odometry coordinates 
-            self.x_odom_index = round((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
-            self.y_odom_index = round((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+            self.x_odom_index = round((self.odom_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
+            self.y_odom_index = round((self.odom_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
             # find and save egments
             self.segments = self.find_segments()
@@ -449,9 +433,9 @@ class lime_rt_sub(object):
 
             # to explain from another callback function, track copies (faster changing vars), and current callback vars
             start = time.time()
-            self.lime_rt_pub.explain(self.global_plan_tmp_copy, self.local_plan_x_list_copy, self.local_plan_y_list_copy, self.local_plan_tmp_copy, 
-            self.odom_tmp_copy, self.amcl_pose_tmp_copy, self.footprint_tmp_copy, self.robot_position_map_copy, self.robot_orientation_map_copy, self.costmap_info_tmp, 
-            self.segments, self.data, self.tf_map_odom_tmp, self.tf_odom_map_tmp, self.image, self.fudged_image)
+            self.lime_rt_pub.explain(self.global_plan_copy, self.local_plan_xs_copy, self.local_plan_ys_copy, self.local_plan_copy, 
+            self.odom_copy, self.amcl_pose_copy, self.footprint_copy, self.robot_position_map_copy, self.robot_orientation_map_copy, self.costmap_info, 
+            self.segments, self.data, self.tf_map_odom, self.tf_odom_map, self.image, self.fudged_image)
             end = time.time()
             print('\n\nEXPLANATION TIME = ', end-start)
 
@@ -572,12 +556,12 @@ class lime_rt_sub(object):
     def create_data(self):
         # create N+1 perturbations for N segments--superpixels
         self.n_features = np.unique(self.segments).shape[0]
-        self.num_samples = self.n_features
+        self.n_samples = self.n_features
         lst = [[1]*self.n_features]
-        for i in range(1, self.num_samples):
+        for i in range(1, self.n_samples):
             lst.append([1]*self.n_features)
             lst[i][self.n_features-i] = 0    
-        self.data = np.array(lst).reshape((self.num_samples, self.n_features))
+        self.data = np.array(lst).reshape((self.n_samples, self.n_features))
 
 
 
@@ -832,45 +816,40 @@ class lime_rt_pub(object):
 
         self.hard_obstacle = 99
         
-        self.dirCurr = os.getcwd()
+        self.dir_curr = os.getcwd()
 
-        self.dirMain = 'explanation_data'
+        self.dir_main = 'explanation_data'
         try:
-            os.mkdir(self.dirMain)
+            os.mkdir(self.dir_main)
         except FileExistsError:
             pass
         
-        self.dirData = self.dirMain + '/lime_rt_data'
+        self.dirData = self.dir_main + '/lime_rt_data'
         try:
             os.mkdir(self.dirData)
         except FileExistsError:
             pass
 
         if self.plot_explanation == True:
-            self.explanation_dir = self.dirMain + '/explanation_images'
+            self.explanation_dir = self.dir_main + '/explanation_images'
             try:
                 os.mkdir(self.explanation_dir)
             except FileExistsError:
                 pass
 
         if self.plot_perturbations == True: 
-            self.perturbation_dir = self.dirMain + '/perturbation_images'
+            self.perturbation_dir = self.dir_main + '/perturbation_images'
             try:
                 os.mkdir(self.perturbation_dir)
             except FileExistsError:
                 pass
         
         if self.plot_classification == True:
-            self.classifier_dir = self.dirMain + '/classifier_images'
+            self.classifier_dir = self.dir_main + '/classifier_images'
             try:
                 os.mkdir(self.classifier_dir)
             except FileExistsError:
                 pass
-
-        # plans' variables
-        self.global_plan_empty = True
-        self.local_plan_empty = True
-        self.local_plan_counter = 0
 
         # costmap variables
         self.labels = np.array([]) 
@@ -883,7 +862,7 @@ class lime_rt_pub(object):
         self.original_deviation = 0
 
         # samples variables
-        self.num_samples = 0
+        self.n_samples = 0
         self.n_features = 0
 
         # LIME variables
@@ -929,8 +908,8 @@ class lime_rt_pub(object):
         
         try:
             # Save footprint instance to a file
-            self.footprint_tmp_pd = pd.DataFrame(self.footprint_tmp)
-            self.footprint_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+            self.footprint_pd = pd.DataFrame(self.footprint)
+            self.footprint_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
             # Save local plan instance to a file
             self.local_plan_original_pd = pd.DataFrame(self.local_plan_original)
@@ -941,28 +920,28 @@ class lime_rt_pub(object):
             self.plan_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
             # Save global plan instance to a file
-            self.global_plan_tmp_pd = pd.DataFrame(self.global_plan_tmp)
-            self.global_plan_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
+            self.global_plan_pd = pd.DataFrame(self.global_plan)
+            self.global_plan_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
 
             # Save costmap_info instance to file
-            self.costmap_info_tmp_pd = pd.DataFrame(self.costmap_info_tmp).transpose()
-            self.costmap_info_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
+            self.costmap_info_pd = pd.DataFrame(self.costmap_info).transpose()
+            self.costmap_info_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
             # Save amcl_pose instance to file
-            self.amcl_pose_tmp_pd = pd.DataFrame(self.amcl_pose_tmp).transpose()
-            self.amcl_pose_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+            self.amcl_pose_pd = pd.DataFrame(self.amcl_pose).transpose()
+            self.amcl_pose_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
             # Save tf_odom_map instance to file
-            self.tf_odom_map_tmp_pd = pd.DataFrame(self.tf_odom_map_tmp).transpose()
-            self.tf_odom_map_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
+            self.tf_odom_map_pd = pd.DataFrame(self.tf_odom_map).transpose()
+            self.tf_odom_map_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
 
             # Save tf_map_odom instance to file
-            self.tf_map_odom_tmp_pd = pd.DataFrame(self.tf_map_odom_tmp).transpose()
-            self.tf_map_odom_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
+            self.tf_map_odom_pd = pd.DataFrame(self.tf_map_odom).transpose()
+            self.tf_map_odom_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
 
             # Save odometry instance to file
-            self.odom_tmp_pd = pd.DataFrame(self.odom_tmp).transpose()
-            self.odom_tmp_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+            self.odom_pd = pd.DataFrame(self.odom).transpose()
+            self.odom_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
         except Exception as e:
             print('exception = ', e)
@@ -975,41 +954,41 @@ class lime_rt_pub(object):
         #print(self.local_plan_original.shape)
         #print(self.local_plan_original)
         
-        #print('\nself.costmap_info_tmp = ', self.costmap_info_tmp)
-        #print('\nself.odom_tmp = ', self.odom_tmp)
-        #print('\nself.global_plan_tmp = ', self.global_plan_tmp)
+        #print('\nself.costmap_info = ', self.costmap_info)
+        #print('\nself.odom = ', self.odom)
+        #print('\nself.global_plan = ', self.global_plan)
 
         try:
-            self.t_om = np.asarray([self.tf_odom_map_tmp[0],self.tf_odom_map_tmp[1],self.tf_odom_map_tmp[2]])
-            self.r_om = R.from_quat([self.tf_odom_map_tmp[3],self.tf_odom_map_tmp[4],self.tf_odom_map_tmp[5],self.tf_odom_map_tmp[6]])
+            self.t_om = np.asarray([self.tf_odom_map[0],self.tf_odom_map[1],self.tf_odom_map[2]])
+            self.r_om = R.from_quat([self.tf_odom_map[3],self.tf_odom_map[4],self.tf_odom_map[5],self.tf_odom_map[6]])
             self.r_om = np.asarray(self.r_om.as_matrix())
 
-            self.t_mo = np.asarray([self.tf_map_odom_tmp[0],self.tf_map_odom_tmp[1],self.tf_map_odom_tmp[2]])
-            self.r_mo = R.from_quat([self.tf_map_odom_tmp[3],self.tf_map_odom_tmp[4],self.tf_map_odom_tmp[5],self.tf_map_odom_tmp[6]])
+            self.t_mo = np.asarray([self.tf_map_odom[0],self.tf_map_odom[1],self.tf_map_odom[2]])
+            self.r_mo = R.from_quat([self.tf_map_odom[3],self.tf_map_odom[4],self.tf_map_odom[5],self.tf_map_odom[6]])
             self.r_mo = np.asarray(self.r_mo.as_matrix())    
 
             # save costmap info to class variables
-            self.localCostmapOriginX = self.costmap_info_tmp[3]
-            #print('self.localCostmapOriginX: ', self.localCostmapOriginX)
-            self.localCostmapOriginY = self.costmap_info_tmp[4]
-            #print('self.localCostmapOriginY: ', self.localCostmapOriginY)
-            self.localCostmapResolution = self.costmap_info_tmp[0]
-            #print('self.localCostmapResolution: ', self.localCostmapResolution)
-            self.localCostmapHeight = self.costmap_info_tmp[2]
+            self.local_costmap_origin_x = self.costmap_info[3]
+            #print('self.local_costmap_origin_x: ', self.local_costmap_origin_x)
+            self.local_costmap_origin_y = self.costmap_info[4]
+            #print('self.local_costmap_origin_y: ', self.local_costmap_origin_y)
+            self.local_costmap_resolution = self.costmap_info[0]
+            #print('self.local_costmap_resolution: ', self.local_costmap_resolution)
+            self.localCostmapHeight = self.costmap_info[2]
             #print('self.localCostmapHeight: ', self.localCostmapHeight)
-            self.localCostmapWidth = self.costmap_info_tmp[1]
+            self.localCostmapWidth = self.costmap_info[1]
             #print('self.localCostmapWidth: ', self.localCostmapWidth)
 
             # save robot odometry location to class variables
-            self.odom_x = self.odom_tmp[0]
+            self.odom_x = self.odom[0]
             # print('self.odom_x: ', self.odom_x)
-            self.odom_y = self.odom_tmp[1]
+            self.odom_y = self.odom[1]
             # print('self.odom_y: ', self.odom_y)
 
             # save indices of robot's odometry location in local costmap to class variables
-            self.localCostmapIndex_x_odom = int((self.odom_x - self.localCostmapOriginX) / self.localCostmapResolution)
+            self.localCostmapIndex_x_odom = int((self.odom_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
             # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
-            self.localCostmapIndex_y_odom = int((self.odom_y - self.localCostmapOriginY) / self.localCostmapResolution)
+            self.localCostmapIndex_y_odom = int((self.odom_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
             # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
 
             # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
@@ -1020,8 +999,8 @@ class lime_rt_pub(object):
 
             #'''
             # save robot odometry orientation to class variables
-            self.odom_z = self.odom_tmp[2]
-            self.odom_w = self.odom_tmp[2]
+            self.odom_z = self.odom[2]
+            self.odom_w = self.odom[2]
             # calculate Euler angles based on orientation quaternion
             [self.yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
             
@@ -1032,9 +1011,9 @@ class lime_rt_pub(object):
 
             self.transformed_plan_xs = []
             self.transformed_plan_ys = []
-            for i in range(0, len(self.global_plan_tmp)):
-                x_temp = int((self.global_plan_tmp[i][0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                y_temp = int((self.global_plan_tmp[i][1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            for i in range(0, len(self.global_plan)):
+                x_temp = int((self.global_plan[i][0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
+                y_temp = int((self.global_plan[i][1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
                 if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                     self.transformed_plan_xs.append(x_temp)
@@ -1117,8 +1096,8 @@ class lime_rt_pub(object):
         transformed_plan_xs = []
         transformed_plan_ys = []
         for i in range(0, transformed_plan.shape[0]):
-            x_temp = int((transformed_plan[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = int((transformed_plan[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            x_temp = int((transformed_plan[i, 0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
+            y_temp = int((transformed_plan[i, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
             if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                 transformed_plan_xs.append(x_temp)
@@ -1132,8 +1111,8 @@ class lime_rt_pub(object):
             # find if there is local plan
             local_plans_local = local_plans.loc[local_plans['ID'] == ctr]
             for j in range(0, local_plans_local.shape[0]):
-                    x_temp = int((local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                    y_temp = int((local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                    x_temp = int((local_plans_local.iloc[j, 0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
+                    y_temp = int((local_plans_local.iloc[j, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
                     if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
                         local_plan_x_list.append(x_temp)
@@ -1167,12 +1146,12 @@ class lime_rt_pub(object):
             temp = np.delete(sampled_instance,2,3)
             temp = np.delete(temp,1,3)
             temp = temp.reshape(temp.shape[0]*160,160)
-            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+            np.savetxt(self.dir_curr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
         elif sampled_instance_shape_len == 3:
             temp = sampled_instance.reshape(sampled_instance.shape[0]*160,160)
-            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+            np.savetxt(self.dir_curr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
         elif sampled_instance_shape_len == 2:
-            np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
+            np.savetxt(self.dir_curr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
         end = time.time()
         print('DATA PREP TIME = ', end-start)
 
@@ -1201,20 +1180,20 @@ class lime_rt_pub(object):
         
         # load local path planner's outputs
         # load command velocities - output from local planner
-        cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
+        cmd_vel_perturb = pd.read_csv(self.dir_curr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
 
         # load local plans - output from local planner
-        local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
+        local_plans = pd.read_csv(self.dir_curr + '/src/teb_local_planner/src/Data/local_plans.csv')
         #print('local_plans = ', local_plans)
         # save original local plan for qsr_rt
         #self.local_plan_full_perturbation = local_plans.loc[local_plans['ID'] == 0]
         #print('self.local_plan_full_perturbation.shape = ', self.local_plan_full_perturbation.shape)
-        #local_plan_full_perturbation.to_csv(self.dirCurr + '/' + self.dirData + '/local_plan_full_perturbation.csv', index=False)#, header=False)
+        #local_plan_full_perturbation.to_csv(self.dir_curr + '/' + self.dirData + '/local_plan_full_perturbation.csv', index=False)#, header=False)
 
         # load transformed global plan to /odom frame
-        transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
+        transformed_plan = np.array(pd.read_csv(self.dir_curr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
         # save transformed plan for the qsr_rt
-        #transformed_plan.to_csv(self.dirCurr + '/' + self.dirData + '/transformed_plan.csv', index=False)#, header=False)
+        #transformed_plan.to_csv(self.dir_curr + '/' + self.dirData + '/transformed_plan.csv', index=False)#, header=False)
        
         end = time.time()
         print('RESULTS LOADING TIME = ', end-start)
@@ -1283,23 +1262,23 @@ class lime_rt_pub(object):
     
         explain_time_start = time.time()
 
-        self.local_plan_x_list_fixed = local_plan_x_list_copy
-        self.local_plan_y_list_fixed = local_plan_y_list_copy
+        self.local_plan_xs_fixed = local_plan_x_list_copy
+        self.local_plan_ys_fixed = local_plan_y_list_copy
 
         self.robot_position_map = robot_position_map_copy
         self.robot_orientation_map = robot_orientation_map_copy
 
-        self.global_plan_tmp = global_plan_tmp_copy
+        self.global_plan = global_plan_tmp_copy
         self.plan_tmp = global_plan_tmp_copy
-        self.footprint_tmp = footprint_tmp_copy
+        self.footprint = footprint_tmp_copy
         self.local_plan_original = local_plan_tmp_copy
-        self.amcl_pose_tmp = amcl_pose_tmp_copy
-        self.odom_tmp = odom_tmp_copy
-        self.costmap_info_tmp = costmap_info_tmp
+        self.amcl_pose = amcl_pose_tmp_copy
+        self.odom = odom_tmp_copy
+        self.costmap_info = costmap_info_tmp
         self.segments = segments
         self.data = data
-        self.tf_map_odom_tmp = tf_map_odom_tmp
-        self.tf_odom_map_tmp = tf_odom_map_tmp
+        self.tf_map_odom = tf_map_odom_tmp
+        self.tf_odom_map = tf_odom_map_tmp
         self.image = image
         self.fudged_image = fudged_image
         
@@ -1380,9 +1359,9 @@ class lime_rt_pub(object):
             
             #print('\nexp = ', exp)
 
-            #pd.DataFrame(output[:,:,0]).to_csv(self.dirCurr + '/' + self.dirData + '/output_B.csv', index=False) #, header=False)
-            #pd.DataFrame(output[:,:,1]).to_csv(self.dirCurr + '/' + self.dirData + '/output_G.csv', index=False) #, header=False)
-            #pd.DataFrame(output[:,:,2]).to_csv(self.dirCurr + '/' + self.dirData + '/output_R.csv', index=False) #, header=False)
+            #pd.DataFrame(output[:,:,0]).to_csv(self.dir_curr + '/' + self.dirData + '/output_B.csv', index=False) #, header=False)
+            #pd.DataFrame(output[:,:,1]).to_csv(self.dir_curr + '/' + self.dirData + '/output_G.csv', index=False) #, header=False)
+            #pd.DataFrame(output[:,:,2]).to_csv(self.dir_curr + '/' + self.dirData + '/output_R.csv', index=False) #, header=False)
 
 
             if self.plot_explanation == True:
@@ -1405,7 +1384,7 @@ class lime_rt_pub(object):
                 fig.add_axes(ax)
 
                 ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='x')
-                ax.scatter(self.local_plan_x_list_fixed, self.local_plan_y_list_fixed, c='yellow', marker='o')
+                ax.scatter(self.local_plan_xs_fixed, self.local_plan_ys_fixed, c='yellow', marker='o')
                 ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
                 ax.text(self.x_odom_index[0], self.y_odom_index[0], 'robot', c='white')
                 ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
@@ -1453,7 +1432,7 @@ class lime_rt_pub(object):
                 print('\nexp_img_time = ', exp_img_end - exp_img_start)
             
             explain_time_end = time.time()
-            with open(self.dirMain + '/explanation_time.csv','a') as file:
+            with open(self.dir_main + '/explanation_time.csv','a') as file:
                 file.write(str(explain_time_end-explain_time_start))
                 file.write('\n')
             

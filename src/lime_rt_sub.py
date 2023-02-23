@@ -74,7 +74,7 @@ class lime_rt_sub(object):
         self.odom_y = 0
   
         # costmap variables
-        self.costmap_info = [] 
+        self.local_costmap_info = [] 
         self.costmap_size = 160
         self.local_costmap_origin_x = 0 
         self.local_costmap_origin_y = 0 
@@ -141,7 +141,7 @@ class lime_rt_sub(object):
 
         self.fig.savefig(dirCurr + '/' + 'segments_without_labels_' + str(self.counter_global) + '.png', transparent=False)
         #self.fig.clf()
-
+        pd.DataFrame(segs).to_csv(dirCurr + '/segments_without_labels.csv', index=False)#, header=False)
 
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -153,12 +153,14 @@ class lime_rt_sub(object):
         segs = np.flip(self.segments, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        for i in range(0, len(centroids_segments)):
-            self.ax.scatter(centroids_segments[i][1], self.costmap_size - centroids_segments[i][2], c='white', marker='o')   
-            self.ax.text(centroids_segments[i][1], self.costmap_size - centroids_segments[i][2], centroids_segments[i][0], c='white')
+        for i in range(0, len(self.centroids_segments)):
+            self.ax.scatter(self.centroids_segments[i][1], self.costmap_size - self.centroids_segments[i][2], c='white', marker='o')   
+            self.ax.text(self.centroids_segments[i][1], self.costmap_size - self.centroids_segments[i][2], self.centroids_segments[i][0], c='white')
 
         self.fig.savefig(dirCurr + '/' + 'segments_with_labels_' + str(self.counter_global) + '.png', transparent=False)
         self.fig.clf()
+        pd.DataFrame(segs).to_csv(dirCurr + '/segments_with_labels.csv', index=False)#, header=False)
+        pd.DataFrame(segs).to_csv(dirCurr + '/centroids_segments.csv', index=False)#, header=False)
         
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -172,6 +174,7 @@ class lime_rt_sub(object):
 
         self.fig.savefig(dirCurr + '/' + 'local_costmap_' + str(self.counter_global) + '.png', transparent=False)
         self.fig.clf()
+        pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
 
         end = time.time()
         print('SEGMENTS PLOTTING TIME = ' + str(end-start) + ' seconds!!!')
@@ -210,11 +213,11 @@ class lime_rt_sub(object):
         # find centroids_in_LC of the objects' areas
         lc_regions = regionprops(self.segments.astype(int))
         #print('\nlen(lc_regions) = ', len(lc_regions))
-        centroids_segments = []
+        self.centroids_segments = []
         for lc_region in lc_regions:
             v = lc_region.label
             cy, cx = lc_region.centroid
-            centroids_segments.append([v,cx,cy])
+            self.centroids_segments.append([v,cx,cy])
         
         # plot segments
         if self.plot_segments == True:
@@ -243,8 +246,8 @@ class lime_rt_sub(object):
         except FileExistsError:
             pass
         
-        self.image_99s_100s = copy.deepcopy(self.local_costmap)
-        self.image_99s_100s[self.image_99s_100s < 99] = 0        
+        image_99s_100s = copy.deepcopy(self.local_costmap)
+        image_99s_100s[image_99s_100s < 99] = 0        
         #self.fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -252,12 +255,12 @@ class lime_rt_sub(object):
         self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         self.ax.set_axis_off()
         self.fig.add_axes(self.ax)
-        self.image_99s_100s = np.flip(self.image_99s_100s, 0)
-        self.ax.imshow(self.image_99s_100s.astype('float64'), aspect='auto')
+        image_99s_100s = np.flip(image_99s_100s, 0)
+        self.ax.imshow(image_99s_100s.astype('float64'), aspect='auto')
         self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
         #self.fig.clf()
         
-        self.image_original = copy.deepcopy(self.local_costmap)
+        image_original = copy.deepcopy(self.local_costmap)
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -265,13 +268,13 @@ class lime_rt_sub(object):
         #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         #ax.set_axis_off()
         #self.fig.add_axes(ax)
-        self.image_original = np.flip(self.image_original, 0)
-        self.ax.imshow(self.image_original.astype('float64'), aspect='auto')
+        image_original = np.flip(image_original, 0)
+        self.ax.imshow(image_original.astype('float64'), aspect='auto')
         self.fig.savefig(dirCurr + '/' + 'local_costmap_original.png', transparent=False)
         #self.fig.clf()
         
-        self.image_100s = copy.deepcopy(self.local_costmap)
-        self.image_100s[self.image_100s != 100] = 0
+        image_100s = copy.deepcopy(self.local_costmap)
+        image_100s[image_100s != 100] = 0
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -279,13 +282,13 @@ class lime_rt_sub(object):
         #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         #ax.set_axis_off()
         #self.fig.add_axes(ax)
-        self.image_100s = np.flip(self.image_100s, 0)
-        self.ax.imshow(self.image_100s.astype('float64'), aspect='auto')
+        image_100s = np.flip(image_100s, 0)
+        self.ax.imshow(image_100s.astype('float64'), aspect='auto')
         self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
         #self.fig.clf()
         
-        self.image_99s = copy.deepcopy(self.local_costmap)
-        self.image_99s[self.image_99s != 99] = 0
+        image_99s = copy.deepcopy(self.local_costmap)
+        image_99s[image_99s != 99] = 0
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -293,13 +296,13 @@ class lime_rt_sub(object):
         #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         #ax.set_axis_off()
         #self.fig.add_axes(self.ax)
-        self.image_99s = np.flip(self.image_99s, 0)
-        self.ax.imshow(self.image_99s.astype('float64'), aspect='auto')
+        image_99s = np.flip(image_99s, 0)
+        self.ax.imshow(image_99s.astype('float64'), aspect='auto')
         self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
         #self.fig.clf()
         
-        self.image_less_than_99 = copy.deepcopy(self.local_costmap)
-        self.image_less_than_99[self.image_less_than_99 >= 99] = 0
+        image_less_than_99 = copy.deepcopy(self.local_costmap)
+        image_less_than_99[image_less_than_99 >= 99] = 0
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -307,8 +310,8 @@ class lime_rt_sub(object):
         #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         #ax.set_axis_off()
         #self.fig.add_axes(self.ax)
-        self.image_less_than_99 = np.flip(self.image_less_than_99, 0)
-        self.ax.imshow(self.image_less_than_99.astype('float64'), aspect='auto')
+        image_less_than_99 = np.flip(image_less_than_99, 0)
+        self.ax.imshow(image_less_than_99.astype('float64'), aspect='auto')
         self.fig.savefig(dirCurr + '/' + 'local_costmap_less_than_99.png', transparent=False)
         self.fig.clf()
         
@@ -326,14 +329,14 @@ class lime_rt_sub(object):
             self.tf_map_odom = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
          
             # save tf 
-            pd.DataFrame(self.tf_odom_map).to_csv(self.dir_curr + '/' + self.dir_data + '/tf_odom_map_tmp.csv', index=False)#, header=False)
-            pd.DataFrame(self.tf_map_odom).to_csv(self.dir_curr + '/' + self.dir_data + '/tf_map_odom_tmp.csv', index=False)#, header=False)
+            pd.DataFrame(self.tf_odom_map).to_csv(self.dir_curr + '/' + self.dir_data + '/tf_odom_map.csv', index=False)#, header=False)
+            pd.DataFrame(self.tf_map_odom).to_csv(self.dir_curr + '/' + self.dir_data + '/tf_map_odom.csv', index=False)#, header=False)
             
             # save costmap in a right image format
             self.local_costmap_origin_x = msg.info.origin.position.x
             self.local_costmap_origin_y = msg.info.origin.position.y
             self.local_costmap_resolution = msg.info.resolution
-            self.costmap_info = [self.local_costmap_resolution, msg.info.width, msg.info.height, self.local_costmap_origin_x, self.local_costmap_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
+            self.local_costmap_info = [self.local_costmap_resolution, msg.info.width, msg.info.height, self.local_costmap_origin_x, self.local_costmap_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
             # create image object
             self.local_costmap = np.asarray(msg.data)
@@ -343,7 +346,7 @@ class lime_rt_sub(object):
                 self.plot_costmaps()
             
             # Turn non-lethal inflated area (< 99) to free space and 100s to 99s
-            # POSSIBLE PLACE TO AFFECT SEGMENTATION
+            # possible place to affect segmentation
             self.local_costmap[self.local_costmap == 100] = 99
             self.local_costmap[self.local_costmap <= 98] = 0
 
@@ -354,19 +357,15 @@ class lime_rt_sub(object):
             self.fudged_image = self.local_costmap.copy()
             self.fudged_image[:] = 0 #hide_color = 0
 
-            # save indices of robot's odometry location in local costmap to class variables
-            self.x_odom_index = round((self.odom_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
-            self.y_odom_index = round((self.odom_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
-
             # find segments
-            self.segments = self.find_segments(self.local_costmap)
+            self.find_segments()
 
             # create data -- perturbations
             self.create_data()
 
             # save data to the .csv files
-            pd.DataFrame(self.costmap_info).to_csv(self.dir_curr + '/' + self.dir_data + '/costmap_info_tmp.csv', index=False)#, header=False)
-            pd.DataFrame(self.local_costmap).to_csv(self.dir_curr + '/' + self.dir_data + '/image.csv', index=False) #, header=False)
+            pd.DataFrame(self.local_costmap_info).to_csv(self.dir_curr + '/' + self.dir_data + '/local_costmap_info.csv', index=False)#, header=False)
+            pd.DataFrame(self.local_costmap).to_csv(self.dir_curr + '/' + self.dir_data + '/local_costmap.csv', index=False) #, header=False)
             pd.DataFrame(self.fudged_image).to_csv(self.dir_curr + '/' + self.dir_data + '/fudged_image.csv', index=False)#, header=False)
             pd.DataFrame(self.segments).to_csv(self.dir_curr + '/' + self.dir_data + '/segments.csv', index=False)#, header=False)
             pd.DataFrame(self.data).to_csv(self.dir_curr + '/' + self.dir_data + '/data.csv', index=False)#, header=False)

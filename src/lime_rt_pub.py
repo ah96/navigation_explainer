@@ -208,13 +208,13 @@ class ImageExplanation(object):
 
         temp = np.zeros(self.image.shape)
 
-        w_sum = 0.0
-        w_s = []
+        w_sum_abs = 0.0
+        w_s_abs = []
         for f, w in exp:
-            w_sum += abs(w)
-            w_s.append(abs(w))
-        max_w = max(w_s)
-        if max_w == 0:
+            w_sum_abs += abs(w)
+            w_s_abs.append(abs(w))
+        max_w_abs = max(w_s_abs)
+        if max_w_abs == 0:
             self.all_weights_zero = True
             temp[self.image == 0] = self.free_space_shade
             temp[self.image != 0] = 0.0
@@ -248,9 +248,9 @@ class ImageExplanation(object):
                     if c == 1:
                         temp[segments == f, 0] = 0.0
                         if self.use_maximum_weight == True:
-                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                         else:
-                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
                         temp[segments == f, 2] = 0.0
                     elif c == 0:
                         temp[segments == f, 0] = 0.0
@@ -258,9 +258,9 @@ class ImageExplanation(object):
                         temp[segments == f, 2] = 0.0
                     elif c == -1:
                         if self.use_maximum_weight == True:
-                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                         else:
-                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
                         temp[segments == f, 1] = 0.0
                         temp[segments == f, 2] = 0.0
                                         
@@ -274,45 +274,36 @@ class lime_rt_pub(object):
         # directory variables
         self.dirCurr = os.getcwd()
         self.dirName = 'lime_rt_data'
-        self.file_path_1 = self.dirName + '/footprint_tmp.csv'
-        self.file_path_2 = self.dirName + '/plan_tmp.csv'
-        self.file_path_3 = self.dirName + '/global_plan_tmp.csv'
-        self.file_path_4 = self.dirName + '/costmap_info_tmp.csv'
-        self.file_path_5 = self.dirName + '/amcl_pose_tmp.csv' 
-        self.file_path_6 = self.dirName + '/tf_odom_map_tmp.csv'
-        self.file_path_7 = self.dirName + '/tf_map_odom_tmp.csv'
-        self.file_path_8 = self.dirName + '/odom_tmp.csv'
-        self.file_path_9 = self.dirName + '/local_plan_x_list.csv'
-        self.file_path_10 = self.dirName + '/local_plan_y_list.csv'
-        self.file_path_11 = self.dirName + '/local_plan_tmp.csv'
-        self.file_path_12 = self.dirName + '/segments.csv'
-        self.file_path_13 = self.dirName + '/data.csv'
-        self.file_path_14 = self.dirName + '/image.csv'
-        self.file_path_15 = self.dirName + '/fudged_image.csv'
+        self.file_path_footprint = self.dirName + '/footprint.csv'
+        self.file_path_global_plan = self.dirName + '/global_plan.csv'
+        self.file_path_costmap_info = self.dirName + '/costmap_info.csv'
+        self.file_path_amcl_pose = self.dirName + '/amcl_pose.csv' 
+        self.file_path_tf_odom_map = self.dirName + '/tf_odom_map.csv'
+        self.file_path_tf_map_odom = self.dirName + '/tf_map_odom.csv'
+        self.file_path_odom = self.dirName + '/odom.csv'
+        self.file_path_local_plan_xs = self.dirName + '/local_plan_xs.csv'
+        self.file_path_local_plan_ys = self.dirName + '/local_plan_ys.csv'
+        self.file_path_local_plan = self.dirName + '/local_plan.csv'
+        self.file_path_segments = self.dirName + '/segments.csv'
+        self.file_path_data = self.dirName + '/data.csv'
+        self.file_path_local_costmap = self.dirName + '/local_costmap.csv'
+        self.file_path_fudged_image = self.dirName + '/fudged_image.csv'
 
         # plans' variables
         self.transformed_plan_xs = [] 
         self.transformed_plan_ys = []
-        self.local_plan_x_list_fixed = []
-        self.local_plan_x_list_fixed = []
-        self.local_plan_tmp_fixed = []
-        self.global_plan_empty = True
-        self.local_plan_empty = True
-        self.local_plan_counter = 0
+        self.local_plan_xs_fixed = []
+        self.local_plan_xs_fixed = []
+        self.local_plan_fixed = []
 
         # costmap variables
         self.labels = np.array([]) 
         self.distances = np.array([])
         self.costmap_size = 160
-        self.pd_image_size = (self.costmap_size,self.costmap_size) 
-        self.local_costmap_empty = True
-   
+        self.pd_image_size = (self.costmap_size,self.costmap_size)
+
         # deviation
         self.original_deviation = 0
-
-        # samples variables
-        self.num_samples = 0
-        self.n_features = 0
 
         # LIME variables
         kernel_width=.25
@@ -340,7 +331,6 @@ class lime_rt_pub(object):
         self.header = Header()
 
         # bool variables
-        self.divide_obstacles = False
         self.publish_explanation_coeffs = True  
         self.publish_explanation_image = True
         self.publish_pointcloud = False
@@ -349,116 +339,104 @@ class lime_rt_pub(object):
     def load_data(self):
         print_data = False
         try:
-            if os.path.getsize(self.file_path_1) == 0 or os.path.exists(self.file_path_1) == False:
+            if os.path.getsize(self.file_path_footprint) == 0 or os.path.exists(self.file_path_footprint) == False:
                 return False
-            self.footprint_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/footprint_tmp.csv')
+            self.footprint = pd.read_csv(self.dirCurr + '/' + self.dirName + '/footprint.csv')
             if print_data == True:
-                print('self.footprint_tmp.shape = ', self.footprint_tmp.shape)
+                print('self.footprint.shape = ', self.footprint.shape)
             
-            if os.path.getsize(self.file_path_2) == 0 or os.path.exists(self.file_path_2) == False:
+            if os.path.getsize(self.file_path_global_plan) == 0 or os.path.exists(self.file_path_global_plan) == False:
                 return False
-            self.plan_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/plan_tmp.csv')
+            self.global_plan = pd.read_csv(self.dirCurr + '/' + self.dirName + '/global_plan.csv')
             if print_data == True:
-                print('self.plan_tmp.shape = ', self.plan_tmp.shape)
+                print('self.global_plan.shape = ', self.global_plan.shape)
             
-            if os.path.getsize(self.file_path_3) == 0 or os.path.exists(self.file_path_3) == False:
+            if os.path.getsize(self.file_path_costmap_info) == 0 or os.path.exists(self.file_path_costmap_info) == False:
                 return False
-            self.global_plan_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/global_plan_tmp.csv')
+            self.costmap_info = pd.read_csv(self.dirCurr + '/' + self.dirName + '/costmap_info.csv')
             if print_data == True:
-                print('self.global_plan_tmp.shape = ', self.global_plan_tmp.shape)
+                print('self.costmap_info.shape = ', self.costmap_info.shape)
             
-            if os.path.getsize(self.file_path_4) == 0 or os.path.exists(self.file_path_4) == False:
+            if os.path.getsize(self.file_path_amcl_pose) == 0 or os.path.exists(self.file_path_amcl_pose) == False:
                 return False
-            self.costmap_info_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/costmap_info_tmp.csv')
+            self.amcl_pose = pd.read_csv(self.dirCurr + '/' + self.dirName + '/amcl_pose.csv')
             if print_data == True:
-                print('self.costmap_info_tmp.shape = ', self.costmap_info_tmp.shape)
+                print('self.amcl_pose.shape = ', self.amcl_pose.shape)
             
-            if os.path.getsize(self.file_path_5) == 0 or os.path.exists(self.file_path_5) == False:
+            if os.path.getsize(self.file_path_tf_odom_map) == 0 or os.path.exists(self.file_path_tf_odom_map) == False:
                 return False
-            self.amcl_pose_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/amcl_pose_tmp.csv')
+            self.tf_odom_map = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map.csv')
             if print_data == True:
-                print('self.amcl_pose_tmp.shape = ', self.amcl_pose_tmp.shape)
+                print('self.tf_odom_map.shape = ', self.tf_odom_map.shape)
             
-            if os.path.getsize(self.file_path_6) == 0 or os.path.exists(self.file_path_6) == False:
+            if os.path.getsize(self.file_path_tf_map_odom) == 0 or os.path.exists(self.file_path_tf_map_odom) == False:
                 return False
-            self.tf_odom_map_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_odom_map_tmp.csv')
+            self.tf_map_odom = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom.csv')
             if print_data == True:
-                print('self.tf_odom_map_tmp.shape = ', self.tf_odom_map_tmp.shape)
+                print('self.tf_map_odom.shape = ', self.tf_map_odom.shape)
             
-            if os.path.getsize(self.file_path_7) == 0 or os.path.exists(self.file_path_7) == False:
+            if os.path.getsize(self.file_path_odom) == 0 or os.path.exists(self.file_path_odom) == False:
                 return False
-            self.tf_map_odom_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/tf_map_odom_tmp.csv')
+            self.odom = pd.read_csv(self.dirCurr + '/' + self.dirName + '/odom.csv')
             if print_data == True:
-                print('self.tf_map_odom_tmp.shape = ', self.tf_map_odom_tmp.shape)
-            
-            if os.path.getsize(self.file_path_8) == 0 or os.path.exists(self.file_path_8) == False:
-                return False
-            self.odom_tmp = pd.read_csv(self.dirCurr + '/' + self.dirName + '/odom_tmp.csv')
-            if print_data == True:
-                print('self.odom_tmp.shape = ', self.odom_tmp.shape)
+                print('self.odom.shape = ', self.odom.shape)
 
-            if os.path.getsize(self.file_path_9) == 0 or os.path.exists(self.file_path_9) == False:
+            if os.path.getsize(self.file_path_local_plan_xs) == 0 or os.path.exists(self.file_path_local_plan_xs) == False:
                 return False
-            self.local_plan_x_list_fixed = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_x_list.csv'))
+            self.local_plan_xs_fixed = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_xs.csv'))
             if print_data == True:
-                print('self.local_plan_x_list_fixed.shape = ', self.local_plan_x_list_fixed.shape)
+                print('self.local_plan_xs_fixed.shape = ', self.local_plan_xs_fixed.shape)
             
-            if os.path.getsize(self.file_path_10) == 0 or os.path.exists(self.file_path_10) == False:
+            if os.path.getsize(self.file_path_local_plan_ys) == 0 or os.path.exists(self.file_path_local_plan_ys) == False:
                 return False         
-            self.local_plan_y_list_fixed = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_y_list.csv'))
+            self.local_plan_ys_fixed = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_ys.csv'))
             if print_data == True:
-                print('self.local_plan_y_list_fixed.shape = ', self.local_plan_y_list_fixed.shape)
+                print('self.local_plan_ys_fixed.shape = ', self.local_plan_ys_fixed.shape)
             
-            if os.path.getsize(self.file_path_11) == 0 or os.path.exists(self.file_path_11) == False:
+            if os.path.getsize(self.file_path_local_plan) == 0 or os.path.exists(self.file_path_local_plan) == False:
                 return False        
-            self.local_plan_tmp_fixed = pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan_tmp.csv')
+            self.local_plan_fixed = pd.read_csv(self.dirCurr + '/' + self.dirName + '/local_plan.csv')
             if print_data == True:
-                print('self.local_plan_tmp_fixed.shape = ', self.local_plan_tmp_fixed.shape)
+                print('self.local_plan_fixed.shape = ', self.local_plan_fixed.shape)
             
-            if os.path.getsize(self.file_path_12) == 0 or os.path.exists(self.file_path_12) == False:
+            if os.path.getsize(self.file_path_segments) == 0 or os.path.exists(self.file_path_segments) == False:
                 return False       
             self.segments = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/segments.csv'))
             if print_data == True:
                 print('self.segments.shape = ', self.segments.shape)
                
-            if os.path.getsize(self.file_path_13) == 0 or os.path.exists(self.file_path_13) == False:
+            if os.path.getsize(self.file_path_data) == 0 or os.path.exists(self.file_path_data) == False:
                 return False       
             self.data = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/data.csv'))
             if print_data == True:
                 print('self.data.shape = ', self.data.shape)
             
-            if os.path.getsize(self.file_path_14) == 0 or os.path.exists(self.file_path_14) == False:
+            if os.path.getsize(self.file_path_local_costmap) == 0 or os.path.exists(self.file_path_local_costmap) == False:
                 return False        
-            self.image = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/image.csv'))
+            self.image = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/ilocal_costmap.csv'))
             if print_data == True:
                 print('self.image.shape = ', self.image.shape)
             
-            if os.path.getsize(self.file_path_15) == 0 or os.path.exists(self.file_path_15) == False:
+            if os.path.getsize(self.file_path_fudged_image) == 0 or os.path.exists(self.file_path_fudged_image) == False:
                 return False        
             self.fudged_image = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/fudged_image.csv'))
             if print_data == True:
                 print('self.fudged_image.shape = ', self.fudged_image.shape)
 
-            #if os.path.getsize(self.file_path_15) == 0 or os.path.exists(self.file_path_15) == False:
-            #    return False        
-            #self.segments_not_inflated = np.array(pd.read_csv(self.dirCurr + '/' + self.dirName + '/segments_not_inflated.csv'))
-            #if print_data == True:
-            #    print('self.segments_not_inflated.shape = ', self.segments_not_inflated.shape)
-
             # if anything is empty or not of the right shape do not explain
-            if self.plan_tmp.empty or self.global_plan_tmp.empty or self.costmap_info_tmp.empty or self.amcl_pose_tmp.empty or self.tf_odom_map_tmp.empty or self.tf_map_odom_tmp.empty or self.odom_tmp.empty or self.local_plan_tmp_fixed.empty or self.footprint_tmp.empty: 
+            if self.global_plan.empty or self.costmap_info.empty or self.amcl_pose.empty or self.tf_odom_map.empty or self.tf_map_odom.empty or self.odom.empty or self.local_plan_fixed.empty or self.footprint.empty: 
                 return False
 
-            if self.local_plan_x_list_fixed.size == 0 or self.local_plan_y_list_fixed.size == 0 or self.segments.size == 0 or self.data.size == 0 or self.image.size == 0 or self.fudged_image.size == 0:
+            if self.local_plan_xs_fixed.size == 0 or self.local_plan_ys_fixed.size == 0 or self.segments.size == 0 or self.data.size == 0 or self.image.size == 0 or self.fudged_image.size == 0:
                 return False
 
-            if self.local_plan_x_list_fixed.shape != self.local_plan_y_list_fixed.shape:
+            if self.local_plan_xs_fixed.shape != self.local_plan_ys_fixed.shape:
                 return False      
 
             if self.segments.shape != self.pd_image_size or self.image.shape != self.pd_image_size or self.fudged_image.shape != self.pd_image_size:
                 return False
 
-            if self.footprint_tmp.shape != (16, 4) or self.costmap_info_tmp.shape != (7, 1) or self.amcl_pose_tmp.shape != (4, 1) or self.tf_map_odom_tmp.shape != (7, 1) or self.tf_odom_map_tmp.shape != (7, 1) or self.odom_tmp.shape != (6, 1):
+            if self.footprint.shape != (16, 4) or self.costmap_info.shape != (7, 1) or self.amcl_pose.shape != (4, 1) or self.tf_map_odom.shape != (7, 1) or self.tf_odom_map.shape != (7, 1) or self.odom.shape != (6, 1):
                 return False
 
             if self.data.shape[0] != len(np.unique(self.segments)):
@@ -474,36 +452,36 @@ class lime_rt_pub(object):
         
         try:
             # Save footprint instance to a file
-            self.footprint_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
+            self.footprint.to_csv('~/amar_ws/src/teb_local_planner/src/Data/footprint.csv', index=False, header=False)
 
             # Save local plan instance to a file
-            self.local_plan_tmp_fixed.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
+            self.local_plan_fixed.to_csv('~/amar_ws/src/teb_local_planner/src/Data/local_plan.csv', index=False, header=False)
 
             # Save plan (from global planner) instance to a file
-            self.plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
+            self.global_plan.to_csv('~/amar_ws/src/teb_local_planner/src/Data/plan.csv', index=False, header=False)
 
             # Save global plan instance to a file
-            self.global_plan_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
+            self.global_plan.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
 
             # Save costmap_info instance to file
-            self.costmap_info_tmp = self.costmap_info_tmp.transpose()
-            self.costmap_info_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
+            self.costmap_info = self.costmap_info.transpose()
+            self.costmap_info.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
             # Save amcl_pose instance to file
-            self.amcl_pose_tmp = self.amcl_pose_tmp.transpose()
-            self.amcl_pose_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
+            self.amcl_pose = self.amcl_pose.transpose()
+            self.amcl_pose.to_csv('~/amar_ws/src/teb_local_planner/src/Data/amcl_pose.csv', index=False, header=False)
 
             # Save tf_odom_map instance to file
-            self.tf_odom_map_tmp = self.tf_odom_map_tmp.transpose()
-            self.tf_odom_map_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
+            self.tf_odom_map = self.tf_odom_map.transpose()
+            self.tf_odom_map.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_odom_map.csv', index=False, header=False)
 
             # Save tf_map_odom instance to file
-            self.tf_map_odom_tmp = self.tf_map_odom_tmp.transpose()
-            self.tf_map_odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
+            self.tf_map_odom = self.tf_map_odom.transpose()
+            self.tf_map_odom.to_csv('~/amar_ws/src/teb_local_planner/src/Data/tf_map_odom.csv', index=False, header=False)
 
             # Save odometry instance to file
-            self.odom_tmp = self.odom_tmp.transpose()
-            self.odom_tmp.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
+            self.odom = self.odom.transpose()
+            self.odom.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
         except:
             return False
@@ -669,9 +647,9 @@ class lime_rt_pub(object):
         # turn grayscale image to rgb image
         self.image_rgb = gray2rgb(self.image * 1.0)
         # get current local costmap data
-        self.localCostmapOriginX = self.costmap_info_tmp.iloc[3]
-        self.localCostmapOriginY = self.costmap_info_tmp.iloc[4]
-        self.localCostmapResolution = self.costmap_info_tmp.iloc[0]
+        self.local_costmap_origin_x = self.costmap_info.iloc[3]
+        self.local_costmap_origin_y = self.costmap_info.iloc[4]
+        self.local_costmap_resolution = self.costmap_info.iloc[0]
 
         # save data for teb
         if self.saveImageDataForLocalPlanner() == False:
@@ -770,8 +748,8 @@ class lime_rt_pub(object):
                 output = output[:, :, [2, 1, 0]].astype(np.uint8)
                 for i in range(0, self.costmap_size):
                     for j in range(0, self.costmap_size):
-                        x = self.localCostmapOriginX + i * self.localCostmapResolution
-                        y = self.localCostmapOriginY + j * self.localCostmapResolution
+                        x = self.local_costmap_origin_x + i * self.local_costmap_resolution
+                        y = self.local_costmap_origin_y + j * self.local_costmap_resolution
                         r = int(output[j, i, 2])
                         g = int(output[j, i, 1])
                         b = int(output[j, i, 0])
