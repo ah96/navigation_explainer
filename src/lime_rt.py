@@ -35,8 +35,6 @@ from skimage.color import gray2rgb
 # global variables
 PI = math.pi
 
-# lc -- local costmap
-
 def rotationMatrixToQuaternion(m):
     #q0 = qw
     t = np.matrix.trace(m)
@@ -97,16 +95,15 @@ def euler_to_quaternion(roll, pitch, yaw):
   return Quaternion(qx, qy, qz, qw)
 
 
-
 # lime subscriber class
 class lime_rt_sub(object):
-     # Constructor
+    # constructor
     def __init__(self):
         self.lime_rt_pub = lime_rt_pub()
 
         # plotting
-        self.plot_costmaps = True
-        self.plot_segments = True
+        self.plot_costmaps_bool = True
+        self.plot_segments_bool = True
 
         # declare transformation buffer
         self.tfBuffer = tf2_ros.Buffer()
@@ -116,7 +113,7 @@ class lime_rt_sub(object):
         self.gazebo_names = []
         self.gazebo_poses = []
 
-        # directory
+        # directories
         self.dir_curr = os.getcwd()
         
         self.dir_main = 'explanation_data'
@@ -131,14 +128,14 @@ class lime_rt_sub(object):
         except FileExistsError:
             pass
 
-        if self.plot_segments == True:
+        if self.plot_segments_bool == True:
             self.segmentation_dir = self.dir_main + '/segmentation_images'
             try:
                 os.mkdir(self.segmentation_dir)
             except FileExistsError:
                 pass
 
-        if self.plot_costmaps == True:
+        if self.plot_costmaps_bool == True:
             self.costmap_dir = self.dir_main + '/costmap_images'
             try:
                 os.mkdir(self.costmap_dir)
@@ -153,47 +150,45 @@ class lime_rt_sub(object):
         self.robot_orientation_map = Quaternion(0.0,0.0,0.0,1.0)
         self.robot_position_odom = Point(0.0,0.0,0.0)        
         self.robot_orientation_odom = Quaternion(0.0,0.0,0.0,1.0)
-
-        # plans' variables
-        self.global_plan_xs = []
-        self.global_plan_ys = []
-        self.transformed_plan_xs = [] 
-        self.transformed_plan_ys = []
-        self.local_plan_xs = [] 
-        self.local_plan_ys = []
-        self.local_plan = [] 
-        self.global_plan = [] 
-        
-        # poses' variables
         self.footprint = []  
         self.amcl_pose = [] 
         self.odom = []
         self.odom_x = 0
         self.odom_y = 0
 
+        # plans' variables
+        self.transformed_plan_xs = [] 
+        self.transformed_plan_ys = []
+        self.local_plan_xs = [] 
+        self.local_plan_ys = []
+        self.local_plan = [] 
+        self.global_plan = [] 
+
         # tf variables
         self.tf_odom_map = [] 
         self.tf_map_odom = [] 
 
         # costmap variables
-        self.segments = np.array([])
-        self.data = np.array([]) 
-        self.image = np.array([])
+        self.local_costmap = np.array([])
         self.local_costmap_origin_x = 0 
         self.local_costmap_origin_y = 0 
         self.local_costmap_resolution = 0
-        self.costmap_size = 160
-        self.costmap_info = []
+        self.local_costmap_size = 160
+        self.local_costmap_info = []
+        self.segments = np.array([])
+ 
+        # perturbation variables
+        self.data = np.array([])
 
         # samples        
         self.n_samples = 0
         self.n_features = 0
 
-    # Declare subscribers
+    # declare subscribers
     def main_(self):
         lime_rt_pub().main_()
 
-        if self.plot_costmaps == True or self.plot_segments == True:
+        if self.plot_costmaps_bool == True or self.plot_segments_bool == True:
             self.fig = plt.figure(frameon=False)
             self.w = 1.6 * 3
             self.h = 1.6 * 3
@@ -206,6 +201,7 @@ class lime_rt_sub(object):
         self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
 
         self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
+        # or /move_base/TebLocalPlannerROS/local_plan
 
         self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
 
@@ -215,32 +211,25 @@ class lime_rt_sub(object):
 
         self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
               
-    # Define a callback for the local plan
+    # odom callback
     def odom_callback(self, msg):
-        #print('odom_callback!!!')
+        #print('\nodom_callback')
         self.odom_x = msg.pose.pose.position.x
         self.odom_y = msg.pose.pose.position.y
         self.odom = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
         self.robot_position_odom = msg.pose.pose.position
         self.robot_orientation_odom = msg.pose.pose.orientation
         
-    # Define a callback for the global plan
+    # global plan callback
     def global_plan_callback(self, msg):
-        #print('\nglobal_plan_callback!')
+        #print('\nglobal_plan_callback')
         
         self.global_plan = []
-        #self.plan_tmp = []
-        #self.transformed_plan_xs = []
-        #self.transformed_plan_ys = []
 
         for i in range(0,len(msg.poses)):
             self.global_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-            #self.plan_tmp.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
 
-        #pd.DataFrame(self.global_plan).to_csv(self.dir_curr + '/' + self.dirData + '/global_plan_tmp.csv', index=False)#, header=False)
-        #pd.DataFrame(self.plan_tmp).to_csv(self.dir_curr + '/' + self.dirData + '/plan_tmp.csv', index=False)#, header=False)
-        
-    # Define a callback for the local plan
+    # local plan callback
     def local_plan_callback(self, msg):
         #print('\nlocal_plan_callback')  
         try:
@@ -253,26 +242,29 @@ class lime_rt_sub(object):
 
                 x_temp = int((msg.poses[i].pose.position.x - self.local_costmap_origin_x) / self.local_costmap_resolution)
                 y_temp = int((msg.poses[i].pose.position.y - self.local_costmap_origin_y) / self.local_costmap_resolution)
-                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                     self.local_plan_xs.append(x_temp)
-                    self.local_plan_ys.append(self.costmap_size - y_temp)
+                    self.local_plan_ys.append(self.local_costmap_size - y_temp)
 
-        except:
-            pass
+        except Exception as e:
+            print('exception = ', e)
+            return
     
-    # Define a callback for the footprint
+    # footprint callback
     def footprint_callback(self, msg):
         #print('\nfootprint_callback') 
         self.footprint = []
         for i in range(0,len(msg.polygon.points)):
             self.footprint.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
     
-    # Define a callback for the amcl pose
+    # amcl pose callback
     def amcl_callback(self, msg):
-        #print('amcl_callback!!!')
+        #print('\namcl_callback')
         self.amcl_pose = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
+        self.robot_position_map = msg.pose.pose.position
+        self.robot_orientation_map = msg.pose.pose.orientation
 
-    # Define a callback for the local costmap
+    # local costmap callback
     def local_costmap_callback(self, msg):
         print('\nlocal_costmap_callback')
 
@@ -289,155 +281,69 @@ class lime_rt_sub(object):
         try:
             # catch transform from /map to /odom and vice versa
             transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
-            #t = np.asarray([transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z])
-            #r = R.from_quat([transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w])
-            #r_ = np.asarray(r.as_matrix())
-
             transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
 
             self.tf_map_odom = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
             self.tf_odom_map = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
 
             # convert robot positions from /odom to /map
-            t_o_m = np.asarray([transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z])
+            #t_o_m = np.asarray([transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z])
             r_o_m = R.from_quat([transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w])
             r_o_m = np.asarray(r_o_m.as_matrix())
             r_o = R.from_quat([self.robot_orientation_odom.x,self.robot_orientation_odom.y,self.robot_orientation_odom.z,self.robot_orientation_odom.w])
             r_o = np.asarray(r_o.as_matrix())
 
             # position transformation
-            p = np.array([self.robot_position_odom.x, self.robot_position_odom.y, self.robot_position_odom.z])
-            pnew = p.dot(r_o_m) + t_o_m
-            self.robot_position_map.x = pnew[0]
-            self.robot_position_map.y = pnew[1]
-            self.robot_position_map.z = pnew[2]
-            
+            #p = np.array([self.robot_position_odom.x, self.robot_position_odom.y, self.robot_position_odom.z])
+            #pnew = p.dot(r_o_m) + t_o_m
+            #self.robot_position_map.x = pnew[0]
+            #self.robot_position_map.y = pnew[1]
+            #self.robot_position_map.z = pnew[2]
             # orientation transformation
-            r_m = r_o * r_o_m
-            self.robot_orientation_map = rotationMatrixToQuaternion(r_m) #tr.quaternion_from_matrix(r_m)
+            #r_m = r_o * r_o_m
+            #self.robot_orientation_map = rotationMatrixToQuaternion(r_m) #tr.quaternion_from_matrix(r_m)
                 
             # save costmap data
             self.local_costmap_origin_x = msg.info.origin.position.x
             self.local_costmap_origin_y = msg.info.origin.position.y
             self.local_costmap_resolution = msg.info.resolution
-            self.costmap_info = [self.local_costmap_resolution, msg.info.width, msg.info.height, self.local_costmap_origin_x, self.local_costmap_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
+            self.local_costmap_info = [self.local_costmap_resolution, msg.info.width, msg.info.height, self.local_costmap_origin_x, self.local_costmap_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
             # create np.array image object
-            self.image = np.asarray(msg.data)
-            self.image.resize((msg.info.height,msg.info.width))
+            self.local_costmap = np.asarray(msg.data)
+            self.local_costmap.resize((msg.info.height,msg.info.width))
 
-            if self.plot_costmaps == True:
-                start = time.time()
-
-                dirCurr = self.costmap_dir + '/' + str(self.counter_global)
-                try:
-                    os.mkdir(dirCurr)
-                except FileExistsError:
-                    pass
-                
-                self.image_99s_100s = copy.deepcopy(self.image)
-                self.image_99s_100s[self.image_99s_100s < 99] = 0        
-                #self.fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                self.ax.set_axis_off()
-                self.fig.add_axes(self.ax)
-                self.image_99s_100s = np.flip(self.image_99s_100s, 0)
-                self.ax.imshow(self.image_99s_100s.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
-                #self.fig.clf()
-                
-                self.image_original = copy.deepcopy(self.image)
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(ax)
-                self.image_original = np.flip(self.image_original, 0)
-                self.ax.imshow(self.image_original.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_original.png', transparent=False)
-                #self.fig.clf()
-                
-                self.image_100s = copy.deepcopy(self.image)
-                self.image_100s[self.image_100s != 100] = 0
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(ax)
-                self.image_100s = np.flip(self.image_100s, 0)
-                self.ax.imshow(self.image_100s.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
-                #self.fig.clf()
-                
-                self.image_99s = copy.deepcopy(self.image)
-                self.image_99s[self.image_99s != 99] = 0
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(self.ax)
-                self.image_99s = np.flip(self.image_99s, 0)
-                self.ax.imshow(self.image_99s.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
-                #self.fig.clf()
-                
-                self.image_less_than_99 = copy.deepcopy(self.image)
-                self.image_less_than_99[self.image_less_than_99 >= 99] = 0
-                #fig = plt.figure(frameon=False)
-                #w = 1.6 * 3
-                #h = 1.6 * 3
-                #self.fig.set_size_inches(w, h)
-                #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-                #ax.set_axis_off()
-                #self.fig.add_axes(self.ax)
-                self.image_less_than_99 = np.flip(self.image_less_than_99, 0)
-                self.ax.imshow(self.image_less_than_99.astype('float64'), aspect='auto')
-                self.fig.savefig(dirCurr + '/' + 'local_costmap_less_than_99.png', transparent=False)
-                self.fig.clf()
-                
-                end = time.time()
-                print('COSTMAPS PLOTTING TIME = ' + str(end-start) + ' seconds!!!')
+            if self.plot_costmaps_bool == True:
+                self.plot_costmaps()
                 
             # Turn inflated area to free space and 100s to 99s
-            self.image[self.image == 100] = 99
-            self.image[self.image <= 98] = 0
+            self.local_costmap[self.local_costmap == 100] = 99
+            self.local_costmap[self.local_costmap <= 98] = 0
 
             # Turn every local costmap entry from int to float, so the segmentation algorithm works okay
-            self.image = self.image * 1.0
+            self.local_costmap = self.local_costmap * 1.0
 
             # my change - to return grayscale to classifier_fn
-            self.fudged_image = self.image.copy()
+            self.fudged_image = self.local_costmap.copy()
             self.fudged_image[:] = 0 #hide_color = 0
 
             # find lc coordinates of robot's odometry coordinates 
             self.x_odom_index = round((self.odom_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
             self.y_odom_index = round((self.odom_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-            # find and save egments
-            self.segments = self.find_segments()
+            # find segments
+            self.find_segments()
 
             # create and save encoded perturbations
             self.create_data()
 
-            # set the local_costmap_empty var to False
-            self.local_costmap_empty = False
-
             # to explain from another callback function, track copies (faster changing vars), and current callback vars
             start = time.time()
             self.lime_rt_pub.explain(self.global_plan_copy, self.local_plan_xs_copy, self.local_plan_ys_copy, self.local_plan_copy, 
-            self.odom_copy, self.amcl_pose_copy, self.footprint_copy, self.robot_position_map_copy, self.robot_orientation_map_copy, self.costmap_info, 
-            self.segments, self.data, self.tf_map_odom, self.tf_odom_map, self.image, self.fudged_image)
+            self.odom_copy, self.amcl_pose_copy, self.footprint_copy, self.robot_position_map_copy, self.robot_orientation_map_copy, self.local_costmap_info, 
+            self.segments, self.data, self.tf_map_odom, self.tf_odom_map, self.local_costmap, self.fudged_image)
             end = time.time()
-            print('\n\nEXPLANATION TIME = ', end-start)
+            print('EXPLANATION TIME = ', 1000*(end-start))
 
             # increase the global counter
             self.counter_global += 1
@@ -446,13 +352,95 @@ class lime_rt_sub(object):
             print('exception = ', e)
             return
 
+    # plot costmaps
+    def plot_costmaps(self):
+        start = time.time()
+
+        dirCurr = self.costmap_dir + '/' + str(self.counter_global)
+        try:
+            os.mkdir(dirCurr)
+        except FileExistsError:
+            pass
+        
+        local_costmap_99s_100s = copy.deepcopy(self.local_costmap)
+        local_costmap_99s_100s[local_costmap_99s_100s < 99] = 0        
+        #self.fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        local_costmap_99s_100s = np.flip(local_costmap_99s_100s, 0)
+        self.ax.imshow(local_costmap_99s_100s.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
+        #self.fig.clf()
+        
+        local_costmap_original = copy.deepcopy(self.local_costmap)
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(ax)
+        local_costmap_original = np.flip(local_costmap_original, 0)
+        self.ax.imshow(local_costmap_original.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_original.png', transparent=False)
+        #self.fig.clf()
+        
+        local_costmap_100s = copy.deepcopy(self.local_costmap)
+        local_costmap_100s[local_costmap_100s != 100] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(ax)
+        local_costmap_100s = np.flip(local_costmap_100s, 0)
+        self.ax.imshow(local_costmap_100s.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
+        #self.fig.clf()
+        
+        local_costmap_99s = copy.deepcopy(self.local_costmap)
+        local_costmap_99s[local_costmap_99s != 99] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        local_costmap_99s = np.flip(local_costmap_99s, 0)
+        self.ax.imshow(local_costmap_99s.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
+        #self.fig.clf()
+        
+        local_costmap_less_than_99 = copy.deepcopy(self.local_costmap)
+        local_costmap_less_than_99[local_costmap_less_than_99 >= 99] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        local_costmap_less_than_99 = np.flip(local_costmap_less_than_99, 0)
+        self.ax.imshow(local_costmap_less_than_99.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_less_than_99.png', transparent=False)
+        self.fig.clf()
+        
+        end = time.time()
+        print('COSTMAPS PLOTTING TIME = ', 1000*(end-start))
+
     # find segments -- do segmentation
     def find_segments(self):
         ###### SEGMENTATION PART ######
         start = time.time()
 
         # find image_rgb
-        image_rgb = gray2rgb(self.image)
+        image_rgb = gray2rgb(self.local_costmap)
 
         segment_start = time.time()
 
@@ -461,9 +449,9 @@ class lime_rt_sub(object):
                         #slic(image, n_segments=100, compactness=10.0, max_iter=10, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False) #0.14.2
 
         segment_end = time.time()        
-        print('SLIC runtime = ', segment_end - segment_start)
+        print('SLIC runtime = ', 1000*(segment_end - segment_start))
         
-        self.segments = np.zeros(self.image.shape, np.uint8)
+        self.segments = np.zeros(self.local_costmap.shape, np.uint8)
         
         # make one free space segment
         ctr = 0
@@ -473,7 +461,7 @@ class lime_rt_sub(object):
         # add obstacle segments
         num_of_obstacles = 0        
         for i in np.unique(segments_slic):
-            temp = self.image[segments_slic == i]
+            temp = self.local_costmap[segments_slic == i]
             count_of_99_s = np.count_nonzero(temp != 0) #np.count_nonzero(temp == 99)
             if count_of_99_s > 0.95 * temp.shape[0]: #or np.all(image[segments_slic == i] == 99) 
                 self.segments[segments_slic == i] = ctr
@@ -482,7 +470,7 @@ class lime_rt_sub(object):
         #print('num_of_obstacles: ', num_of_obstacles)
 
         end = time.time()
-        print('segmentation_time = ' + str(end-start) + ' seconds!')
+        print('segmentation_time = ', 1000*(end-start))
 
         # find centroids_in_LC of the objects' areas
         lc_regions = regionprops(self.segments.astype(int))
@@ -494,63 +482,67 @@ class lime_rt_sub(object):
             centroids_segments.append([v,cx,cy])
 
         # plot segments
-        if self.plot_segments == True:
-            start = time.time()
-
-            dirCurr = self.segmentation_dir + '/' + str(self.counter_global)            
-            try:
-                os.mkdir(dirCurr)
-            except FileExistsError:
-                pass
-
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
-            segs = np.flip(self.segments, axis=0)
-            self.ax.imshow(segs.astype('float64'), aspect='auto')
-
-            self.fig.savefig(dirCurr + '/' + 'segments_without_labels_' + str(self.counter_global) + '.png', transparent=False)
-            #self.fig.clf()
-
-
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            #self.ax.set_axis_off()
-            #self.fig.add_axes(self.ax)
-            segs = np.flip(self.segments, axis=0)
-            self.ax.imshow(segs.astype('float64'), aspect='auto')
-
-            for i in range(0, len(centroids_segments)):
-                self.ax.scatter(centroids_segments[i][1], self.costmap_size - centroids_segments[i][2], c='white', marker='o')   
-                self.ax.text(centroids_segments[i][1], self.costmap_size - centroids_segments[i][2], centroids_segments[i][0], c='white')
-
-            self.fig.savefig(dirCurr + '/' + 'segments_with_labels_' + str(self.counter_global) + '.png', transparent=False)
-            self.fig.clf()
-            
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
-            img = np.flip(self.image, axis=0)
-            self.ax.imshow(img.astype('float64'), aspect='auto')
-
-            self.fig.savefig(dirCurr + '/' + 'local_costmap_' + str(self.counter_global) + '.png', transparent=False)
-            self.fig.clf()
-
-            end = time.time()
-            print('SEGMENTS PLOTTING TIME = ' + str(end-start) + ' seconds!!!')
+        if self.plot_segments_bool == True:
+            self.plot_segments()
 
         return self.segments
+
+    # plot segments
+    def plot_segments(self):
+        start = time.time()
+
+        dirCurr = self.segmentation_dir + '/' + str(self.counter_global)            
+        try:
+            os.mkdir(dirCurr)
+        except FileExistsError:
+            pass
+
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        segs = np.flip(self.segments, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        self.fig.savefig(dirCurr + '/' + 'segments_without_labels_' + str(self.counter_global) + '.png', transparent=False)
+        #self.fig.clf()
+
+
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #self.ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        segs = np.flip(self.segments, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        for i in range(0, len(centroids_segments)):
+            self.ax.scatter(centroids_segments[i][1], self.local_costmap_size - centroids_segments[i][2], c='white', marker='o')   
+            self.ax.text(centroids_segments[i][1], self.local_costmap_size - centroids_segments[i][2], centroids_segments[i][0], c='white')
+
+        self.fig.savefig(dirCurr + '/' + 'segments_with_labels_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.clf()
+        
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        img = np.flip(self.local_costmap, axis=0)
+        self.ax.imshow(img.astype('float64'), aspect='auto')
+
+        self.fig.savefig(dirCurr + '/' + 'local_costmap_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.clf()
+
+        end = time.time()
+        print('SEGMENTS PLOTTING TIME = ' + str(end-start) + ' seconds!!!')
 
     # create encoded perturbations
     def create_data(self):
@@ -562,8 +554,6 @@ class lime_rt_sub(object):
             lst.append([1]*self.n_features)
             lst[i][self.n_features-i] = 0    
         self.data = np.array(lst).reshape((self.n_samples, self.n_features))
-
-
 
 
 class LimeBase(object):
@@ -720,7 +710,7 @@ class LimeBase(object):
 
 class ImageExplanation(object):
     def __init__(self, image, segments):
-        self.image = image
+        self.local_costmap = image
         self.segments = segments
         self.intercept = {}
         self.local_exp = {}
@@ -742,18 +732,18 @@ class ImageExplanation(object):
         
         exp = self.local_exp[label]
 
-        temp = np.zeros(self.image.shape)
+        temp = np.zeros(self.local_costmap.shape)
 
-        w_sum = 0.0
-        w_s = []
+        w_sum_abs = 0.0
+        w_s_abs = []
         for f, w in exp:
-            w_sum += abs(w)
-            w_s.append(abs(w))
-        max_w = max(w_s)
-        if max_w == 0:
+            w_sum_abs += abs(w)
+            w_s_abs.append(abs(w))
+        max_w_abs = max(w_s_abs)
+        if max_w_abs == 0:
             self.all_weights_zero = True
-            temp[self.image == 0] = self.free_space_shade
-            temp[self.image != 0] = 0.0
+            temp[self.local_costmap == 0] = self.free_space_shade
+            temp[self.local_costmap != 0] = 0.0
             return temp, exp
 
         segments_labels = np.unique(self.segments)
@@ -784,9 +774,9 @@ class ImageExplanation(object):
                     if c == 1:
                         temp[self.segments == f, 0] = 0.0
                         if self.use_maximum_weight == True:
-                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                         else:
-                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
                         temp[self.segments == f, 2] = 0.0
                     elif c == 0:
                         temp[self.segments == f, 0] = 0.0
@@ -794,9 +784,9 @@ class ImageExplanation(object):
                         temp[self.segments == f, 2] = 0.0
                     elif c == -1:
                         if self.use_maximum_weight == True:
-                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
+                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                         else:
-                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum 
+                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
                         temp[self.segments == f, 1] = 0.0
                         temp[self.segments == f, 2] = 0.0
                                         
@@ -805,17 +795,19 @@ class ImageExplanation(object):
 class lime_rt_pub(object):
     # Constructor
     def __init__(self):
+        # global counter
         self.counter_global = 0
 
+        # publishers
         self.publish_explanation_coeffs = False  
-        self.publish_explanation_image = False
+        self.publish_explanation_image = True
 
+        # plotting
         self.plot_explanation = True
         self.plot_perturbations = True 
         self.plot_classification = True
 
-        self.hard_obstacle = 99
-        
+        # directories        
         self.dir_curr = os.getcwd()
 
         self.dir_main = 'explanation_data'
@@ -851,12 +843,10 @@ class lime_rt_pub(object):
             except FileExistsError:
                 pass
 
-        # costmap variables
+        # local costmap variables
         self.labels = np.array([]) 
         self.distances = np.array([])
-        self.costmap_size = 160
-        self.pd_image_size = (self.costmap_size,self.costmap_size) 
-        self.local_costmap_empty = True
+        self.local_costmap_size = 160
    
         # deviation
         self.original_deviation = 0
@@ -924,8 +914,8 @@ class lime_rt_pub(object):
             self.global_plan_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/global_plan.csv', index=False, header=False)
 
             # Save costmap_info instance to file
-            self.costmap_info_pd = pd.DataFrame(self.costmap_info).transpose()
-            self.costmap_info_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
+            self.local_costmap_info_pd = pd.DataFrame(self.local_costmap_info).transpose()
+            self.local_costmap_info_pd.to_csv('~/amar_ws/src/teb_local_planner/src/Data/costmap_info.csv', index=False, header=False)
 
             # Save amcl_pose instance to file
             self.amcl_pose_pd = pd.DataFrame(self.amcl_pose).transpose()
@@ -954,7 +944,7 @@ class lime_rt_pub(object):
         #print(self.local_plan_original.shape)
         #print(self.local_plan_original)
         
-        #print('\nself.costmap_info = ', self.costmap_info)
+        #print('\nself.local_costmap_info = ', self.local_costmap_info)
         #print('\nself.odom = ', self.odom)
         #print('\nself.global_plan = ', self.global_plan)
 
@@ -968,15 +958,15 @@ class lime_rt_pub(object):
             self.r_mo = np.asarray(self.r_mo.as_matrix())    
 
             # save costmap info to class variables
-            self.local_costmap_origin_x = self.costmap_info[3]
+            self.local_costmap_origin_x = self.local_costmap_info[3]
             #print('self.local_costmap_origin_x: ', self.local_costmap_origin_x)
-            self.local_costmap_origin_y = self.costmap_info[4]
+            self.local_costmap_origin_y = self.local_costmap_info[4]
             #print('self.local_costmap_origin_y: ', self.local_costmap_origin_y)
-            self.local_costmap_resolution = self.costmap_info[0]
+            self.local_costmap_resolution = self.local_costmap_info[0]
             #print('self.local_costmap_resolution: ', self.local_costmap_resolution)
-            self.localCostmapHeight = self.costmap_info[2]
+            self.localCostmapHeight = self.local_costmap_info[2]
             #print('self.localCostmapHeight: ', self.localCostmapHeight)
-            self.localCostmapWidth = self.costmap_info[1]
+            self.localCostmapWidth = self.local_costmap_info[1]
             #print('self.localCostmapWidth: ', self.localCostmapWidth)
 
             # save robot odometry location to class variables
@@ -1015,7 +1005,7 @@ class lime_rt_pub(object):
                 x_temp = int((self.global_plan[i][0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
                 y_temp = int((self.global_plan[i][1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                     self.transformed_plan_xs.append(x_temp)
                     self.transformed_plan_ys.append(y_temp)
         
@@ -1046,7 +1036,7 @@ class lime_rt_pub(object):
 
             ctr = 0
             for row in rows:
-                temp = copy.deepcopy(self.image)
+                temp = copy.deepcopy(self.local_costmap)
                 zeros = np.where(row == 0)[0]
                 mask = np.zeros(self.segments.shape).astype(bool)
                 for z in zeros:
@@ -1099,7 +1089,7 @@ class lime_rt_pub(object):
             x_temp = int((transformed_plan[i, 0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
             y_temp = int((transformed_plan[i, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+            if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                 transformed_plan_xs.append(x_temp)
                 transformed_plan_ys.append(y_temp)
 
@@ -1114,7 +1104,7 @@ class lime_rt_pub(object):
                     x_temp = int((local_plans_local.iloc[j, 0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
                     y_temp = int((local_plans_local.iloc[j, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-                    if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                    if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                         local_plan_x_list.append(x_temp)
                         local_plan_y_list.append(y_temp)
 
@@ -1274,16 +1264,16 @@ class lime_rt_pub(object):
         self.local_plan_original = local_plan_tmp_copy
         self.amcl_pose = amcl_pose_tmp_copy
         self.odom = odom_tmp_copy
-        self.costmap_info = costmap_info_tmp
+        self.local_costmap_info = costmap_info_tmp
         self.segments = segments
         self.data = data
         self.tf_map_odom = tf_map_odom_tmp
         self.tf_odom_map = tf_odom_map_tmp
-        self.image = image
+        self.local_costmap = image
         self.fudged_image = fudged_image
         
         # turn grayscale image to rgb image
-        self.image_rgb = gray2rgb(self.image * 1.0)
+        self.local_costmap_rgb = gray2rgb(self.local_costmap * 1.0)
         
         # saving important data to class variables
         if self.saveImportantData2ClassVars() == False:
@@ -1326,7 +1316,7 @@ class lime_rt_pub(object):
         try:
             start = time.time()
             # find explanation
-            ret_exp = ImageExplanation(self.image_rgb, self.segments)
+            ret_exp = ImageExplanation(self.local_costmap_rgb, self.segments)
             if top_labels:
                 top = np.argsort(self.labels[0])[-top_labels:]
                 ret_exp.top_labels = list(top)
@@ -1390,8 +1380,8 @@ class lime_rt_pub(object):
                 ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
                 ax.imshow(output.astype('float64'), aspect='auto')
                 for i in range(0, len(centroids_for_plot)):
-                    ax.scatter(centroids_for_plot[i][1], self.costmap_size - centroids_for_plot[i][2], c='white', marker='o')   
-                    ax.text(centroids_for_plot[i][1], self.costmap_size - centroids_for_plot[i][2], centroids_for_plot[i][0], c='white')
+                    ax.scatter(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], c='white', marker='o')   
+                    ax.text(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], centroids_for_plot[i][0], c='white')
 
                 fig.savefig(dirCurr + '/explanation_' + '.png', transparent=False)
                 fig.clf()
