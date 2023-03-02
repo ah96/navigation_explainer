@@ -343,7 +343,7 @@ class lime_rt_sub(object):
             self.odom_copy, self.amcl_pose_copy, self.footprint_copy, self.robot_position_map_copy, self.robot_orientation_map_copy, self.local_costmap_info, 
             self.segments, self.data, self.tf_map_odom, self.tf_odom_map, self.local_costmap, self.fudged_image)
             end = time.time()
-            print('EXPLANATION TIME = ', 1000*(end-start))
+            print('explanation time = ', round(end-start,3))
 
             # increase the global counter
             self.counter_global += 1
@@ -432,7 +432,7 @@ class lime_rt_sub(object):
         self.fig.clf()
         
         end = time.time()
-        print('COSTMAPS PLOTTING TIME = ', 1000*(end-start))
+        print('costmaps plot runtime = ', round(end-start, 3))
 
     # find segments -- do segmentation
     def find_segments(self):
@@ -449,7 +449,7 @@ class lime_rt_sub(object):
                         #slic(image, n_segments=100, compactness=10.0, max_iter=10, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False) #0.14.2
 
         segment_end = time.time()        
-        print('SLIC runtime = ', 1000*(segment_end - segment_start))
+        print('SLIC runtime = ', round(segment_end - segment_start,3))
         
         self.segments = np.zeros(self.local_costmap.shape, np.uint8)
         
@@ -470,16 +470,16 @@ class lime_rt_sub(object):
         #print('num_of_obstacles: ', num_of_obstacles)
 
         end = time.time()
-        print('segmentation_time = ', 1000*(end-start))
+        print('segmentation runtime = ', (round(end-start,3)))
 
         # find centroids_in_LC of the objects' areas
         lc_regions = regionprops(self.segments.astype(int))
         #print('\nlen(lc_regions) = ', len(lc_regions))
-        centroids_segments = []
+        self.centroids_segments = []
         for lc_region in lc_regions:
             v = lc_region.label
             cy, cx = lc_region.centroid
-            centroids_segments.append([v,cx,cy])
+            self.centroids_segments.append([v,cx,cy])
 
         # plot segments
         if self.plot_segments_bool == True:
@@ -507,9 +507,9 @@ class lime_rt_sub(object):
         segs = np.flip(self.segments, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        self.fig.savefig(dirCurr + '/' + 'segments_without_labels_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'segments_without_labels.png', transparent=False)
         #self.fig.clf()
-
+        pd.DataFrame(segs).to_csv(dirCurr + '/segments_without_labels.csv', index=False)#, header=False)
 
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -521,12 +521,15 @@ class lime_rt_sub(object):
         segs = np.flip(self.segments, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        for i in range(0, len(centroids_segments)):
-            self.ax.scatter(centroids_segments[i][1], self.local_costmap_size - centroids_segments[i][2], c='white', marker='o')   
-            self.ax.text(centroids_segments[i][1], self.local_costmap_size - centroids_segments[i][2], centroids_segments[i][0], c='white')
+        if len(self.centroids_segments) > 0:
+            for i in range(0, len(self.centroids_segments)):
+                self.ax.scatter(self.centroids_segments[i][1], self.local_costmap_size - self.centroids_segments[i][2], c='white', marker='o')   
+                self.ax.text(self.centroids_segments[i][1], self.local_costmap_size - self.centroids_segments[i][2], self.centroids_segments[i][0], c='white')
+            pd.DataFrame(self.centroids_segments).to_csv(dirCurr + '/centroids_segments.csv', index=False)#, header=False)
 
-        self.fig.savefig(dirCurr + '/' + 'segments_with_labels_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'segments_with_labels.png', transparent=False)
         self.fig.clf()
+        pd.DataFrame(segs).to_csv(dirCurr + '/segments_with_labels.csv', index=False)#, header=False)
         
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -538,11 +541,11 @@ class lime_rt_sub(object):
         img = np.flip(self.local_costmap, axis=0)
         self.ax.imshow(img.astype('float64'), aspect='auto')
 
-        self.fig.savefig(dirCurr + '/' + 'local_costmap_' + str(self.counter_global) + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'local_costmap.png', transparent=False)
         self.fig.clf()
 
         end = time.time()
-        print('SEGMENTS PLOTTING TIME = ' + str(end-start) + ' seconds!!!')
+        print('segments plot runtime = ' + str(round(end-start,3)))
 
     # create encoded perturbations
     def create_data(self):
@@ -803,9 +806,9 @@ class lime_rt_pub(object):
         self.publish_explanation_image = True
 
         # plotting
-        self.plot_explanation = True
-        self.plot_perturbations = True 
-        self.plot_classification = True
+        self.plot_explanation = False
+        self.plot_perturbations = False 
+        self.plot_classification = False
 
         # directories        
         self.dir_curr = os.getcwd()
@@ -1143,7 +1146,7 @@ class lime_rt_pub(object):
         elif sampled_instance_shape_len == 2:
             np.savetxt(self.dir_curr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instance, delimiter=",")
         end = time.time()
-        print('DATA PREP TIME = ', end-start)
+        print('classifier_fn: data preparation runtime = ', round(end-start,3))
 
         # calling ROS C++ node
         #print('\nC++ node started')
@@ -1161,7 +1164,7 @@ class lime_rt_pub(object):
         time.sleep(0.30)
         
         end = time.time()
-        print('TEB CALL TIME = ', end-start)
+        print('classifier_fn: local planner time = ', round(end-start,3))
 
         #print('\nC++ node ended')
 
@@ -1186,7 +1189,7 @@ class lime_rt_pub(object):
         #transformed_plan.to_csv(self.dir_curr + '/' + self.dirData + '/transformed_plan.csv', index=False)#, header=False)
        
         end = time.time()
-        print('RESULTS LOADING TIME = ', end-start)
+        print('classifier_fn: load results runtime = ', round(end-start,2))
 
 
         local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
@@ -1236,7 +1239,7 @@ class lime_rt_pub(object):
 
             local_plan_deviation.iloc[i, 0] = sum(devs)
         end = time.time()
-        print('TARGET CALC TIME = ', end-start)
+        print('classifier_fn: target calculation runtime = ', round(end-start,3))
         
         self.original_deviation = local_plan_deviation.iloc[0, 0]
         #print('\noriginal_deviation = ', self.original_deviation)
@@ -1293,7 +1296,7 @@ class lime_rt_pub(object):
             print('error while creating labels')
             return
         end = time.time()
-        print('\nCALLING TEB TIME = ', end-start)
+        print('label creation runtime = ', round(end-start,2))
         print('labels: ', self.labels)
 
         # find distances
@@ -1306,7 +1309,7 @@ class lime_rt_pub(object):
         ).ravel()
         #print('self.distances: ', self.distances)
 
-        
+        '''
         # Explanation variables
         top_labels=1 #10
         model_regressor = None
@@ -1432,6 +1435,7 @@ class lime_rt_pub(object):
             print('Exception: ', e)
             #print('Exception - explanation is skipped!!!')
             return
+        '''
         
 
 
