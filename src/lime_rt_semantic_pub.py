@@ -310,8 +310,8 @@ class lime_rt_pub(object):
 
         self.counter_global = 0
 
-        self.plot_perturbations = True 
-        self.plot_classification = False
+        self.plot_perturbations = False 
+        self.plot_classification = True
         self.plot_explanation = False
 
         self.hard_obstacle = 99

@@ -102,8 +102,8 @@ class lime_rt_sub(object):
         self.lime_rt_pub = lime_rt_pub()
 
         # plotting
-        self.plot_costmaps_bool = True
-        self.plot_segments_bool = True
+        self.plot_costmaps_bool = False
+        self.plot_segments_bool = False
 
         # declare transformation buffer
         self.tfBuffer = tf2_ros.Buffer()
@@ -806,9 +806,9 @@ class lime_rt_pub(object):
         self.publish_explanation_image = True
 
         # plotting
-        self.plot_explanation = False
-        self.plot_perturbations = False 
-        self.plot_classification = False
+        self.plot_explanation = True
+        self.plot_perturbations = True 
+        self.plot_classifier = True
 
         # directories        
         self.dir_curr = os.getcwd()
@@ -839,7 +839,7 @@ class lime_rt_pub(object):
             except FileExistsError:
                 pass
         
-        if self.plot_classification == True:
+        if self.plot_classifier == True:
             self.classifier_dir = self.dir_main + '/classifier_images'
             try:
                 os.mkdir(self.classifier_dir)
@@ -1073,7 +1073,7 @@ class lime_rt_pub(object):
             self.labels = np.array(self.labels)    
 
         except Exception as e:
-            print('e: ', e)
+            print('create_labels exception: ', e)
             return False
 
         return True   
@@ -1093,7 +1093,7 @@ class lime_rt_pub(object):
             y_temp = int((transformed_plan[i, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
             if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
-                transformed_plan_xs.append(x_temp)
+                transformed_plan_xs.append(self.local_costmap_size - x_temp)
                 transformed_plan_ys.append(y_temp)
 
         for ctr in range(0, sample_size):
@@ -1108,7 +1108,7 @@ class lime_rt_pub(object):
                     y_temp = int((local_plans_local.iloc[j, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
                     if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
-                        local_plan_x_list.append(x_temp)
+                        local_plan_x_list.append(self.local_costmap_size - x_temp)
                         local_plan_y_list.append(y_temp)
 
             fig = plt.figure(frameon=True)
@@ -1121,8 +1121,8 @@ class lime_rt_pub(object):
             ax.imshow(np.flipud(sampled_instance[ctr]).astype(np.uint8))
             plt.scatter(transformed_plan_xs, transformed_plan_ys, c='blue', marker='x')
             plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
-            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-            ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
+            ax.scatter([self.local_costmap_size - self.x_odom_index[0]], self.y_odom_index, c='white', marker='o')
+            #ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
             fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png')
             fig.clf()
 
@@ -1194,7 +1194,7 @@ class lime_rt_pub(object):
 
         local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
-        if self.plot_classification == True:
+        if self.plot_classifier == True:
             self.classifier_fn_plot(transformed_plan, local_plans, sampled_instance, sample_size)
 
 
@@ -1293,7 +1293,7 @@ class lime_rt_pub(object):
         self.labels=(0,)
         self.top = self.labels
         if self.create_labels(self.classifier_fn) == False:
-            print('error while creating labels')
+            print('\nError while creating labels!')
             return
         end = time.time()
         print('label creation runtime = ', round(end-start,2))
@@ -1308,6 +1308,8 @@ class lime_rt_pub(object):
             metric=distance_metric
         ).ravel()
         #print('self.distances: ', self.distances)
+
+        self.counter_global += 1
 
         '''
         # Explanation variables
