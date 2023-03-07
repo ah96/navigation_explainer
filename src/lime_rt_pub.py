@@ -656,10 +656,11 @@ class lime_rt_pub(object):
             self.local_costmap_size = self.local_costmap_info[0, 1]
 
             self.odom = np.array(self.odom)
+            self.amcl_pose = np.array(self.amcl_pose)
             # save robot odometry location to class variables
-            self.odom_x = self.odom[0, 0]
+            self.odom_x = self.amcl_pose[0, 0]
             # print('self.odom_x: ', self.odom_x)
-            self.odom_y = self.odom[0, 1]
+            self.odom_y = self.amcl_pose[0, 1]
             # print('self.odom_y: ', self.odom_y)
 
             # save indices of robot's odometry location in local costmap to class variables
@@ -685,8 +686,8 @@ class lime_rt_pub(object):
 
             #'''
             # save robot odometry orientation to class variables
-            self.odom_z = self.odom[0, 2]
-            self.odom_w = self.odom[0, 3]
+            self.odom_z = self.amcl_pose[0, 2]
+            self.odom_w = self.amcl_pose[0, 3]
             # calculate Euler angles based on orientation quaternion
             [self.yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
             
@@ -938,14 +939,14 @@ class lime_rt_pub(object):
                 fig.add_axes(ax)
 
                 ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='x')
-                #ax.scatter(self.local_plan_xs_fixed, self.local_plan_ys_fixed, c='yellow', marker='o')
+                ax.scatter(self.local_plan_xs.tolist(), self.local_plan_ys.tolist(), c='yellow', marker='o')
                 ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
                 ax.text(self.x_odom_index[0], self.y_odom_index[0], 'robot', c='white')
                 ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
-                ax.imshow(np.flipud(output).astype('float64'), aspect='auto')
+                ax.imshow(output.astype('float64'), aspect='auto')
                 for i in range(0, len(centroids_for_plot)):
-                    ax.scatter(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], c='white', marker='o')   
-                    ax.text(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], centroids_for_plot[i][0], c='white')
+                    ax.scatter(centroids_for_plot[i][1], centroids_for_plot[i][2], c='white', marker='o')   
+                    ax.text(centroids_for_plot[i][1], centroids_for_plot[i][2], centroids_for_plot[i][0], c='white')
 
                 fig.savefig(dirCurr + '/explanation.png', transparent=False)
                 fig.clf()
@@ -1048,3 +1049,19 @@ while not rospy.is_shutdown():
     with open('TIME.csv','a') as file:
         file.write(str(1000 * (end-start)))
         file.write('\n')
+
+
+            self.local_plan_xs = [] 
+            self.local_plan_ys = [] 
+            self.local_plan = []
+            
+            # transform local plan coordinates to pixel positions in the local costmap
+            for i in range(0,len(msg.poses)):
+                # 5 is a random ID number
+                self.local_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+
+                x_temp = int((msg.poses[i].pose.position.x - self.local_costmap_origin_x) / self.local_costmap_resolution)
+                y_temp = int((msg.poses[i].pose.position.y - self.local_costmap_origin_y) / self.local_costmap_resolution)
+                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                    self.local_plan_xs.append(x_temp)
+                    self.local_plan_ys.append(y_temp)

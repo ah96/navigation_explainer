@@ -54,8 +54,6 @@ class lime_rt_sub(object):
 
         # plans' variables
         self.global_plan = []
-        self.local_plan_xs = [] 
-        self.local_plan_ys = []
         self.local_plan = [] 
 
         # tf variables
@@ -69,9 +67,9 @@ class lime_rt_sub(object):
         self.amcl_pose = [] 
         self.odom = []
   
-        # costmap variables
+        # local costmap variables
         self.local_costmap_info = [] 
-        self.costmap_size = 160
+        self.local_costmap_size = 160
         self.local_costmap_origin_x = 0 
         self.local_costmap_origin_y = 0 
         self.local_costmap_resolution = 0
@@ -87,7 +85,7 @@ class lime_rt_sub(object):
 
     # define subscribers
     def main_(self):
-        if self.plot_costmaps_bool == True or self.plot_segments_bool == True:
+        if self.plot_costmaps_bool==True or self.plot_segments_bool==True:
             self.fig = plt.figure(frameon=False)
             self.w = 1.6 * 3
             self.h = 1.6 * 3
@@ -134,6 +132,7 @@ class lime_rt_sub(object):
         self.ax.set_axis_off()
         self.fig.add_axes(self.ax)
         segs = np.flip(self.segments, axis=0)
+        #segs = self.segments
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
         self.fig.savefig(dirCurr + '/' + 'segments_without_labels.png', transparent=False)
@@ -148,17 +147,27 @@ class lime_rt_sub(object):
         #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         #self.ax.set_axis_off()
         #self.fig.add_axes(self.ax)
-        segs = np.flip(self.segments, axis=0)
+        #segs = np.flip(self.segments, axis=0)
+        #segs = self.segments
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        for i in range(0, len(self.centroids_segments)):
-            self.ax.scatter(self.centroids_segments[i][1], self.costmap_size - self.centroids_segments[i][2], c='white', marker='o')   
-            self.ax.text(self.centroids_segments[i][1], self.costmap_size - self.centroids_segments[i][2], self.centroids_segments[i][0], c='white')
+        # find centroids_in_LC of the objects' areas
+        lc_regions = regionprops(segs.astype(int))
+        #print('\nlen(lc_regions) = ', len(lc_regions))
+        self.centroids_segments = []
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            self.centroids_segments.append([v,cx,cy])
 
+        for i in range(0, len(self.centroids_segments)):
+            self.ax.scatter(self.centroids_segments[i][1], self.centroids_segments[i][2], c='white', marker='o')   
+            self.ax.text(self.centroids_segments[i][1], self.centroids_segments[i][2], self.centroids_segments[i][0], c='white')
+
+        #plt.gca().invert_yaxis()
         self.fig.savefig(dirCurr + '/' + 'segments_with_labels.png', transparent=False)
         self.fig.clf()
-        pd.DataFrame(segs).to_csv(dirCurr + '/segments_with_labels.csv', index=False)#, header=False)
-        pd.DataFrame(segs).to_csv(dirCurr + '/centroids_segments.csv', index=False)#, header=False)
+        pd.DataFrame(self.centroids_segments).to_csv(dirCurr + '/centroids_segments.csv', index=False)#, header=False)
 
 
         #fig = plt.figure(frameon=False)
@@ -169,8 +178,9 @@ class lime_rt_sub(object):
         self.ax.set_axis_off()
         self.fig.add_axes(self.ax)
         img = np.flip(self.local_costmap, axis=0)
+        #img = self.local_costmap
         self.ax.imshow(img.astype('float64'), aspect='auto')
-
+        #plt.gca().invert_yaxis()
         self.fig.savefig(dirCurr + '/' + 'local_costmap.png', transparent=False)
         self.fig.clf()
         pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
@@ -208,15 +218,6 @@ class lime_rt_sub(object):
                 ctr = ctr + 1
                 num_of_obstacles += 1
         #print('num_of_obstacles: ', num_of_obstacles)
-
-        # find centroids_in_LC of the objects' areas
-        lc_regions = regionprops(self.segments.astype(int))
-        #print('\nlen(lc_regions) = ', len(lc_regions))
-        self.centroids_segments = []
-        for lc_region in lc_regions:
-            v = lc_region.label
-            cy, cx = lc_region.centroid
-            self.centroids_segments.append([v,cx,cy])
         
         # plot segments
         if self.plot_segments_bool == True:
@@ -325,8 +326,8 @@ class lime_rt_sub(object):
             # catch transform from /map to /odom and vice versa
             transf = self.tfBuffer.lookup_transform('map', 'odom', rospy.Time())
             transf_ = self.tfBuffer.lookup_transform('odom', 'map', rospy.Time())
-            self.tf_odom_map = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
             self.tf_map_odom = [transf.transform.translation.x,transf.transform.translation.y,transf.transform.translation.z,transf.transform.rotation.x,transf.transform.rotation.y,transf.transform.rotation.z,transf.transform.rotation.w]
+            self.tf_odom_map = [transf_.transform.translation.x,transf_.transform.translation.y,transf_.transform.translation.z,transf_.transform.rotation.x,transf_.transform.rotation.y,transf_.transform.rotation.z,transf_.transform.rotation.w]
          
             # save tf 
             pd.DataFrame(self.tf_odom_map).to_csv(self.dir_curr + '/' + self.dir_data + '/tf_odom_map.csv', index=False)#, header=False)
@@ -354,8 +355,9 @@ class lime_rt_sub(object):
             self.local_costmap = self.local_costmap * 1.0
 
             # my change - to return grayscale to classifier_fn
-            self.fudged_image = self.local_costmap.copy()
-            self.fudged_image[:] = 0 #hide_color = 0
+            #self.fudged_image = self.local_costmap.copy()
+            #self.fudged_image[:] = 0 #hide_color = 0
+            self.fudged_image = np.zeros((msg.info.height,msg.info.width))
 
             # find segments
             self.find_segments()
@@ -379,34 +381,28 @@ class lime_rt_sub(object):
         
     # global plan callback
     def global_plan_callback(self, msg):
-        self.global_plan = []
-        
-        for i in range(0,len(msg.poses)):
-            self.global_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
+        try:
+            self.global_plan = []
+            
+            for i in range(0,len(msg.poses)):
+                # 5 is a random ID number (needed for the local planner)
+                self.global_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
 
-        pd.DataFrame(self.global_plan).to_csv(self.dir_curr + '/' + self.dir_data + '/global_plan.csv', index=False)#, header=False)
+            pd.DataFrame(self.global_plan).to_csv(self.dir_curr + '/' + self.dir_data + '/global_plan.csv', index=False)#, header=False)
+
+        except:
+            pass
         
     # local plan callback
     def local_plan_callback(self, msg):
         try:        
-            self.local_plan_xs = [] 
-            self.local_plan_ys = [] 
             self.local_plan = []
-            
-            # transform local plan coordinates to pixel positions in the local costmap
+
             for i in range(0,len(msg.poses)):
-                # 5 is a random ID number
+                # 5 is a random ID number (needed for the local planner)
                 self.local_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
 
-                x_temp = int((msg.poses[i].pose.position.x - self.local_costmap_origin_x) / self.local_costmap_resolution)
-                y_temp = int((msg.poses[i].pose.position.y - self.local_costmap_origin_y) / self.local_costmap_resolution)
-                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                    self.local_plan_xs.append(x_temp)
-                    self.local_plan_ys.append(y_temp)
-
             # save data to the .csv files
-            pd.DataFrame(self.local_plan_xs).to_csv(self.dir_curr + '/' + self.dir_data + '/local_plan_xs.csv', index=False)#, header=False)
-            pd.DataFrame(self.local_plan_ys).to_csv(self.dir_curr + '/' + self.dir_data + '/local_plan_ys.csv', index=False)#, header=False)
             pd.DataFrame(self.local_plan).to_csv(self.dir_curr + '/' + self.dir_data + '/local_plan.csv', index=False)#, header=False)
             pd.DataFrame(self.odom).to_csv(self.dir_curr + '/' + self.dir_data + '/odom.csv', index=False)#, header=False)
         
