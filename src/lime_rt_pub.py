@@ -25,6 +25,36 @@ from std_msgs.msg import Float32MultiArray
 import scipy as sp
 import tf2_ros
 import time
+from matplotlib import pyplot as plt
+from skimage.measure import regionprops
+from scipy.spatial.transform import Rotation as R
+
+# convert orientation quaternion to euler angles
+def quaternion_to_euler(x, y, z, w):
+    # roll (x-axis rotation)
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    # pitch (y-axis rotation)
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+
+    # yaw (z-axis rotation)
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return [yaw, pitch, roll]
+# convert euler angles to orientation quaternion
+def euler_to_quaternion(roll, pitch, yaw):
+  qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+  qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+  qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+  return Quaternion(qx, qy, qz, qw)
 
 
 class LimeBase(object):
@@ -192,10 +222,9 @@ class ImageExplanation(object):
         self.use_maximum_weight = True
         self.all_weights_zero = False
 
-
         self.val_low = 0.0
-        self.val_high = 255.0
-        self.free_space_shade = 180
+        self.val_high = 1.0
+        self.free_space_shade = 0.7
 
     def get_image_and_mask(self, segments, label):
 
@@ -267,15 +296,57 @@ class ImageExplanation(object):
 class lime_rt_pub(object):
     # Constructor
     def __init__(self):
-        # bool variables
+        # global counter
+        self.counter_global = 0
+
+        # publish bool variables
         self.publish_explanation_coeffs = False  
-        self.publish_explanation_image = True
+        self.publish_explanation_image = False
         self.publish_pointcloud = False
 
-        # directory variables
+        # plotting
+        self.plot_explanation = True
+        self.plot_perturbations = False 
+        self.plot_classifier = False
+
+        # directories        
         self.dir_curr = os.getcwd()
-        self.dir_main = 'explanation_data'
         self.dir_name = 'lime_rt_data'
+
+        self.dir_main = 'explanation_data'
+        try:
+            os.mkdir(self.dir_main)
+        except FileExistsError:
+            pass
+        
+        self.dirData = self.dir_main + '/' + self.dir_name
+        try:
+            os.mkdir(self.dirData)
+        except FileExistsError:
+            pass
+
+        if self.plot_explanation == True:
+            self.explanation_dir = self.dir_main + '/explanation_images'
+            try:
+                os.mkdir(self.explanation_dir)
+            except FileExistsError:
+                pass
+
+        if self.plot_perturbations == True: 
+            self.perturbation_dir = self.dir_main + '/perturbation_images'
+            try:
+                os.mkdir(self.perturbation_dir)
+            except FileExistsError:
+                pass
+        
+        if self.plot_classifier == True:
+            self.classifier_dir = self.dir_main + '/classifier_images'
+            try:
+                os.mkdir(self.classifier_dir)
+            except FileExistsError:
+                pass
+
+        # directory variables
         self.file_path_footprint = self.dir_main + '/' + self.dir_name + '/footprint.csv'
         self.file_path_global_plan = self.dir_main + '/' + self.dir_name + '/global_plan.csv'
         self.file_path_local_costmap_info = self.dir_main + '/' + self.dir_name + '/local_costmap_info.csv'
@@ -492,9 +563,16 @@ class lime_rt_pub(object):
 
         return True
 
-    # call teb
+    # call local planner
     def create_labels(self, image, fudged_image, segments, classifier_fn, batch_size=10):
         try:
+            if self.plot_perturbations == True:
+                dirCurr = self.perturbation_dir + '/' + str(self.counter_global)
+                try:
+                    os.mkdir(dirCurr)
+                except FileExistsError:
+                    pass
+
             # call teb and get labels
             self.labels = []
             imgs = []
@@ -507,6 +585,7 @@ class lime_rt_pub(object):
             segments_labels = np.unique(self.segments)
             #print('segments_labels = ', segments_labels)
 
+            ctr = 0
             for row in rows:
                 #print('row = ', row)
                 temp = copy.deepcopy(image)
@@ -519,10 +598,26 @@ class lime_rt_pub(object):
                     mask[segments == segments_labels[z]] = True
                 temp[mask] = fudged_image[mask]
                 imgs.append(temp)
+
+                # plot perturbation
+                if self.plot_perturbations:
+                    fig = plt.figure(frameon=False)
+                    w = 1.6 * 3
+                    h = 1.6 * 3
+                    fig.set_size_inches(w, h)
+                    ax = plt.Axes(fig, [0., 0., 1., 1.])
+                    ax.set_axis_off()
+                    fig.add_axes(ax)
+                    ax.imshow(np.flipud(imgs[-1]).astype('float64'), aspect='auto')
+                    fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png', transparent=False)
+                    fig.clf()
+                    ctr += 1
+
                 if len(imgs) == batch_size:
                     preds = classifier_fn(np.array(imgs))
                     self.labels.extend(preds)
                     imgs = []
+            
             if len(imgs) > 0:
                 preds = classifier_fn(np.array(imgs))
                 self.labels.extend(preds)
@@ -534,6 +629,88 @@ class lime_rt_pub(object):
             return False
 
         return True    
+
+    # saving important data to class variables
+    def saveImportantData2ClassVars(self):
+        #print(self.local_plan_original.shape)
+        #print(self.local_plan_original)
+        
+        #print('\nself.local_costmap_info = ', self.local_costmap_info)
+        #print('\nself.odom = ', self.odom)
+        #print('\nself.global_plan = ', self.global_plan)
+
+        try:
+            self.local_costmap_info = np.array(self.local_costmap_info)
+            #print(self.local_costmap_info)
+            # save costmap info to class variables
+            self.local_costmap_origin_x = self.local_costmap_info[0, 3]
+            #print('self.local_costmap_origin_x: ', self.local_costmap_origin_x)
+            self.local_costmap_origin_y = self.local_costmap_info[0, 4]
+            #print('self.local_costmap_origin_y: ', self.local_costmap_origin_y)
+            self.local_costmap_resolution = self.local_costmap_info[0, 0]
+            #print('self.local_costmap_resolution: ', self.local_costmap_resolution)
+            #self.localCostmapHeight = self.local_costmap_info[0, 2]
+            #print('self.localCostmapHeight: ', self.localCostmapHeight)
+            #self.localCostmapWidth = self.local_costmap_info[0, 1]
+            #print('self.localCostmapWidth: ', self.localCostmapWidth)
+            self.local_costmap_size = self.local_costmap_info[0, 1]
+
+            self.odom = np.array(self.odom)
+            # save robot odometry location to class variables
+            self.odom_x = self.odom[0, 0]
+            # print('self.odom_x: ', self.odom_x)
+            self.odom_y = self.odom[0, 1]
+            # print('self.odom_y: ', self.odom_y)
+
+            # save indices of robot's odometry location in local costmap to class variables
+            self.localCostmapIndex_x_odom = int((self.odom_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
+            # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
+            self.localCostmapIndex_y_odom = int((self.odom_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
+            # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
+
+            # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
+            self.x_odom_index = [self.localCostmapIndex_x_odom]
+            #print('self.x_odom_index: ', self.x_odom_index)
+            self.y_odom_index = [self.localCostmapIndex_y_odom]
+            #print('self.y_odom_index: ', self.y_odom_index)
+
+            # tf vars
+            #self.t_om = np.asarray([self.tf_odom_map[0],self.tf_odom_map[1],self.tf_odom_map[2]])
+            #self.r_om = R.from_quat([self.tf_odom_map[3],self.tf_odom_map[4],self.tf_odom_map[5],self.tf_odom_map[6]])
+            #self.r_om = np.asarray(self.r_om.as_matrix())
+
+            #self.t_mo = np.asarray([self.tf_map_odom[0],self.tf_map_odom[1],self.tf_map_odom[2]])
+            #self.r_mo = R.from_quat([self.tf_map_odom[3],self.tf_map_odom[4],self.tf_map_odom[5],self.tf_map_odom[6]])
+            #self.r_mo = np.asarray(self.r_mo.as_matrix())    
+
+            #'''
+            # save robot odometry orientation to class variables
+            self.odom_z = self.odom[0, 2]
+            self.odom_w = self.odom[0, 3]
+            # calculate Euler angles based on orientation quaternion
+            [self.yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
+            
+            # find yaw angles projections on x and y axes and save them to class variables
+            self.yaw_odom_x = math.cos(self.yaw_odom)
+            self.yaw_odom_y = math.sin(self.yaw_odom)
+            #'''
+
+            self.global_plan = np.array(self.global_plan)
+            self.transformed_plan_xs = []
+            self.transformed_plan_ys = []
+            for i in range(0, len(self.global_plan)):
+                x_temp = int((self.global_plan[i, 0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
+                y_temp = int((self.global_plan[i, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
+
+                if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
+                    self.transformed_plan_xs.append(x_temp)
+                    self.transformed_plan_ys.append(y_temp)
+        
+        except Exception as e:
+            print('exception = ', e)
+            return False
+
+        return True
 
     # classifier function for lime image
     def classifier_fn(self, sampled_instance):
@@ -649,14 +826,14 @@ class lime_rt_pub(object):
             print('\nData not loaded!')
             return
         end = time.time()
-        print('\nDATA LOADING TIME = ', 1000*(end-start))
+        print('\n\nDATA LOADING TIME = ', 1000*(end-start))
 
         # turn grayscale image to rgb image
         self.image_rgb = gray2rgb(self.image * 1.0)
         # get current local costmap data
-        self.local_costmap_origin_x = self.local_costmap_info.iloc[3]
-        self.local_costmap_origin_y = self.local_costmap_info.iloc[4]
-        self.local_costmap_resolution = self.local_costmap_info.iloc[0]
+        #self.local_costmap_origin_x = self.local_costmap_info.iloc[3]
+        #self.local_costmap_origin_y = self.local_costmap_info.iloc[4]
+        #self.local_costmap_resolution = self.local_costmap_info.iloc[0]
 
         # save data for teb
         start = time.time()
@@ -665,6 +842,11 @@ class lime_rt_pub(object):
             return
         end = time.time()
         print('DATA LOCAL PLANNER SAVING TIME = ', 1000*(end-start))
+
+        # saving important data to class variables
+        if self.saveImportantData2ClassVars() == False:
+            print('\nData not saved into variables correctly!')
+            return
 
         start = time.time()
         # call teb
@@ -729,6 +911,48 @@ class lime_rt_pub(object):
             #pd.DataFrame(output[:,:,1]).to_csv(self.dir_curr + '/' + self.dir_name + '/output_G.csv', index=False) #, header=False)
             #pd.DataFrame(output[:,:,2]).to_csv(self.dir_curr + '/' + self.dir_name + '/output_R.csv', index=False) #, header=False)
 
+            if self.plot_explanation == True:
+                dirCurr = self.explanation_dir + '/' + str(self.counter_global)
+                try:
+                    os.mkdir(dirCurr)
+                except FileExistsError:
+                    pass
+
+                centroids_for_plot = []
+                lc_regions = regionprops(self.segments.astype(int))
+                for lc_region in lc_regions:
+                    v = lc_region.label
+                    cy, cx = lc_region.centroid
+                    centroids_for_plot.append([v,cx,cy])
+
+                output[:,:,0] = np.flip(output[:,:,0], axis=0)
+                output[:,:,1] = np.flip(output[:,:,1], axis=0)
+                output[:,:,2] = np.flip(output[:,:,2], axis=0)
+
+                fig = plt.figure(frameon=False)
+                w = 1.6 * 3
+                h = 1.6 * 3
+                fig.set_size_inches(w, h)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+
+                ax.scatter(self.transformed_plan_xs, self.transformed_plan_ys, c='blue', marker='x')
+                #ax.scatter(self.local_plan_xs_fixed, self.local_plan_ys_fixed, c='yellow', marker='o')
+                ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+                ax.text(self.x_odom_index[0], self.y_odom_index[0], 'robot', c='white')
+                ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_y, self.yaw_odom_x, color='white')
+                ax.imshow(np.flipud(output).astype('float64'), aspect='auto')
+                for i in range(0, len(centroids_for_plot)):
+                    ax.scatter(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], c='white', marker='o')   
+                    ax.text(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], centroids_for_plot[i][0], c='white')
+
+                fig.savefig(dirCurr + '/explanation.png', transparent=False)
+                fig.clf()
+
+            self.counter_global += 1
+
+            '''
             if self.publish_explanation_coeffs:
                 # publish explanation coefficients
                 exp_with_centroids = Float32MultiArray()
@@ -776,6 +1000,9 @@ class lime_rt_pub(object):
                 pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
                 pc2.header.stamp = rospy.Time.now()
                 self.pub_exp_pointcloud.publish(pc2)
+
+            self.counter_global+=1
+            '''
                 
         except Exception as e:
             print('Exception: ', e)

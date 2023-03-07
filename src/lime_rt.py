@@ -1388,7 +1388,7 @@ class lime_rt_pub(object):
                     ax.scatter(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], c='white', marker='o')   
                     ax.text(centroids_for_plot[i][1], self.local_costmap_size - centroids_for_plot[i][2], centroids_for_plot[i][0], c='white')
 
-                fig.savefig(dirCurr + '/explanation_' + '.png', transparent=False)
+                fig.savefig(dirCurr + '/explanation.png', transparent=False)
                 fig.clf()
 
             if self.publish_explanation_coeffs:
