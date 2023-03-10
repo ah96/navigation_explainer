@@ -539,7 +539,7 @@ class lime_rt_sub(object):
             lst[i][self.n_features-i] = 0    
         self.data = np.array(lst).reshape((self.n_samples, self.n_features))
 
-# lime base class
+
 class LimeBase(object):
     def __init__(self,
                  kernel_fn,
@@ -692,10 +692,10 @@ class LimeBase(object):
             return self.feature_selection(data, labels, weights,
                                           num_features, n_method)
 
-# image explanation class
+
 class ImageExplanation(object):
     def __init__(self, image, segments):
-        self.local_costmap = image
+        self.image = image
         self.segments = segments
         self.intercept = {}
         self.local_exp = {}
@@ -710,14 +710,14 @@ class ImageExplanation(object):
         self.val_high = 1.0
         self.free_space_shade = 0.7
 
-    def get_image_and_mask(self, label):
+    def get_image_and_mask(self, segments, label):
 
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
         
         exp = self.local_exp[label]
 
-        temp = np.zeros(self.local_costmap.shape)
+        temp = np.zeros(self.image.shape)
 
         w_sum_abs = 0.0
         w_s_abs = []
@@ -727,11 +727,11 @@ class ImageExplanation(object):
         max_w_abs = max(w_s_abs)
         if max_w_abs == 0:
             self.all_weights_zero = True
-            temp[self.local_costmap == 0] = self.free_space_shade
-            temp[self.local_costmap != 0] = 0.0
+            temp[self.image == 0] = self.free_space_shade
+            temp[self.image != 0] = 0.0
             return temp, exp
 
-        segments_labels = np.unique(self.segments)
+        segments_labels = np.unique(segments)
         
         for f, w in exp:
             #print('(f, w): ', (f, w))
@@ -750,32 +750,33 @@ class ImageExplanation(object):
             if f == 0:
                 #print('free_space, (f, w) = ', (f, w))
                 if self.color_free_space == False:
-                    temp[self.segments == f, 0] = self.free_space_shade
-                    temp[self.segments == f, 1] = self.free_space_shade
-                    temp[self.segments == f, 2] = self.free_space_shade
+                    temp[segments == f, 0] = self.free_space_shade
+                    temp[segments == f, 1] = self.free_space_shade
+                    temp[segments == f, 2] = self.free_space_shade
             # obstacle
             else:
                 if self.color_free_space == False:
                     if c == 1:
-                        temp[self.segments == f, 0] = 0.0
+                        temp[segments == f, 0] = 0.0
                         if self.use_maximum_weight == True:
-                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                         else:
-                            temp[self.segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
-                        temp[self.segments == f, 2] = 0.0
+                            temp[segments == f, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
+                        temp[segments == f, 2] = 0.0
                     elif c == 0:
-                        temp[self.segments == f, 0] = 0.0
-                        temp[self.segments == f, 1] = 0.0
-                        temp[self.segments == f, 2] = 0.0
+                        temp[segments == f, 0] = 0.0
+                        temp[segments == f, 1] = 0.0
+                        temp[segments == f, 2] = 0.0
                     elif c == -1:
                         if self.use_maximum_weight == True:
-                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                         else:
-                            temp[self.segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
-                        temp[self.segments == f, 1] = 0.0
-                        temp[self.segments == f, 2] = 0.0
+                            temp[segments == f, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs 
+                        temp[segments == f, 1] = 0.0
+                        temp[segments == f, 2] = 0.0
                                         
         return temp, exp
+
 
 # lime publisher class
 class lime_rt_pub(object):
@@ -936,77 +937,6 @@ class lime_rt_pub(object):
 
         return True
 
-    # saving important data to class variables
-    def saveImportantData2ClassVars(self):
-
-        try:
-            self.t_om = np.asarray([self.tf_odom_map[0],self.tf_odom_map[1],self.tf_odom_map[2]])
-            self.r_om = R.from_quat([self.tf_odom_map[3],self.tf_odom_map[4],self.tf_odom_map[5],self.tf_odom_map[6]])
-            self.r_om = np.asarray(self.r_om.as_matrix())
-
-            self.t_mo = np.asarray([self.tf_map_odom[0],self.tf_map_odom[1],self.tf_map_odom[2]])
-            self.r_mo = R.from_quat([self.tf_map_odom[3],self.tf_map_odom[4],self.tf_map_odom[5],self.tf_map_odom[6]])
-            self.r_mo = np.asarray(self.r_mo.as_matrix())    
-
-            # save costmap info to class variables
-            self.local_costmap_origin_x = self.local_costmap_info[3]
-            #print('self.local_costmap_origin_x: ', self.local_costmap_origin_x)
-            self.local_costmap_origin_y = self.local_costmap_info[4]
-            #print('self.local_costmap_origin_y: ', self.local_costmap_origin_y)
-            self.local_costmap_resolution = self.local_costmap_info[0]
-            #print('self.local_costmap_resolution: ', self.local_costmap_resolution)
-            self.localCostmapHeight = self.local_costmap_info[2]
-            #print('self.localCostmapHeight: ', self.localCostmapHeight)
-            self.localCostmapWidth = self.local_costmap_info[1]
-            #print('self.localCostmapWidth: ', self.localCostmapWidth)
-
-            # save robot odometry location to class variables
-            self.odom_x = self.odom[0]
-            # print('self.odom_x: ', self.odom_x)
-            self.odom_y = self.odom[1]
-            # print('self.odom_y: ', self.odom_y)
-
-            # save indices of robot's odometry location in local costmap to class variables
-            self.localCostmapIndex_x_odom = int((self.odom_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
-            # print('self.localCostmapIndex_x_odom: ', self.localCostmapIndex_x_odom)
-            self.localCostmapIndex_y_odom = int((self.odom_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
-            # print('self.localCostmapIndex_y_odom: ', self.localCostmapIndex_y_odom)
-
-            # save indices of robot's odometry location in local costmap to lists which are class variables - suitable for plotting
-            self.x_odom_index = [self.localCostmapIndex_x_odom]
-            # print('self.x_odom_index: ', self.x_odom_index)
-            self.y_odom_index = [self.localCostmapIndex_y_odom]
-            # print('self.y_odom_index: ', self.y_odom_index)
-
-            #'''
-            # save robot odometry orientation to class variables
-            self.odom_z = self.odom[2]
-            self.odom_w = self.odom[2]
-            # calculate Euler angles based on orientation quaternion
-            [self.yaw_odom, pitch_odom, roll_odom] = quaternion_to_euler(0.0, 0.0, self.odom_z, self.odom_w)
-            
-            # find yaw angles projections on x and y axes and save them to class variables
-            self.yaw_odom_x = math.cos(self.yaw_odom)
-            self.yaw_odom_y = math.sin(self.yaw_odom)
-            #'''
-
-            self.transformed_plan_xs = []
-            self.transformed_plan_ys = []
-            for i in range(0, len(self.global_plan)):
-                x_temp = int((self.global_plan[i][0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
-                y_temp = int((self.global_plan[i][1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
-
-                if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
-                    self.transformed_plan_xs.append(x_temp)
-                    self.transformed_plan_ys.append(y_temp)
-        
-        except Exception as e:
-            print('exception = ', e)
-            print('\nData not saved into variables correctly!')
-            return False
-
-        return True
-            
     # call local planner
     def create_labels(self, image, fudged_image, segments, classifier_fn, batch_size=10):
         try:
@@ -1091,15 +1021,15 @@ class lime_rt_pub(object):
             os.mkdir(dirCurr)
         except FileExistsError:
             pass
-
-        robot_x = self.amcl_pose.iloc[0,0]
-        robot_y = self.amcl_pose.iloc[0,1]
+        print(self.amcl_pose)
+        robot_x = self.amcl_pose[0]
+        robot_y = self.amcl_pose[1]
 
         robot_x_idx = int((robot_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
-        robot_y_idx = self.costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
+        robot_y_idx = self.local_costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-        robot_orient_z = self.amcl_pose.iloc[0,2]
-        robot_orient_w = self.amcl_pose.iloc[0,3]
+        robot_orient_z = self.amcl_pose[2]
+        robot_orient_w = self.amcl_pose[3]
         # calculate Euler angles based on orientation quaternion
         [robot_yaw, robot_pitch, robot_roll] = quaternion_to_euler(0.0, 0.0, robot_orient_z, robot_orient_w)
         
@@ -1115,7 +1045,7 @@ class lime_rt_pub(object):
 
             if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                 transformed_plan_xs_idx.append(x_temp)
-                transformed_plan_ys_idx.append(self.costmap_size - 1 - y_temp)
+                transformed_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
 
         pd.DataFrame(transformed_plan_xs_idx).to_csv(dirCurr + '/transformed_plan_xs_idx.csv', index=False)#, header=False)
         pd.DataFrame(transformed_plan_ys_idx).to_csv(dirCurr + '/transformed_plan_ys_idx.csv', index=False)#, header=False)
@@ -1134,7 +1064,7 @@ class lime_rt_pub(object):
 
                     if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                         local_plan_xs_idx.append(x_temp)
-                        local_plan_ys_idx.append(self.costmap_size - 1 - y_temp)
+                        local_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
 
             fig = plt.figure(frameon=True)
             w = 1.6*3
@@ -1271,7 +1201,7 @@ class lime_rt_pub(object):
         return np.array(cmd_vel_perturb.iloc[:, 3:])
 
     # find distances
-    def find_distances(self):
+    def create_distances(self):
         # find distances
         # distance_metric = 'jaccard' - alternative distance metric
         distance_metric='cosine'
@@ -1294,14 +1224,14 @@ class lime_rt_pub(object):
         #self.r_mo = np.asarray(self.r_mo.as_matrix())    
 
         try:
-            robot_x = self.amcl_pose.iloc[0,0]
-            robot_y = self.amcl_pose.iloc[0,1]
+            robot_x = self.amcl_pose[0]
+            robot_y = self.amcl_pose[1]
 
             robot_x_idx = int((robot_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
-            robot_y_idx = self.costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
+            robot_y_idx = self.local_costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-            robot_orient_z = self.amcl_pose.iloc[0,2]
-            robot_orient_w = self.amcl_pose.iloc[0,3]
+            robot_orient_z = self.amcl_pose[2]
+            robot_orient_w = self.amcl_pose[3]
             # calculate Euler angles based on orientation quaternion
             [robot_yaw, robot_pitch, robot_roll] = quaternion_to_euler(0.0, 0.0, robot_orient_z, robot_orient_w)
             
@@ -1327,7 +1257,7 @@ class lime_rt_pub(object):
                 x_temp = int((local_plan[i, 0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
                 y_temp = int((local_plan[i, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                     local_plan_xs_idx.append(x_temp)
                     local_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
             
@@ -1389,7 +1319,7 @@ class lime_rt_pub(object):
     def explain(self, global_plan_tmp_copy, local_plan_tmp_copy, odom_tmp_copy, amcl_pose_tmp_copy, footprint_tmp_copy, 
                 robot_position_map_copy, robot_orientation_map_copy, costmap_info_tmp, segments, data, 
                 tf_map_odom_tmp, tf_odom_map_tmp, image, fudged_image):
-    
+        
         explain_time_start = time.time()
 
         self.robot_position_map = robot_position_map_copy
@@ -1410,11 +1340,11 @@ class lime_rt_pub(object):
         # turn grayscale image to rgb image
         self.local_costmap_rgb = gray2rgb(self.local_costmap * 1.0)
         # get current local costmap data
-        self.local_costmap_origin_x = self.local_costmap_info[0][3]
-        self.local_costmap_origin_y = self.local_costmap_info[0][4]
-        self.local_costmap_resolution = self.local_costmap_info[0][0]
-        self.local_costmap_size = self.local_costmap_info[0][1]
- 
+        self.local_costmap_origin_x = self.local_costmap_info[3]
+        self.local_costmap_origin_y = self.local_costmap_info[4]
+        self.local_costmap_resolution = self.local_costmap_info[0]
+        self.local_costmap_size = self.local_costmap_info[1]
+      
         # save data for teb
         if self.save_data_for_local_planner() == False:
             return

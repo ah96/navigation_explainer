@@ -372,8 +372,8 @@ class lime_rt_pub(object):
         # costmap variables
         self.labels = np.array([]) 
         self.distances = np.array([])
-        self.costmap_size = 160
-        self.pd_image_size = (self.costmap_size,self.costmap_size)
+        self.local_costmap_size = 160
+        self.pd_image_size = (self.local_costmap_size,self.local_costmap_size)
 
         # deviation
         self.original_deviation = 0
@@ -649,7 +649,7 @@ class lime_rt_pub(object):
             robot_y = self.amcl_pose.iloc[0,1]
 
             robot_x_idx = int((robot_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
-            robot_y_idx = self.costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
+            robot_y_idx = self.local_costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
             robot_orient_z = self.amcl_pose.iloc[0,2]
             robot_orient_w = self.amcl_pose.iloc[0,3]
@@ -678,7 +678,7 @@ class lime_rt_pub(object):
                 x_temp = int((local_plan[i, 0] - self.local_costmap_origin_x) / self.local_costmap_resolution)
                 y_temp = int((local_plan[i, 1] - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
-                if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                     local_plan_xs_idx.append(x_temp)
                     local_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
             
@@ -764,7 +764,7 @@ class lime_rt_pub(object):
         robot_y = self.amcl_pose.iloc[0,1]
 
         robot_x_idx = int((robot_x - self.local_costmap_origin_x) / self.local_costmap_resolution)
-        robot_y_idx = self.costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
+        robot_y_idx = self.local_costmap_size - 1 - int((robot_y - self.local_costmap_origin_y) / self.local_costmap_resolution)
 
         robot_orient_z = self.amcl_pose.iloc[0,2]
         robot_orient_w = self.amcl_pose.iloc[0,3]
@@ -783,7 +783,7 @@ class lime_rt_pub(object):
 
             if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                 transformed_plan_xs_idx.append(x_temp)
-                transformed_plan_ys_idx.append(self.costmap_size - 1 - y_temp)
+                transformed_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
 
         pd.DataFrame(transformed_plan_xs_idx).to_csv(dirCurr + '/transformed_plan_xs_idx.csv', index=False)#, header=False)
         pd.DataFrame(transformed_plan_ys_idx).to_csv(dirCurr + '/transformed_plan_ys_idx.csv', index=False)#, header=False)
@@ -802,7 +802,7 @@ class lime_rt_pub(object):
 
                     if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
                         local_plan_xs_idx.append(x_temp)
-                        local_plan_ys_idx.append(self.costmap_size - 1 - y_temp)
+                        local_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
 
             fig = plt.figure(frameon=True)
             w = 1.6*3
