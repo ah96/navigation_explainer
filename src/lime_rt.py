@@ -792,7 +792,7 @@ class lime_rt_pub(object):
         # plotting
         self.plot_explanation_bool = True
         self.plot_perturbations_bool = True 
-        self.plot_classifier_bool = False
+        self.plot_classifier_bool = True
 
         # directories        
         self.dir_curr = os.getcwd()
@@ -1404,38 +1404,25 @@ class lime_rt_pub(object):
         self.data = data
         self.tf_map_odom = tf_map_odom_tmp
         self.tf_odom_map = tf_odom_map_tmp
-        self.image = image
+        self.local_costmap = copy.deepcopy(image)
         self.fudged_image = fudged_image
 
-        self.local_costmap_origin_x = self.local_costmap_info[3]
-        self.local_costmap_origin_y = self.local_costmap_info[4]
-        self.local_costmap_resolution = self.local_costmap_info[0]
-        self.local_costmap_size = self.local_costmap_info[2]
-        
         # turn grayscale image to rgb image
         self.local_costmap_rgb = gray2rgb(self.local_costmap * 1.0)
-
-        # try to load lime_rt_sub data
-        # if data not loaded do not explain
-        if self.load_data() == False:
-            return
-        
+        # get current local costmap data
+        self.local_costmap_origin_x = self.local_costmap_info[0][3]
+        self.local_costmap_origin_y = self.local_costmap_info[0][4]
+        self.local_costmap_resolution = self.local_costmap_info[0][0]
+        self.local_costmap_size = self.local_costmap_info[0][1]
+ 
         # save data for teb
         if self.save_data_for_local_planner() == False:
             return
 
-        # turn grayscale image to rgb image
-        self.image_rgb = gray2rgb(self.image * 1.0)
-        # get current local costmap data
-        self.local_costmap_origin_x = self.local_costmap_info.iloc[0,3]
-        self.local_costmap_origin_y = self.local_costmap_info.iloc[0,4]
-        self.local_costmap_resolution = self.local_costmap_info.iloc[0,0]
-        self.local_costmap_size = self.local_costmap_info.iloc[0,1]
-
         # call the local planner
         self.labels=(0,)
         self.top = self.labels
-        if self.create_labels(self.image, self.fudged_image, self.segments, self.classifier_fn, batch_size=2048) == False:
+        if self.create_labels(self.local_costmap, self.fudged_image, self.segments, self.classifier_fn, batch_size=2048) == False:
             return
 
         # create distances between the instance of interest and perturbations
@@ -1451,7 +1438,7 @@ class lime_rt_pub(object):
 
             # train interpretable model
             start = time.time()
-            ret_exp = ImageExplanation(self.image_rgb, self.segments)
+            ret_exp = ImageExplanation(self.local_costmap_rgb, self.segments)
             if top_labels:
                 top = np.argsort(self.labels[0])[-top_labels:]
                 ret_exp.top_labels = list(top)
