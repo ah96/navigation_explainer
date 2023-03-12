@@ -502,7 +502,7 @@ class lime_rt_pub(object):
                 return False
 
             end = time.time()
-            print('\n\nDATA LOADING RUNTIME = ', 1000*(end-start))
+            print('\n\nDATA LOADING RUNTIME = ', round(end-start,3))
         
         except Exception as e:
             print('exception = ', e)
@@ -549,7 +549,7 @@ class lime_rt_pub(object):
             self.odom.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
             end = time.time()
-            print('DATA LOCAL PLANNER SAVING RUNTIME = ', 1000*(end-start))
+            print('DATA LOCAL PLANNER SAVING RUNTIME = ', round(end-start,3))
 
         except Exception as e:
             print('exception = ', e)
@@ -598,17 +598,17 @@ class lime_rt_pub(object):
 
                 # plot perturbation
                 if self.plot_perturbations_bool:
-                    fig = plt.figure(frameon=False)
-                    w = 1.6 * 3
-                    h = 1.6 * 3
-                    fig.set_size_inches(w, h)
-                    ax = plt.Axes(fig, [0., 0., 1., 1.])
+                    #fig = plt.figure(frameon=False)
+                    #w = 1.6 * 3
+                    #h = 1.6 * 3
+                    #fig.set_size_inches(w, h)
+                    ax = plt.Axes(self.fig, [0., 0., 1., 1.])
                     ax.set_axis_off()
-                    fig.add_axes(ax)
+                    self.fig.add_axes(ax)
                     img = np.flipud(imgs[-1])
                     ax.imshow(img.astype('float64'), aspect='auto')
-                    fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png', transparent=False)
-                    fig.clf()
+                    self.fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png', transparent=False)
+                    self.fig.clf()
                     pd.DataFrame(img).to_csv(dirCurr + '/perturbation_' + str(ctr) + '.csv', index=False)#, header=False)
                     ctr += 1
 
@@ -624,7 +624,7 @@ class lime_rt_pub(object):
             self.labels = np.array(self.labels)
 
             end = time.time()
-            print('LABELS CREATION RUNTIME = ', 1000*(end-start))
+            print('LABELS CREATION RUNTIME = ', round(end-start,3))
         
         except Exception as e:
             print('exception = ', e)
@@ -689,13 +689,13 @@ class lime_rt_pub(object):
             except FileExistsError:
                 pass
 
-            fig = plt.figure(frameon=False)
-            w = 1.6 * 3
-            h = 1.6 * 3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            #fig = plt.figure(frameon=False)
+            #w = 1.6 * 3
+            #h = 1.6 * 3
+            #fig.set_size_inches(w, h)
+            ax = plt.Axes(self.fig, [0., 0., 1., 1.])
             ax.set_axis_off()
-            fig.add_axes(ax)
+            self.fig.add_axes(ax)
 
             ax.scatter(global_plan_xs_idx, global_plan_ys_idx, c='blue', marker='x')
             ax.scatter(local_plan_xs_idx, local_plan_ys_idx, c='yellow', marker='o')
@@ -715,8 +715,8 @@ class lime_rt_pub(object):
                 ax.scatter(centroids_for_plot[i][1], centroids_for_plot[i][2], c='white', marker='o')   
                 ax.text(centroids_for_plot[i][1], centroids_for_plot[i][2], centroids_for_plot[i][0], c='white')
 
-            fig.savefig(dirCurr + '/explanation.png', transparent=False)
-            fig.clf()
+            self.fig.savefig(dirCurr + '/explanation.png', transparent=False)
+            self.fig.clf()
 
             pd.DataFrame(global_plan_xs_idx).to_csv(dirCurr + '/global_plan_xs_idx.csv', index=False)#, header=False)
             pd.DataFrame(global_plan_ys_idx).to_csv(dirCurr + '/global_plan_ys_idx.csv', index=False)#, header=False)
@@ -748,7 +748,7 @@ class lime_rt_pub(object):
             metric=distance_metric
         ).ravel()
         end = time.time()
-        print('DISTANCES CREATION RUNTIME = ', 1000*(end-start))
+        print('DISTANCES CREATION RUNTIME = ', round(end-start,3))
 
     # plot local planner outputs for every perturbation
     def plot_classifier(self, transformed_plan, local_plans, sampled_instances, sample_size):
@@ -804,13 +804,13 @@ class lime_rt_pub(object):
                         local_plan_xs_idx.append(x_temp)
                         local_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
 
-            fig = plt.figure(frameon=True)
-            w = 1.6*3
-            h = 1.6*3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            #fig = plt.figure(frameon=True)
+            #w = 1.6*3
+            #h = 1.6*3
+            #fig.set_size_inches(w, h)
+            ax = plt.Axes(self.fig, [0., 0., 1., 1.])
             ax.set_axis_off()
-            fig.add_axes(ax)
+            self.fig.add_axes(ax)
             img = np.flipud(sampled_instances[ctr]).astype(np.uint8)
             ax.imshow(img)
             plt.scatter(transformed_plan_xs_idx, transformed_plan_ys_idx, c='blue', marker='x')
@@ -818,15 +818,15 @@ class lime_rt_pub(object):
             ax.scatter([robot_x_idx], [robot_y_idx], c='white', marker='o')
             ax.text(robot_x_idx, robot_y_idx, 'robot', c='white')
             ax.quiver(robot_x_idx, robot_y_idx, robot_yaw_x, robot_yaw_y, color='white')
-            fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png')
-            fig.clf()
+            self.fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png')
+            self.fig.clf()
 
             pd.DataFrame(img).to_csv(dirCurr + '/perturbation_' + str(ctr) + '.csv', index=False)#, header=False)
             pd.DataFrame(local_plan_xs_idx).to_csv(dirCurr + '/local_plan_xs_idx_' + str(ctr) + '.csv', index=False)#, header=False)
             pd.DataFrame(local_plan_ys_idx).to_csv(dirCurr + '/local_plan_ys_idx_' + str(ctr) + '.csv', index=False)#, header=False)
         
         end = time.time()
-        print('PLOT CLASSIFIER RUNTIME = ', 1000*(end-start))
+        print('PLOT CLASSIFIER RUNTIME = ', round(end-start,3))
 
     # classifier function for lime image
     def classifier_fn(self, sampled_instances):
@@ -847,7 +847,7 @@ class lime_rt_pub(object):
         elif sampled_instances_shape_len == 2:
             np.savetxt(self.dir_curr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instances, delimiter=",")
         end = time.time()
-        print('LOCAL PLANNER DATA PREPARATION RUNTIME = ', 1000*(end-start))
+        print('LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
 
         # calling ROS C++ node
         #print('\nC++ node started')
@@ -864,7 +864,7 @@ class lime_rt_pub(object):
         
         time.sleep(0.35)
         end = time.time()
-        print('REAL LOCAL PLANNER RUNTIME = ', 1000*(end-start))
+        print('REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
 
         #print('\nC++ node ended')
 
@@ -879,7 +879,7 @@ class lime_rt_pub(object):
         # load transformed global plan to /odom frame
         transformed_plan = np.array(pd.read_csv(self.dir_curr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
         end = time.time()
-        print('BETWEEN TEB AND TARGET RUNTIME = ', 1000*(end-start))
+        print('BETWEEN TEB AND TARGET RUNTIME = ', round(end-start,3))
 
         local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
@@ -933,7 +933,7 @@ class lime_rt_pub(object):
                 devs.append(min(local_diffs))   
             local_plan_deviation.iloc[i, 0] = sum(devs)
         end = time.time()
-        print('TARGET CALC RUNTIME = ', 1000*(end-start))
+        print('TARGET CALC RUNTIME = ', round(end-start,3))
         
         if self.publish_explanation_coeffs:
             self.original_deviation = local_plan_deviation.iloc[0, 0]
@@ -996,13 +996,13 @@ class lime_rt_pub(object):
                     model_regressor=model_regressor,
                     feature_selection=feature_selection)
             end = time.time()
-            print('MODEL FITTING RUNTIME = ', 1000*(end-start))
+            print('MODEL FITTING RUNTIME = ', round(end-start,3))
 
             start = time.time()
             # get explanation image
             self.output, exp = ret_exp.get_image_and_mask(self.segments, label=0)
             end = time.time()
-            print('GET EXPLANATION IMAGE RUNTIME = ', 1000*(end-start))
+            print('GET EXPLANATION IMAGE RUNTIME = ', round(end-start,3))
             print('exp = ', exp)
 
             self.output[:,:,0] = np.flip(self.output[:,:,0], axis=0)
@@ -1034,7 +1034,7 @@ class lime_rt_pub(object):
                 self.pub_exp_image.publish(output_msg)
 
                 exp_img_end = time.time()
-                print('PUBLISH EXPLANATION IMAGE RUNTIME = ', 1000*(exp_img_end - exp_img_start))
+                print('PUBLISH EXPLANATION IMAGE RUNTIME = ', round(exp_img_end - exp_img_start,3))
 
             if self.publish_pointcloud:
                 # publish explanation layer
@@ -1064,7 +1064,7 @@ class lime_rt_pub(object):
                         pt = [x, y, z, rgb]
                         points.append(pt)
                 points_end = time.time()
-                print('POINT CLOUD RUNTIME = ', 1000*(points_end - points_start))
+                print('POINT CLOUD RUNTIME = ', round(points_end - points_start,3))
                 self.header.frame_id = 'odom'
                 pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
                 pc2.header.stamp = rospy.Time.now()
@@ -1088,6 +1088,15 @@ class lime_rt_pub(object):
             # N_segments * (label, coefficient) + (original_deviation)
             self.pub_lime = rospy.Publisher("/lime_rt_exp", Float32MultiArray, queue_size=10)
 
+        if self.plot_explanation_bool==True or self.plot_classifier_bool==True or self.plot_perturbations_bool==True:
+            self.fig = plt.figure(frameon=False)
+            self.w = 1.6 * 3
+            self.h = 1.6 * 3
+            self.fig.set_size_inches(self.w, self.h)
+            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+            self.ax.set_axis_off()
+            self.fig.add_axes(self.ax)
+
 
 # ----------main-----------
 # main function
@@ -1105,13 +1114,16 @@ lime_rt_pub_obj.tf_listener = tf2_ros.TransformListener(lime_rt_pub_obj.tfBuffer
 
 #rate = rospy.Rate(1)
 
+dir_curr = os.getcwd()
+dir_main = 'explanation_data'
+
 # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
 while not rospy.is_shutdown():
     #rate.sleep()
     start = time.time()
     lime_rt_pub_obj.explain()
     end = time.time()
-    with open('RUNTIME.csv','a') as file:
-        file.write(str(1000 * (end-start)))
+    with open(dir_curr + '/' + dir_main + '/runtime.csv', 'a') as file:
+        file.write(str(round(end-start,3)))
         file.write('\n')
 
