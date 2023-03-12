@@ -559,7 +559,7 @@ class lime_rt_pub(object):
         return True
 
     # call local planner
-    def create_labels(self, image, fudged_image, segments, classifier_fn, batch_size=10):
+    def create_labels(self, image, fudged_image, segments, classifier_fn):
         try:
             start = time.time()
 
@@ -612,10 +612,10 @@ class lime_rt_pub(object):
                     pd.DataFrame(img).to_csv(dirCurr + '/perturbation_' + str(ctr) + '.csv', index=False)#, header=False)
                     ctr += 1
 
-                if len(imgs) == batch_size:
-                    preds = classifier_fn(np.array(imgs))
-                    self.labels.extend(preds)
-                    imgs = []
+                #if len(imgs) == batch_size:
+                #    preds = classifier_fn(np.array(imgs))
+                #    self.labels.extend(preds)
+                #    imgs = []
             
             if len(imgs) > 0:
                 preds = classifier_fn(np.array(imgs))
@@ -901,12 +901,18 @@ class lime_rt_pub(object):
         for i in range(0, sample_size):
             #print('i = ', i)
             
-            local_plan_xs = []
-            local_plan_ys = []
-            
             # transform the current local_plan to list
             local_plan = (local_plans.loc[local_plans['ID'] == i])
             local_plan = np.array(local_plan)
+            #if i == 0:
+            #    local_plan = np.array(self.local_plan)
+            #else:
+            #    local_plan = np.array(local_plan)
+            if local_plan.shape[0] == 0:
+                local_plan_deviation.iloc[i, 0] = 0.0
+                continue
+            local_plan_xs = []
+            local_plan_ys = []
             for j in range(0, local_plan.shape[0]):
                 local_plan_xs.append(local_plan[j, 0])
                 local_plan_ys.append(local_plan[j, 1])
@@ -960,7 +966,7 @@ class lime_rt_pub(object):
         # call the local planner
         self.labels=(0,)
         self.top = self.labels
-        if self.create_labels(self.image, self.fudged_image, self.segments, self.classifier_fn, batch_size=2048) == False:
+        if self.create_labels(self.image, self.fudged_image, self.segments, self.classifier_fn) == False:
             return
 
         # create distances between the instance of interest and perturbations
@@ -997,6 +1003,7 @@ class lime_rt_pub(object):
             self.output, exp = ret_exp.get_image_and_mask(self.segments, label=0)
             end = time.time()
             print('GET EXPLANATION IMAGE RUNTIME = ', 1000*(end-start))
+            print('exp = ', exp)
 
             self.output[:,:,0] = np.flip(self.output[:,:,0], axis=0)
             self.output[:,:,1] = np.flip(self.output[:,:,1], axis=0)

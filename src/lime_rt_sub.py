@@ -227,7 +227,7 @@ class lime_rt_sub(object):
 
     # create data--perturbations based on segments
     def create_data(self):
-        # create N+1 perturbations for N segments--superpixels
+        # create N+1 perturbations for N obstacle segments--superpixels
         self.n_features = np.unique(self.segments).shape[0]
         self.n_samples = self.n_features
         lst = [[1]*self.n_features]
@@ -368,10 +368,10 @@ class lime_rt_sub(object):
             # save data to the .csv files
             pd.DataFrame(self.local_costmap_info).to_csv(self.dir_curr + '/' + self.dir_data + '/local_costmap_info.csv', index=False)#, header=False)
             pd.DataFrame(self.local_costmap).to_csv(self.dir_curr + '/' + self.dir_data + '/local_costmap.csv', index=False) #, header=False)
-            pd.DataFrame(self.fudged_image).to_csv(self.dir_curr + '/' + self.dir_data + '/fudged_image.csv', index=False)#, header=False)
             pd.DataFrame(self.segments).to_csv(self.dir_curr + '/' + self.dir_data + '/segments.csv', index=False)#, header=False)
             pd.DataFrame(self.data).to_csv(self.dir_curr + '/' + self.dir_data + '/data.csv', index=False)#, header=False)
-
+            pd.DataFrame(self.fudged_image).to_csv(self.dir_curr + '/' + self.dir_data + '/fudged_image.csv', index=False)#, header=False)
+            
             # increase the global counter
             self.counter_global += 1
         
