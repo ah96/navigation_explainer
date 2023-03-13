@@ -22,6 +22,7 @@ import torch
 
 # lc -- local costmap
 
+# rotation matrix to quaternion
 def rotationMatrixToQuaternion(m):
     #q0 = qw
     t = np.matrix.trace(m)
@@ -56,7 +57,7 @@ def rotationMatrixToQuaternion(m):
 
 # lime subscriber class
 class lime_rt_sub(object):
-     # Constructor
+    # constructor
     def _init_(self):
         # simulation or real-world experiment
         self.simulation = True
@@ -65,8 +66,8 @@ class lime_rt_sub(object):
         self.use_local_costmap = False
 
         # whether to plot
-        self.plot_costmaps = False
-        self.plot_segments = False
+        self.plot_costmaps_bool = True
+        self.plot_segments_bool = True
         # global counter for plotting
         self.counter_global = 0
         
@@ -87,14 +88,14 @@ class lime_rt_sub(object):
         except FileExistsError:
             pass
 
-        if self.plot_segments == True:
+        if self.plot_segments_bool == True:
             self.segmentation_dir = self.dirMain + '/segmentation_images'
             try:
                 os.mkdir(self.segmentation_dir)
             except FileExistsError:
                 pass
 
-        if self.plot_costmaps == True and self.use_local_costmap == True:
+        if self.plot_costmaps_bool == True and self.use_local_costmap == True:
             self.costmap_dir = self.dirMain + '/costmap_images'
             try:
                 os.mkdir(self.costmap_dir)
@@ -120,22 +121,14 @@ class lime_rt_sub(object):
         self.robot_orientation_map = Quaternion(0.0,0.0,0.0,1.0)
         self.robot_position_odom = Point(0.0,0.0,0.0)        
         self.robot_orientation_odom = Quaternion(0.0,0.0,0.0,1.0)
-
-        # plans' variables
-        # local plan
-        self.local_plan_xs = [] 
-        self.local_plan_ys = []
-        self.local_plan = []
-        # global plan 
-        self.global_plan = [] 
-                
-        # poses' variables
         self.footprint = []  
         self.amcl_pose = [] 
         self.odom = []
-        self.odom_x = 0
-        self.odom_y = 0 
 
+        # plans' variables
+        self.local_plan = []
+        self.global_plan = [] 
+                
         # local map vars
         self.local_map = np.array([])
         self.local_map_origin_x = 0 
@@ -146,15 +139,16 @@ class lime_rt_sub(object):
 
         # camera and semantic map variables
         self.semantic_map = np.array([])
-        self.camera_image = np.array([])
-        self.depth_image = np.array([])
-        # camera projection matrix 
-        self.P = np.array([])
+        if self.simulation == False:
+            self.camera_image = np.array([])
+            self.depth_image = np.array([])
+            # camera projection matrix 
+            self.P = np.array([])
 
-    # Declare subscribers
+    # declare subscribers
     def main_(self):
         # if plotting==True create the base plot structure
-        if (self.plot_costmaps == True and self.use_local_costmap == True) or self.plot_segments == True:
+        if (self.plot_costmaps_bool == True and self.use_local_costmap == True) or self.plot_segments_bool == True:
             self.fig = plt.figure(frameon=False)
             self.w = 1.6 * 3
             self.h = 1.6 * 3
@@ -177,14 +171,15 @@ class lime_rt_sub(object):
         # local costmap subscriber
         if self.use_local_costmap == True:
             self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
-        # robot camera subscribers
-        self.local_map_sub = message_filters.Subscriber('/xtion/rgb/image_raw', Image)
-        self.depth_sub = message_filters.Subscriber('/xtion/depth_registered/image_raw', Image) #"32FC1"
-        self.camera_info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.local_map_sub, self.depth_sub, self.camera_info_sub], 10, 1.0)
-        self.ts.registerCallback(self.camera_feed_callback)
 
         if self.simulation == False:
+            # robot camera subscribers
+            self.camera_image_sub = message_filters.Subscriber('/xtion/rgb/image_raw', Image)
+            self.depth_sub = message_filters.Subscriber('/xtion/depth_registered/image_raw', Image) #"32FC1"
+            self.camera_info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
+            self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_image_sub, self.depth_sub, self.camera_info_sub], 10, 1.0)
+            self.ts.registerCallback(self.camera_feed_callback)
+
             # Load YOLO model
             #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
             self.model = torch.hub.load(self.path_prefix + '/yolov5_master/', 'custom', self.path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
@@ -192,16 +187,16 @@ class lime_rt_sub(object):
         # semantic part
         ontology_name = 'ont1' #'ont1-4'
 
+        # load ontology
+        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + ontology_name + '/' + 'ontology.csv'))
+
         if self.simulation:
             # gazebo model states subscriber
             self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
 
             # load gazebo tags
             self.gazebo_tags = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + ontology_name + '/' + 'gazebo_tags.csv')) 
-    
-        # load ontology
-        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + ontology_name + '/' + 'ontology.csv'))
-        
+            
     # camera feed callback
     def camera_feed_callback(self, img, depth_img, info):
         #print('\ncamera_feed_callback')
@@ -231,9 +226,6 @@ class lime_rt_sub(object):
         
         self.odom = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
         
-        self.odom_x = msg.pose.pose.position.x
-        self.odom_y = msg.pose.pose.position.y
-        
         self.robot_position_odom = msg.pose.pose.position
         self.robot_orientation_odom = msg.pose.pose.orientation
         
@@ -255,8 +247,8 @@ class lime_rt_sub(object):
             self.local_map_origin_y = self.robot_position_map.y - self.local_map_resolution * self.local_map_size * 0.5
             self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
 
-            # create semantic map
-            self.create_semantic_map()
+            # create semantic data
+            self.create_semantic_data()
 
             # increase the global counter (needed for plotting numeration)
             self.counter_global += 1
@@ -278,27 +270,15 @@ class lime_rt_sub(object):
 
             # get the local plan
             self.local_plan = []
-            self.local_plan_xs = [] 
-            self.local_plan_ys = [] 
             for i in range(0,len(msg.poses)):
                 self.local_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-
-                x_temp = int((msg.poses[i].pose.position.x - self.local_map_origin_x) / self.local_map_resolution)
-                y_temp = int((msg.poses[i].pose.position.y - self.local_map_origin_y) / self.local_map_resolution)
-                if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
-                    self.local_plan_xs.append(x_temp)
-                    self.local_plan_ys.append(self.local_map_size - y_temp)
 
             # save the vars for the publisher/explainer
             pd.DataFrame(self.odom_copy).to_csv(self.dirCurr + '/' + self.dirData + '/odom.csv', index=False)#, header=False)
             pd.DataFrame(self.amcl_pose_copy).to_csv(self.dirCurr + '/' + self.dirData + '/amcl_pose.csv', index=False)#, header=False)
             pd.DataFrame(self.footprint_copy).to_csv(self.dirCurr + '/' + self.dirData + '/footprint.csv', index=False)#, header=False)
-            
             pd.DataFrame(self.tf_odom_map).to_csv(self.dirCurr + '/' + self.dirData + '/tf_odom_map.csv', index=False)#, header=False)
-            pd.DataFrame(self.tf_map_odom).to_csv(self.dirCurr + '/' + self.dirData + '/tf_map_odom.csv', index=False)#, header=False)
-            
-            pd.DataFrame(self.local_plan_xs).to_csv(self.dirCurr + '/' + self.dirData + '/local_plan_xs.csv', index=False)#, header=False)
-            pd.DataFrame(self.local_plan_ys).to_csv(self.dirCurr + '/' + self.dirData + '/local_plan_ys.csv', index=False)#, header=False)
+            pd.DataFrame(self.tf_map_odom).to_csv(self.dirCurr + '/' + self.dirData + '/tf_map_odom.csv', index=False)#, header=False)            
             pd.DataFrame(self.local_plan).to_csv(self.dirCurr + '/' + self.dirData + '/local_plan.csv', index=False)#, header=False)
 
         except:
@@ -307,6 +287,7 @@ class lime_rt_sub(object):
     
     # robot footprint callback
     def footprint_callback(self, msg):
+        #print('\nlocal_plan_callback!')  
         self.footprint = []
         for i in range(0,len(msg.polygon.points)):
             self.footprint.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
@@ -342,8 +323,8 @@ class lime_rt_sub(object):
             self.local_map = np.asarray(msg.data)
             self.local_map.resize((self.local_map_size,self.local_map_size))
 
-            if self.plot_costmaps == True:
-                self.plot_costmaps()
+            if self.plot_costmaps_bool == True:
+                self.plot_costmaps_bool()
                 
             # Turn inflated area to free space and 100s to 99s
             self.local_map[self.local_map == 100] = 99
@@ -582,8 +563,8 @@ class lime_rt_sub(object):
         self.create_semantic_map()
 
         # plot segments
-        if self.plot_segments == True:
-            self.plot_segments()
+        if self.plot_segments_bool == True:
+            self.plot_segments_bool()
 
         # create interpretable features
         self.create_interpretable_features()
