@@ -58,16 +58,16 @@ def rotationMatrixToQuaternion(m):
 # lime subscriber class
 class lime_rt_sub(object):
     # constructor
-    def _init_(self):
+    def __init__(self):
         # simulation or real-world experiment
         self.simulation = True
 
         # use local costmap
-        self.use_local_costmap = False
+        self.use_local_costmap = True
 
         # whether to plot
         self.plot_costmaps_bool = True
-        self.plot_segments_bool = True
+        self.plot_semantic_map_bool = True
         # global counter for plotting
         self.counter_global = 0
         
@@ -88,7 +88,7 @@ class lime_rt_sub(object):
         except FileExistsError:
             pass
 
-        if self.plot_segments_bool == True:
+        if self.plot_semantic_map_bool == True:
             self.segmentation_dir = self.dirMain + '/segmentation_images'
             try:
                 os.mkdir(self.segmentation_dir)
@@ -137,8 +137,10 @@ class lime_rt_sub(object):
         self.local_map_size = 160
         self.local_map_info = []
 
-        # camera and semantic map variables
+        # semantic map variables
         self.semantic_map = np.array([])
+
+        # camera variables
         if self.simulation == False:
             self.camera_image = np.array([])
             self.depth_image = np.array([])
@@ -148,7 +150,7 @@ class lime_rt_sub(object):
     # declare subscribers
     def main_(self):
         # if plotting==True create the base plot structure
-        if (self.plot_costmaps_bool == True and self.use_local_costmap == True) or self.plot_segments_bool == True:
+        if (self.plot_costmaps_bool == True and self.use_local_costmap == True) or self.plot_semantic_map_bool == True:
             self.fig = plt.figure(frameon=False)
             self.w = 1.6 * 3
             self.h = 1.6 * 3
@@ -186,10 +188,10 @@ class lime_rt_sub(object):
 
         # semantic part
         ontology_name = 'ont1' #'ont1-4'
-
         # load ontology
         self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + ontology_name + '/' + 'ontology.csv'))
 
+        # gazebo vars
         if self.simulation:
             # gazebo model states subscriber
             self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
@@ -218,13 +220,17 @@ class lime_rt_sub(object):
 
         # potential place to make semantic map, if local costmap is not used
         if self.use_local_costmap == False:
-            pass
+            # create semantic data
+            self.create_semantic_data()
+
+            # increase the global counter
+            self.counter_global += 1
 
     # odometry callback
     def odom_callback(self, msg):
         #print('odom_callback')
         
-        self.odom = [self.odom_x, self.odom_y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+        self.odom = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
         
         self.robot_position_odom = msg.pose.pose.position
         self.robot_orientation_odom = msg.pose.pose.orientation
@@ -287,7 +293,7 @@ class lime_rt_sub(object):
     
     # robot footprint callback
     def footprint_callback(self, msg):
-        #print('\nlocal_plan_callback!')  
+        #print('local_plan_callback')  
         self.footprint = []
         for i in range(0,len(msg.polygon.points)):
             self.footprint.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
@@ -310,7 +316,7 @@ class lime_rt_sub(object):
 
     # local costmap callback
     def local_costmap_callback(self, msg):
-        #print('\nlocal_costmap_callback')
+        print('\nlocal_costmap_callback')
         
         try:          
             # update local_map (costmap) data
@@ -324,7 +330,7 @@ class lime_rt_sub(object):
             self.local_map.resize((self.local_map_size,self.local_map_size))
 
             if self.plot_costmaps_bool == True:
-                self.plot_costmaps_bool()
+                self.plot_costmaps()
                 
             # Turn inflated area to free space and 100s to 99s
             self.local_map[self.local_map == 100] = 99
@@ -420,7 +426,7 @@ class lime_rt_sub(object):
         self.fig.clf()
         
         end = time.time()
-        print('COSTMAPS PLOTTING TIME = ' + str(end-start) + ' seconds')
+        print('costmaps plotting runtime = ' + str(round(end-start,3)) + ' seconds')
 
     # update ontology
     def update_ontology(self):
@@ -562,9 +568,9 @@ class lime_rt_sub(object):
 
         self.create_semantic_map()
 
-        # plot segments
-        if self.plot_segments_bool == True:
-            self.plot_segments_bool()
+        # plot semantic_map
+        if self.plot_semantic_map_bool == True:
+            self.plot_semantic_map()
 
         # create interpretable features
         self.create_interpretable_features()
@@ -721,7 +727,7 @@ class lime_rt_sub(object):
                 self.semantic_map_inflated[max(0, y_1-inflation_y):min(self.local_map_size-1, y_2+inflation_y), max(0,x_1-inflation_x):min(self.local_map_size-1, x_2+inflation_x)] = i+1
        
         end = time.time()
-        print('semantic_segmentation_time = ' + str(end-start) + ' seconds!')
+        print('semantic_segmentation_time = ' + str(round(end-start,3)) + ' seconds!')
 
 
         # find centroids of the objects in the semantic map
@@ -749,7 +755,7 @@ class lime_rt_sub(object):
                         idx = distances_to_centroids.index(min(distances_to_centroids))
                         self.semantic_map_inflated[i, j] = self.centroids_semantic_map[idx][0]
 
-            # turn pixels in the inflated segments, which are zero in the local costmap, to zero
+            # turn pixels in the inflated semantic_map, which are zero in the local costmap, to zero
             self.semantic_map_inflated[self.local_map == 0] = 0
 
         # save local and semantic maps data
@@ -758,8 +764,8 @@ class lime_rt_sub(object):
         pd.DataFrame(self.semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map.csv', index=False)#, header=False)
         pd.DataFrame(self.semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map_inflated.csv', index=False)#, header=False)
 
-    # plot segments
-    def plot_segments(self):
+    # plot semantic_map
+    def plot_semantic_map(self):
         start = time.time()
 
         # find centroids_in_LC of the objects' areas
@@ -787,9 +793,9 @@ class lime_rt_sub(object):
         segs = np.flip(self.semantic_map, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        self.fig.savefig(dirCurr + '/' + 'segments_without_labels' + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'semantic_map_without_labels' + '.png', transparent=False)
         #self.fig.clf()
-        pd.DataFrame(segs).to_csv(dirCurr + '/segments.csv', index=False)#, header=False)
+        pd.DataFrame(segs).to_csv(dirCurr + '/semantic_map.csv', index=False)#, header=False)
 
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -801,7 +807,7 @@ class lime_rt_sub(object):
         segs = np.flip(self.semantic_map_inflated, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        self.fig.savefig(dirCurr + '/' + 'segments_inflated_without_labels' + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'semantic_map_inflated_without_labels' + '.png', transparent=False)
         #self.fig.clf()
         pd.DataFrame(segs).to_csv(dirCurr + '/semantic_map_inflated.csv', index=False)#, header=False)
         
@@ -819,7 +825,7 @@ class lime_rt_sub(object):
             self.ax.scatter(self.centroids_semantic_map[i][1], self.local_map_size - self.centroids_semantic_map[i][2], c='white', marker='o')   
             self.ax.text(self.centroids_semantic_map[i][1], self.local_map_size - self.centroids_semantic_map[i][2], self.centroids_semantic_map[i][3], c='white')
 
-        self.fig.savefig(dirCurr + '/' + 'segments_with_labels' + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'semantic_map_with_labels' + '.png', transparent=False)
         self.fig.clf()
 
         pd.DataFrame(self.centroids_semantic_map).to_csv(dirCurr + '/centroids_semantic_map.csv', index=False)#, header=False)
@@ -838,28 +844,29 @@ class lime_rt_sub(object):
             self.ax.scatter(centroids_semantic_map_inflated[i][1], self.local_map_size - centroids_semantic_map_inflated[i][2], c='white', marker='o')   
             self.ax.text(centroids_semantic_map_inflated[i][1], self.local_map_size - centroids_semantic_map_inflated[i][2], centroids_semantic_map_inflated[i][3], c='white')
 
-        self.fig.savefig(dirCurr + '/' + 'segments_inflated_with_labels' + '.png', transparent=False)
+        self.fig.savefig(dirCurr + '/' + 'semantic_map_inflated_with_labels' + '.png', transparent=False)
         self.fig.clf()
 
         pd.DataFrame(centroids_semantic_map_inflated).to_csv(dirCurr + '/centroids_semantic_map_inflated.csv', index=False)#, header=False)
         
-        #fig = plt.figure(frameon=False)
-        #w = 1.6 * 3
-        #h = 1.6 * 3
-        #fig.set_size_inches(w, h)
-        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-        self.ax.set_axis_off()
-        self.fig.add_axes(self.ax)
-        img = np.flip(self.local_map, axis=0)
-        self.ax.imshow(img.astype('float64'), aspect='auto')
+        if self.use_local_costmap:
+            #fig = plt.figure(frameon=False)
+            #w = 1.6 * 3
+            #h = 1.6 * 3
+            #fig.set_size_inches(w, h)
+            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+            self.ax.set_axis_off()
+            self.fig.add_axes(self.ax)
+            img = np.flip(self.local_map, axis=0)
+            self.ax.imshow(img.astype('float64'), aspect='auto')
 
-        self.fig.savefig(dirCurr + '/' + 'local_costmap' + '.png', transparent=False)
-        self.fig.clf()
+            self.fig.savefig(dirCurr + '/' + 'local_costmap' + '.png', transparent=False)
+            self.fig.clf()
 
-        pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
+            pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
 
         end = time.time()
-        print('SEGMENTS PLOTTING TIME = ' + str(end-start) + ' seconds')
+        print('semantic map plotting = ' + str(round(end-start,3)) + ' seconds')
 
     # create interpretable features
     def create_interpretable_features(self):
@@ -878,8 +885,8 @@ class lime_rt_sub(object):
         # save object-affordance pairs for publisher
         pd.DataFrame(object_affordance_pairs).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs.csv', index=False)#, header=False)
 
-    # inflate the local costmap
-    def inflate_local_costmap(self):
+    # inflate the local costmap - old (slow) approach
+    def inflate_local_costmap_old(self):
         start = time.time()
 
         inflated_local_map = copy.deepcopy(self.local_map)
@@ -898,7 +905,7 @@ class lime_rt_sub(object):
                         self.inflated_local_map[j, i] = 99        
 
         end = time.time()
-        print('COSTMAP INFLATION RUNTIME = ', end-start)
+        print('costmap inflation runtime = ', round(end-start,3))
 
         dirCurr = self.costmap_dir + '/' + str(self.counter_global)
         try:
