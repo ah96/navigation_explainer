@@ -18,8 +18,8 @@ class lime_rt_sub(object):
     # constructor
     def __init__(self):
         # plot segments and costmaps
-        self.plot_segments_bool = False
-        self.plot_costmaps_bool = False
+        self.plot_segments_bool = True
+        self.plot_costmaps_bool = True
         # global counter for plotting
         self.counter_global = 0
     

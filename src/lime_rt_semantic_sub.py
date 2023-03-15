@@ -63,13 +63,14 @@ class lime_rt_sub(object):
         self.simulation = True
 
         # use local costmap
-        self.use_local_costmap = True
+        self.use_local_costmap = False
 
         # whether to plot
-        self.plot_costmaps_bool = True
+        self.plot_costmaps_bool = False
         self.plot_semantic_map_bool = True
         # global counter for plotting
         self.counter_global = 0
+        self.local_plan_counter = 0
         
         # data directories
         self.dirCurr = os.getcwd()
@@ -89,7 +90,7 @@ class lime_rt_sub(object):
             pass
 
         if self.plot_semantic_map_bool == True:
-            self.segmentation_dir = self.dirMain + '/segmentation_images'
+            self.segmentation_dir = self.dirMain + '/semantic_map_images'
             try:
                 os.mkdir(self.segmentation_dir)
             except FileExistsError:
@@ -130,12 +131,12 @@ class lime_rt_sub(object):
         self.global_plan = [] 
                 
         # local map vars
-        self.local_map = np.array([])
         self.local_map_origin_x = 0 
         self.local_map_origin_y = 0 
         self.local_map_resolution = 0.025
         self.local_map_size = 160
         self.local_map_info = []
+        self.local_map = np.zeros((self.local_map_size,self.local_map_size))
 
         # semantic map variables
         self.semantic_map = np.array([])
@@ -219,7 +220,7 @@ class lime_rt_sub(object):
         self.P = info.P
 
         # potential place to make semantic map, if local costmap is not used
-        if self.use_local_costmap == False:
+        if self.use_local_costmap == False: # and self.simulation == False
             # create semantic data
             self.create_semantic_data()
 
@@ -287,6 +288,30 @@ class lime_rt_sub(object):
             pd.DataFrame(self.tf_map_odom).to_csv(self.dirCurr + '/' + self.dirData + '/tf_map_odom.csv', index=False)#, header=False)            
             pd.DataFrame(self.local_plan).to_csv(self.dirCurr + '/' + self.dirData + '/local_plan.csv', index=False)#, header=False)
 
+            # potential place to make semantic map, if local costmap is not used
+            if self.use_local_costmap == False and self.simulation == True:
+                # increase the local planner counter
+                self.local_plan_counter += 1
+
+                if self.local_plan_counter == 10:
+                    # update local_map (costmap) data
+                    self.local_map_origin_x = self.robot_position_map.x - 0.5 * self.local_map_size * self.local_map_resolution
+                    self.local_map_origin_y = self.robot_position_map.y - 0.5 * self.local_map_size * self.local_map_resolution
+                    #self.local_map_resolution = msg.info.resolution
+                    #self.local_map_size = self.local_map_size
+                    self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
+
+                    # create np.array local_map object
+                    #self.local_map = np.zeros((self.local_map_size,self.local_map_size))
+
+                    # create semantic data
+                    self.create_semantic_data()
+
+                    # increase the global counter
+                    self.counter_global += 1
+                    # reset the local planner counter
+                    self.local_plan_counter = 0
+
         except:
             #print('exception = ', e) # local plan frame rate is too high to print possible exceptions
             return
@@ -319,10 +344,11 @@ class lime_rt_sub(object):
         print('\nlocal_costmap_callback')
         
         try:          
-            # update local_map (costmap) data
+            # update local_map data
             self.local_map_origin_x = msg.info.origin.position.x
             self.local_map_origin_y = msg.info.origin.position.y
             #self.local_map_resolution = msg.info.resolution
+            #self.local_map_size = self.local_map_size
             self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
 
             # create np.array local_map object
@@ -437,56 +463,59 @@ class lime_rt_sub(object):
             for i in range(0, self.ontology.shape[0]):
                 # if the object has some affordance (etc. movability, openability), then it may have changed its position 
                 if self.ontology[i][6] == 1 or self.ontology[i][7] == 1:
+                    # get the object's new position from Gazebo
                     obj_gazebo_name = self.gazebo_tags[i][0]
                     obj_idx = self.gazebo_names.index(obj_gazebo_name)
+                    obj_x_new = self.gazebo_poses[obj_idx].position.x
+                    obj_y_new = self.gazebo_poses[obj_idx].position.y
 
                     obj_x_size = copy.deepcopy(self.ontology[i][4])
                     obj_y_size = copy.deepcopy(self.ontology[i][5])
 
-                    obj_x = self.ontology[i][2]
-                    obj_y = self.ontology[i][3]
+                    obj_x_current = self.ontology[i][2]
+                    obj_y_current = self.ontology[i][3]
                     
                     # update ontology
                     # almost every object type in Gazebo has a different center of mass
                     if 'table' in obj_gazebo_name:
                         # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(self.gazebo_poses[obj_idx].position.x + 0.5*obj_x_size - obj_x)
-                        diff_y = abs(self.gazebo_poses[obj_idx].position.y - 0.5*obj_y_size - obj_y)
+                        diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
+                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
                         if diff_x > 0.1 or diff_y > 0.1:
                             #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][2] = self.gazebo_poses[obj_idx].position.x + 0.5*obj_x_size
-                            self.ontology[i][3] = self.gazebo_poses[obj_idx].position.y - 0.5*obj_y_size 
+                            self.ontology[i][2] = obj_x_new + 0.5*obj_x_size
+                            self.ontology[i][3] = obj_y_new - 0.5*obj_y_size 
                     elif 'wardrobe' in obj_gazebo_name:
                         # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(self.gazebo_poses[obj_idx].position.x - 0.5*obj_x_size - obj_x)
-                        diff_y = abs(self.gazebo_poses[obj_idx].position.y - 0.5*obj_y_size - obj_y)
+                        diff_x = abs(obj_x_new - 0.5*obj_x_size - obj_x_current)
+                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
                         if diff_x > 0.1 or diff_y > 0.1:
                             #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][2] = self.gazebo_poses[obj_idx].position.x - 0.5*obj_x_size
-                            self.ontology[i][3] = self.gazebo_poses[obj_idx].position.y - 0.5*obj_y_size 
+                            self.ontology[i][2] = obj_x_new - 0.5*obj_x_size
+                            self.ontology[i][3] = obj_y_new - 0.5*obj_y_size 
                     elif 'door' in obj_gazebo_name:
                         # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(self.gazebo_poses[obj_idx].position.x - obj_x)
-                        diff_y = abs(self.gazebo_poses[obj_idx].position.y - obj_y)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
                         if diff_x > 0.1 or diff_y > 0.1:
                             # if the doors are opened/closed they are shifted for 90 degrees
                             #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
                             self.ontology[i][4] = obj_y_size
                             self.ontology[i][5] = obj_x_size
 
-                            self.ontology[i][2] = self.gazebo_poses[obj_idx].position.x
-                            self.ontology[i][3] = self.gazebo_poses[obj_idx].position.y 
+                            self.ontology[i][2] = obj_x_new
+                            self.ontology[i][3] = obj_y_new 
                     else:
                         # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(self.gazebo_poses[obj_idx].position.x - obj_x)
-                        diff_y = abs(self.gazebo_poses[obj_idx].position.y - obj_y)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
                         if diff_x > 0.1 or diff_y > 0.1:
                             #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][2] = self.gazebo_poses[obj_idx].position.x
-                            self.ontology[i][3] = self.gazebo_poses[obj_idx].position.y 
+                            self.ontology[i][2] = obj_x_new
+                            self.ontology[i][3] = obj_y_new 
 
         # real world or simulation relying on object detection
-        else:
+        elif self.simulation == False:
             # in object detection the center of mass is always the object's centroid
             start = time.time()
     
@@ -558,7 +587,7 @@ class lime_rt_sub(object):
                             print('\nOld position: x = ' + str(x_o_curr) + ', y = ' + str(y_o_curr))
                             print('\nNew position: x = ' + str(x_o_new) + ', y = ' + str(y_o_new))                                
 
-        # save ontology for publisher
+        # save the updated ontology for the publisher
         pd.DataFrame(self.ontology).to_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv', index=False)#, header=False)
         
     # create semantic data
@@ -566,6 +595,7 @@ class lime_rt_sub(object):
         # update ontology
         self.update_ontology()
 
+        # create semantic map
         self.create_semantic_map()
 
         # plot semantic_map
@@ -582,27 +612,33 @@ class lime_rt_sub(object):
         t_mo = np.asarray([self.tf_map_odom[0],self.tf_map_odom[1],self.tf_map_odom[2]])
         r_mo = R.from_quat([self.tf_map_odom[3],self.tf_map_odom[4],self.tf_map_odom[5],self.tf_map_odom[6]])
         r_mo = np.asarray(r_mo.as_matrix())
+        #print('r_mo = ', r_mo)
+        #print('t_mo = ', t_mo)
 
         # tf from odom to map
         t_om = np.asarray([self.tf_odom_map[0],self.tf_odom_map[1],self.tf_odom_map[2]])
         r_om = R.from_quat([self.tf_odom_map[3],self.tf_odom_map[4],self.tf_odom_map[5],self.tf_odom_map[6]])
         r_om = np.asarray(r_om.as_matrix())
+        #print('r_om = ', r_om)
+        #print('t_om = ', t_om)
 
         # convert LC points from /odom to /map
         # LC origin is a bottom-left point
         lc_bl_odom_x = self.local_map_origin_x
         lc_bl_odom_y = self.local_map_origin_y
-        lc_p_odom = np.array([lc_bl_odom_x, lc_bl_odom_y, 0.0])
-        lc_p_map = lc_p_odom.dot(r_om) + t_om
+        lc_p_odom = np.array([lc_bl_odom_x, lc_bl_odom_y, 0.0])#
+        lc_p_map = lc_p_odom.dot(r_om) + t_om#
         lc_map_bl_x = lc_p_map[0]
         lc_map_bl_y = lc_p_map[1]
+        
         # LC's top-right point
         lc_tr_odom_x = self.local_map_origin_x + self.local_map_size * self.local_map_resolution
         lc_tr_odom_y = self.local_map_origin_y + self.local_map_size * self.local_map_resolution
-        lc_p_odom = np.array([lc_tr_odom_x, lc_tr_odom_y, 0.0])
-        lc_p_map = lc_p_odom.dot(r_om) + t_om
+        lc_p_odom = np.array([lc_tr_odom_x, lc_tr_odom_y, 0.0])#
+        lc_p_map = lc_p_odom.dot(r_om) + t_om#
         lc_map_tr_x = lc_p_map[0]
         lc_map_tr_y = lc_p_map[1]
+        
         # LC sides coordinates in the /map frame
         lc_map_left = lc_map_bl_x
         lc_map_right = lc_map_tr_x
@@ -634,9 +670,9 @@ class lime_rt_sub(object):
             tr_map_x = c_map_x + 0.5*x_size
             tr_map_y = c_map_y + 0.5*y_size
             p_map = np.array([tr_map_x, tr_map_y, 0.0])
-            p_odom = p_map.dot(r_mo) + t_mo
-            tr_odom_x = p_odom[0]
-            tr_odom_y = p_odom[1]
+            p_odom = p_map.dot(r_mo) + t_mo#
+            tr_odom_x = p_odom[0]#
+            tr_odom_y = p_odom[1]#
             tr_pixel_x = int((tr_odom_x - self.local_map_origin_x) / self.local_map_resolution)
             tr_pixel_y = int((tr_odom_y - self.local_map_origin_y) / self.local_map_resolution)
 
@@ -644,9 +680,9 @@ class lime_rt_sub(object):
             bl_map_x = c_map_x - 0.5*x_size
             bl_map_y = c_map_y - 0.5*y_size
             p_map = np.array([bl_map_x, bl_map_y, 0.0])
-            p_odom = p_map.dot(r_mo) + t_mo
-            bl_odom_x = p_odom[0]
-            bl_odom_y = p_odom[1]
+            p_odom = p_map.dot(r_mo) + t_mo#
+            bl_odom_x = p_odom[0]#
+            bl_odom_y = p_odom[1]#
             bl_pixel_x = int((bl_odom_x - self.local_map_origin_x) / self.local_map_resolution)
             bl_pixel_y = int((bl_odom_y - self.local_map_origin_y) / self.local_map_resolution)
 
@@ -656,7 +692,7 @@ class lime_rt_sub(object):
             object_right = tr_pixel_x
             object_bottom = bl_pixel_y
 
-            obstacle_in_lc = False 
+            obstacle_in_neighborhood = False 
             x_1 = 0
             x_2 = 0
             y_1 = 0
@@ -671,7 +707,7 @@ class lime_rt_sub(object):
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
-                obstacle_in_lc = True
+                obstacle_in_neighborhood = True
 
             # top-left(tl) in LC
             elif lc_map_left < tl_map_x < lc_map_right and lc_map_bottom < tl_map_y < lc_map_top:
@@ -682,7 +718,7 @@ class lime_rt_sub(object):
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
-                obstacle_in_lc = True
+                obstacle_in_neighborhood = True
 
             # bottom-left(bl) in LC
             elif lc_map_left < bl_map_x < lc_map_right and lc_map_bottom < bl_map_y < lc_map_top:
@@ -693,7 +729,7 @@ class lime_rt_sub(object):
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
-                obstacle_in_lc = True
+                obstacle_in_neighborhood = True
                 
             # bottom-right(br) in LC
             elif lc_map_left < br_map_x < lc_map_right and lc_map_bottom < br_map_y < lc_map_top:            
@@ -704,7 +740,7 @@ class lime_rt_sub(object):
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
-                obstacle_in_lc = True
+                obstacle_in_neighborhood = True
                 
             # top-right(tr) in LC
             elif lc_map_left < tr_map_x < lc_map_right and lc_map_bottom < tr_map_y < lc_map_top:
@@ -715,9 +751,9 @@ class lime_rt_sub(object):
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
-                obstacle_in_lc = True
+                obstacle_in_neighborhood = True
 
-            if obstacle_in_lc == True:
+            if obstacle_in_neighborhood == True:
                 # semantic map
                 self.semantic_map[max(0, y_1-widening_factor):min(self.local_map_size-1, y_2+widening_factor), max(0,x_1-widening_factor):min(self.local_map_size-1, x_2+widening_factor)] = i+1
                 
@@ -727,7 +763,7 @@ class lime_rt_sub(object):
                 self.semantic_map_inflated[max(0, y_1-inflation_y):min(self.local_map_size-1, y_2+inflation_y), max(0,x_1-inflation_x):min(self.local_map_size-1, x_2+inflation_x)] = i+1
        
         end = time.time()
-        print('semantic_segmentation_time = ' + str(round(end-start,3)) + ' seconds!')
+        print('semantic_map_creation_time = ' + str(round(end-start,3)) + ' seconds!')
 
 
         # find centroids of the objects in the semantic map
@@ -739,8 +775,8 @@ class lime_rt_sub(object):
             cy, cx = lc_region.centroid
             self.centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
 
+        # inflate using the remaining obstacle points of the local costmap            
         if self.use_local_costmap == True:
-            # inflate using the remaining obstacle points of the local costmap
             for i in range(self.semantic_map.shape[0]):
                 for j in range(0, self.semantic_map.shape[1]):
                     if self.local_map[i, j] > 98 and self.semantic_map_inflated[i, j] == 0:
@@ -767,15 +803,6 @@ class lime_rt_sub(object):
     # plot semantic_map
     def plot_semantic_map(self):
         start = time.time()
-
-        # find centroids_in_LC of the objects' areas
-        lc_regions = regionprops(self.semantic_map_inflated.astype(int))
-        #print('\nlen(lc_regions) = ', len(lc_regions))
-        centroids_semantic_map_inflated = []
-        for lc_region in lc_regions:
-            v = lc_region.label
-            cy, cx = lc_region.centroid
-            centroids_semantic_map_inflated.append([v,cx,cy,self.ontology[v-1][1]])
 
         dirCurr = self.segmentation_dir + '/' + str(self.counter_global)            
         try:
@@ -821,14 +848,23 @@ class lime_rt_sub(object):
         segs = np.flip(self.semantic_map, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-        for i in range(0, len(self.centroids_semantic_map)):
-            self.ax.scatter(self.centroids_semantic_map[i][1], self.local_map_size - self.centroids_semantic_map[i][2], c='white', marker='o')   
-            self.ax.text(self.centroids_semantic_map[i][1], self.local_map_size - self.centroids_semantic_map[i][2], self.centroids_semantic_map[i][3], c='white')
+        # find centroids_in_LC of the objects' areas
+        lc_regions = regionprops(segs.astype(int))
+        #print('\nlen(lc_regions) = ', len(lc_regions))
+        centroids_semantic_map = []
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
+
+        for i in range(0, len(centroids_semantic_map)):
+            self.ax.scatter(centroids_semantic_map[i][1], centroids_semantic_map[i][2], c='white', marker='o')   
+            self.ax.text(centroids_semantic_map[i][1], centroids_semantic_map[i][2], centroids_semantic_map[i][3], c='white')
 
         self.fig.savefig(dirCurr + '/' + 'semantic_map_with_labels' + '.png', transparent=False)
         self.fig.clf()
 
-        pd.DataFrame(self.centroids_semantic_map).to_csv(dirCurr + '/centroids_semantic_map.csv', index=False)#, header=False)
+        pd.DataFrame(centroids_semantic_map).to_csv(dirCurr + '/centroids_semantic_map.csv', index=False)#, header=False)
         
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -840,9 +876,18 @@ class lime_rt_sub(object):
         segs = np.flip(self.semantic_map_inflated, axis=0)
         self.ax.imshow(segs.astype('float64'), aspect='auto')
 
+        # find centroids_in_LC of the objects' areas
+        lc_regions = regionprops(segs.astype(int))
+        #print('\nlen(lc_regions) = ', len(lc_regions))
+        centroids_semantic_map_inflated = []
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            centroids_semantic_map_inflated.append([v,cx,cy,self.ontology[v-1][1]])
+
         for i in range(0, len(centroids_semantic_map_inflated)):
-            self.ax.scatter(centroids_semantic_map_inflated[i][1], self.local_map_size - centroids_semantic_map_inflated[i][2], c='white', marker='o')   
-            self.ax.text(centroids_semantic_map_inflated[i][1], self.local_map_size - centroids_semantic_map_inflated[i][2], centroids_semantic_map_inflated[i][3], c='white')
+            self.ax.scatter(centroids_semantic_map_inflated[i][1], centroids_semantic_map_inflated[i][2], c='white', marker='o')   
+            self.ax.text(centroids_semantic_map_inflated[i][1], centroids_semantic_map_inflated[i][2], centroids_semantic_map_inflated[i][3], c='white')
 
         self.fig.savefig(dirCurr + '/' + 'semantic_map_inflated_with_labels' + '.png', transparent=False)
         self.fig.clf()
