@@ -63,11 +63,11 @@ class lime_rt_sub(object):
         self.simulation = True
 
         # use local costmap
-        self.use_local_costmap = False
+        self.use_local_costmap = True
 
         # whether to plot
         self.plot_costmaps_bool = False
-        self.plot_semantic_map_bool = True
+        self.plot_semantic_map_bool = False
         # global counter for plotting
         self.counter_global = 0
         self.local_plan_counter = 0
@@ -293,7 +293,7 @@ class lime_rt_sub(object):
                 # increase the local planner counter
                 self.local_plan_counter += 1
 
-                if self.local_plan_counter == 10:
+                if self.local_plan_counter == 20:
                     # update local_map (costmap) data
                     self.local_map_origin_x = self.robot_position_map.x - 0.5 * self.local_map_size * self.local_map_resolution
                     self.local_map_origin_y = self.robot_position_map.y - 0.5 * self.local_map_size * self.local_map_resolution
