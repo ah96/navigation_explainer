@@ -50,6 +50,7 @@ def quaternion_to_euler(x, y, z, w):
     yaw = math.atan2(t3, t4)
 
     return [yaw, pitch, roll]
+
 # convert euler angles to orientation quaternion
 def euler_to_quaternion(roll, pitch, yaw):
   qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
@@ -233,12 +234,8 @@ class ImageExplanation(object):
 
     def get_image_and_mask(self, label):
 
-        print('GET IMAGE AND MASK STARTING!!!!')
-        #print('self.segments.shape: ', self.segments.shape)
-        #print('self.local_exp: ', self.local_exp)
-        #print('label: ', label)
-        #print('self.ontology: ', self.ontology)
-        print('self.object_affordance_pairs: ', self.object_affordance_pairs)
+        #print('get image and mask starting')
+        #print('self.object_affordance_pairs: ', self.object_affordance_pairs)
 
         if label not in self.local_exp:
             raise KeyError('Label not in explanation')
@@ -247,13 +244,13 @@ class ImageExplanation(object):
 
         temp = np.zeros(self.image.shape)
 
-        w_sum = 0.0
+        w_sum_abs = 0.0
         w_s_abs = []
         for f, w in exp:
-            w_sum += abs(w)
+            w_sum_abs += abs(w)
             w_s_abs.append(abs(w))
-        max_w = max(w_s_abs)
-        if max_w == 0:
+        max_w_abs = max(w_s_abs)
+        if max_w_abs == 0:
             self.all_weights_zero = True
             #temp[self.image == 0] = self.free_space_shade
             #temp[self.image != 0] = 0.0
@@ -282,27 +279,27 @@ class ImageExplanation(object):
             # color the obstacle-affordance pair with green or red
             if w > 0:
                 if self.use_maximum_weight:
-                    temp[self.segments == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
-                    rgb_values.append(self.val_high * w / max_w)
+                    temp[self.segments == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                    rgb_values.append(self.val_high * w / max_w_abs)
                 else:
-                    temp[self.segments == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum
-                    rgb_values.append(self.val_high * w / w_sum)
+                    temp[self.segments == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
+                    rgb_values.append(self.val_high * w / w_sum_abs)
             elif w < 0:
                 if self.use_maximum_weight:
-                    temp[self.segments == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w
-                    rgb_values.append(self.val_high * abs(w) / max_w)
+                    temp[self.segments == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                    rgb_values.append(self.val_high * abs(w) / max_w_abs)
                 else:
-                    temp[self.segments == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum
-                    rgb_values.append(self.val_high * abs(w) / w_sum)
+                    temp[self.segments == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
+                    rgb_values.append(self.val_high * abs(w) / w_sum_abs)
 
             imgs[f] = temp    
 
-        print('weights = ', w_s)
-
-        print('GET IMAGE AND MASK ENDING!!!!')
+        #print('weights = ', w_s)
+        #print('get image and mask ending')
 
         return imgs, exp, w_s, rgb_values
 
+# lime_rt publisher class
 class lime_rt_pub(object):
     # Constructor
     def __init__(self):
@@ -310,13 +307,16 @@ class lime_rt_pub(object):
 
         self.counter_global = 0
 
-        self.plot_perturbations = False 
-        self.plot_classification = True
-        self.plot_explanation = False
+        # plot bool vars
+        self.plot_perturbations_bool = False 
+        self.plot_classification_bool = True
+        self.plot_explanation_bool = False
+
+        # publish bool vars
+        self.publish_explanation_coeffs_bool = False  
+        self.publish_explanation_image_bool = False
 
         self.hard_obstacle = 99
-        
-        self.qsr = QSR()
         
         self.dirCurr = os.getcwd()
 
@@ -332,21 +332,21 @@ class lime_rt_pub(object):
         except FileExistsError:
             pass
 
-        if self.plot_explanation == True:
+        if self.plot_explanation_bool == True:
             self.explanation_dir = self.dirMain + '/explanation_images'
             try:
                 os.mkdir(self.explanation_dir)
             except FileExistsError:
                 pass
 
-        if self.plot_perturbations == True: 
+        if self.plot_perturbations_bool == True: 
             self.perturbation_dir = self.dirMain + '/perturbation_images'
             try:
                 os.mkdir(self.perturbation_dir)
             except FileExistsError:
                 pass
         
-        if self.plot_classification == True:
+        if self.plot_classification_bool == True:
             self.classifier_dir = self.dirMain + '/classifier_images'
             try:
                 os.mkdir(self.classifier_dir)
@@ -368,22 +368,17 @@ class lime_rt_pub(object):
         self.file_path_costmap = self.dirData + '/image.csv'
 
         # plans' variables
-        self.transformed_plan_original_xs = [] 
-        self.transformed_plan_original_ys = []
-        self.transformed_plan_original = []
-        self.local_plan_x_list_original = []
-        self.local_plan_y_list_original = []
+        self.global_plan_original_xs = [] 
+        self.global_plan_original_ys = []
+        self.global_plan_original = []
+        self.local_plan_xs_original = []
+        self.local_plan_ys_original = []
         self.local_plan_original = []
-        self.global_plan_empty = True
-        self.local_plan_empty = True
-        self.local_plan_counter = 0
 
-        # costmap variables
+        # local map variables
         self.labels = np.array([]) 
         self.distances = np.array([])
-        self.costmap_size = 160
-        self.pd_image_size = (self.costmap_size,self.costmap_size) 
-        self.local_costmap_empty = True
+        self.local_map_size = 160
    
         # deviation
         self.original_deviation = 0
@@ -410,19 +405,27 @@ class lime_rt_pub(object):
         # header
         self.header = Header()
 
-        # bool variables
-        self.publish_explanation_coeffs = False  
-        self.publish_explanation_image = False
-
     # initialize publishers
     def main_(self):
-        if self.publish_explanation_image:
+        if self.publish_explanation_image_bool:
             self.pub_exp_image = rospy.Publisher('/lime_explanation_image', Image, queue_size=10)
             self.br = CvBridge()
 
-        if self.publish_explanation_coeffs:
+        if self.publish_explanation_coeffs_bool:
             # N_segments * (label, coefficient) + (original_deviation)
             self.pub_lime = rospy.Publisher("/lime_rt_exp", Float32MultiArray, queue_size=10)
+
+        if self.publish_pointcloud)bool == True:
+            self.pub_exp_pointcloud = rospy.Publisher("/lime_explanation_layer", PointCloud2)
+
+        if self.plot_explanation_bool==True or self.plot_classifier_bool==True or self.plot_perturbations_bool==True:
+            self.fig = plt.figure(frameon=False)
+            self.w = 1.6 * 3
+            self.h = 1.6 * 3
+            self.fig.set_size_inches(self.w, self.h)
+            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+            self.ax.set_axis_off()
+            self.fig.add_axes(self.ax)
 
     # flip matrix horizontally or vertically
     def matrixflip(self,m,d):
@@ -499,16 +502,16 @@ class lime_rt_pub(object):
             if os.path.getsize(self.file_path_lp_x) == 0 or os.path.exists(self.file_path_lp_x) == False:
                 pass
             else:
-                self.local_plan_x_list_original = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/local_plan_x_list.csv'))
+                self.local_plan_xs_original = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/local_plan_x_list.csv'))
                 if print_data == True:
-                    print('self.local_plan_x_list_original.shape = ', self.local_plan_x_list_original.shape)
+                    print('self.local_plan_xs_original.shape = ', self.local_plan_xs_original.shape)
 
             if os.path.getsize(self.file_path_lp_y) == 0 or os.path.exists(self.file_path_lp_y) == False:
                 pass
             else:           
-                self.local_plan_y_list_original = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/local_plan_y_list.csv'))
+                self.local_plan_ys_original = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/local_plan_y_list.csv'))
                 if print_data == True:
-                    print('self.local_plan_y_list_original.shape = ', self.local_plan_y_list_original.shape)
+                    print('self.local_plan_ys_original.shape = ', self.local_plan_ys_original.shape)
             
             if os.path.getsize(self.file_path_lp) == 0 or os.path.exists(self.file_path_lp) == False:
                 pass        
@@ -620,17 +623,17 @@ class lime_rt_pub(object):
         self.y_odom_index = [self.localCostmapIndex_y_odom]
         # print('self.y_odom_index: ', self.y_odom_index)
 
-        self.transformed_plan_original_xs = []
-        self.transformed_plan_original_ys = []
-        self.transformed_plan_original = []
+        self.global_plan_original_xs = []
+        self.global_plan_original_ys = []
+        self.global_plan_original = []
         for i in range(0, self.global_plan_tmp.shape[0]):
             x_temp = int((self.global_plan_tmp.iloc[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
             y_temp = int((self.global_plan_tmp.iloc[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
-                self.transformed_plan_original_xs.append(x_temp)
-                self.transformed_plan_original_ys.append(self.costmap_size - y_temp)
-                self.transformed_plan_original.append([x_temp, y_temp])
+            if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
+                self.global_plan_original_xs.append(x_temp)
+                self.global_plan_original_ys.append(self.local_map_size - y_temp)
+                self.global_plan_original.append([x_temp, y_temp])
 
         #'''
         # save robot odometry orientation to class variables
@@ -741,7 +744,7 @@ class lime_rt_pub(object):
                             #temp[door_tl_pixel_y:door_tl_pixel_y + x_size, door_tl_pixel_x:door_tl_pixel_x + y_size] = label
                             inflation_x = int((max(23, x_size) - x_size) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
                             inflation_y = int((max(23, y_size) - y_size) / 2)                 
-                            temp[max(0, door_tl_pixel_y-inflation_x):min(self.costmap_size-1, door_tl_pixel_y+x_size+inflation_x), max(0,door_tl_pixel_x-inflation_y):min(self.costmap_size-1, door_tl_pixel_x+y_size+inflation_y)] = self.hard_obstacle
+                            temp[max(0, door_tl_pixel_y-inflation_x):min(self.local_map_size-1, door_tl_pixel_y+x_size+inflation_x), max(0,door_tl_pixel_x-inflation_y):min(self.local_map_size-1, door_tl_pixel_x+y_size+inflation_y)] = self.hard_obstacle
 
                         # MORAS DODATI U  ONTOLOGY SA KOJE SE STRANE VRATA OD ORMARA OTVARAJU: TOP, LEFT, RIGHT, BOTTOM 
                         # I OVO IMPLEMENTIRATI U OVOM KODU
@@ -774,14 +777,14 @@ class lime_rt_pub(object):
                             inflation_y = int((max(23, self.ontology[label-1][5]) - self.ontology[label-1][5]) / 2) 
                             x_size = int(1.0 * self.ontology[label - 1][4] / self.localCostmapResolution)
                             y_size = int(1.0 * self.ontology[label - 1][5] / self.localCostmapResolution)
-                            if (0 <= cab_tl_pixel_x < self.costmap_size and 0 <= cab_tl_pixel_y < self.costmap_size):                            
-                                temp[max(0,cab_tl_pixel_y-inflation_y):min(self.costmap_size-1, cab_tl_pixel_y+y_size+inflation_y), max(0,cab_tl_pixel_x-inflation_x):min(self.costmap_size-1, cab_tl_pixel_x+x_size+inflation_x)] = self.hard_obstacle
+                            if (0 <= cab_tl_pixel_x < self.local_map_size and 0 <= cab_tl_pixel_y < self.local_map_size):                            
+                                temp[max(0,cab_tl_pixel_y-inflation_y):min(self.local_map_size-1, cab_tl_pixel_y+y_size+inflation_y), max(0,cab_tl_pixel_x-inflation_x):min(self.local_map_size-1, cab_tl_pixel_x+x_size+inflation_x)] = self.hard_obstacle
 
                 imgs.append(temp)                        
 
 
             # plot perturbations
-            if self.plot_perturbations and len(imgs)>0:
+            if self.plot_perturbations_bool and len(imgs)>0:
                 dirCurr = self.perturbation_dir + '/' + str(self.counter_global)
                 try:
                     os.mkdir(dirCurr)
@@ -827,9 +830,9 @@ class lime_rt_pub(object):
         transformed_plan_ys = []
         for i in range(0, transformed_plan.shape[0]):
             x_temp = int((transformed_plan[i, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-            y_temp = self.costmap_size - int((transformed_plan[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+            y_temp = self.local_map_size - int((transformed_plan[i, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-            if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+            if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
                 transformed_plan_xs.append(x_temp)
                 transformed_plan_ys.append(y_temp)
 
@@ -840,7 +843,7 @@ class lime_rt_pub(object):
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
 
-        self.y_odom_index = [self.costmap_size - self.y_odom_index[0]]
+        self.y_odom_index = [self.local_map_size - self.y_odom_index[0]]
             
         for ctr in range(0, sample_size):
             # indices of local plan's poses in local costmap
@@ -851,9 +854,9 @@ class lime_rt_pub(object):
             local_plans_local = local_plans.loc[local_plans['ID'] == ctr]
             for j in range(0, local_plans_local.shape[0]):
                     x_temp = int((local_plans_local.iloc[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                    y_temp = self.costmap_size - int((local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                    y_temp = self.local_map_size - int((local_plans_local.iloc[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-                    if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                    if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
                         local_plan_x_list.append(x_temp)
                         local_plan_y_list.append(y_temp)
 
@@ -942,11 +945,11 @@ class lime_rt_pub(object):
         end = time.time()
         print('CLASSIFIER_FN RESULTS LOADING TIME = ', end-start)
 
-        self.transformed_plan_original = np.array(self.transformed_plan_original)
+        self.global_plan_original = np.array(self.global_plan_original)
         self.local_plan_original = np.array(self.local_plan_original)
 
-        if self.plot_classification == True:
-            self.classifier_fn_plot(self.transformed_plan_original, self.local_plans, sampled_instance, self.sample_size)
+        if self.plot_classification_bool == True:
+            self.classifier_fn_plot(self.global_plan_original, self.local_plans, sampled_instance, self.sample_size)
 
 
         local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
@@ -1021,7 +1024,7 @@ class lime_rt_pub(object):
         
         self.original_deviation = local_plan_deviation.iloc[-1, 0]
         #print('\noriginal_deviation = ', self.original_deviation)
-        if self.plot_classification:
+        if self.plot_classification_bool:
             dirCurr = self.classifier_dir + '/' + str(self.counter_global)
             pd.DataFrame(local_plan_deviation).to_csv(dirCurr + '/deviations.csv', index=False, header=False)
 
@@ -1117,7 +1120,7 @@ class lime_rt_pub(object):
                 centroids_for_plot.append([v,cx,cy,self.ontology[v-1][1]])
 
 
-            if self.plot_explanation == True:
+            if self.plot_explanation_bool == True:
                 self.dirPlotExp = self.explanation_dir + '/' + str(self.counter_global)
                 try:
                     os.mkdir(self.dirPlotExp)
@@ -1131,7 +1134,7 @@ class lime_rt_pub(object):
                 ax = plt.Axes(fig, [0., 0., 1., 1.])
                 ax.set_axis_off()
                 
-                self.y_odom_index = [self.costmap_size - self.y_odom_index[0]]
+                self.y_odom_index = [self.local_map_size - self.y_odom_index[0]]
 
                 local_plan_x_list = []
                 local_plan_y_list = []
@@ -1139,9 +1142,9 @@ class lime_rt_pub(object):
                 # find if there is local plan
                 for j in range(0, self.local_plan_original.shape[0]):
                         x_temp = int((self.local_plan_original[j, 0] - self.localCostmapOriginX) / self.localCostmapResolution)
-                        y_temp = self.costmap_size - int((self.local_plan_original[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
+                        y_temp = self.local_map_size - int((self.local_plan_original[j, 1] - self.localCostmapOriginY) / self.localCostmapResolution)
 
-                        if 0 <= x_temp < self.costmap_size and 0 <= y_temp < self.costmap_size:
+                        if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
                             local_plan_x_list.append(x_temp)
                             local_plan_y_list.append(y_temp)
 
@@ -1152,15 +1155,15 @@ class lime_rt_pub(object):
                     output[:,:,2] = np.flip(output[:,:,2], axis=0)
 
                     fig.add_axes(ax)
-                    ax.scatter(self.transformed_plan_original_xs, self.transformed_plan_original_ys, c='blue', marker='x')
+                    ax.scatter(self.global_plan_original_xs, self.global_plan_original_ys, c='blue', marker='x')
                     ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
                     ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-                    ax.text(self.x_odom_index[0], self.costmap_size - self.y_odom_index[0], 'robot', c='white')
+                    ax.text(self.x_odom_index[0], self.local_map_size - self.y_odom_index[0], 'robot', c='white')
                     ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
                     ax.imshow(output.astype('float64'), aspect='auto')
                     for i in range(0, len(centroids_for_plot)):
-                        ax.scatter(centroids_for_plot[i][1], self.costmap_size - centroids_for_plot[i][2], c='white', marker='o')   
-                        ax.text(centroids_for_plot[i][1], self.costmap_size - centroids_for_plot[i][2], centroids_for_plot[i][3], c='white')
+                        ax.scatter(centroids_for_plot[i][1], self.local_map_size - centroids_for_plot[i][2], c='white', marker='o')   
+                        ax.text(centroids_for_plot[i][1], self.local_map_size - centroids_for_plot[i][2], centroids_for_plot[i][3], c='white')
                     fig.savefig(self.dirPlotExp + '/explanation_' + self.object_affordance_pairs[k][1] + '_' + self.object_affordance_pairs[k][2] + '.png', transparent=False)
                     fig.clf()
 
