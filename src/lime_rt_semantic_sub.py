@@ -66,8 +66,8 @@ class lime_rt_sub(object):
         self.use_local_costmap = True
 
         # whether to plot
-        self.plot_costmaps_bool = False
-        self.plot_semantic_map_bool = False
+        self.plot_costmaps_bool = True
+        self.plot_semantic_map_bool = True
         # global counter for plotting
         self.counter_global = 0
         self.local_plan_counter = 0
@@ -763,7 +763,7 @@ class lime_rt_sub(object):
                 self.semantic_map_inflated[max(0, y_1-inflation_y):min(self.local_map_size-1, y_2+inflation_y), max(0,x_1-inflation_x):min(self.local_map_size-1, x_2+inflation_x)] = i+1
        
         end = time.time()
-        print('semantic_map_creation_time = ' + str(round(end-start,3)) + ' seconds!')
+        print('semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
 
 
         # find centroids of the objects in the semantic map
@@ -911,7 +911,7 @@ class lime_rt_sub(object):
             pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
 
         end = time.time()
-        print('semantic map plotting = ' + str(round(end-start,3)) + ' seconds')
+        print('semantic map plotting runtime = ' + str(round(end-start,3)) + ' seconds')
 
     # create interpretable features
     def create_interpretable_features(self):

@@ -304,9 +304,9 @@ class lime_rt_pub(object):
         self.counter_global = 0
 
         # publish bool variables
-        self.publish_explanation_coeffs = True  
-        self.publish_explanation_image = True
-        self.publish_pointcloud = True
+        self.publish_explanation_coeffs_bool = True  
+        self.publish_explanation_image_bool = True
+        self.publish_pointcloud_bool = True
 
         # plotting
         self.plot_explanation_bool = False
@@ -362,6 +362,7 @@ class lime_rt_pub(object):
         self.file_path_segments = self.dir_main + '/' + self.dir_name + '/segments.csv'
         self.file_path_data = self.dir_main + '/' + self.dir_name + '/data.csv'
         self.file_path_local_costmap = self.dir_main + '/' + self.dir_name + '/local_costmap.csv'
+        self.file_path_fudged_image = self.dir_main + '/' + self.dir_name + '/fudged_image.csv'
 
         # plans' variables
         self.local_plan = []
@@ -389,7 +390,7 @@ class lime_rt_pub(object):
         feature_selection = feature_selection
         self.base = LimeBase(kernel_fn, verbose, random_state=random_state)
         
-        if self.publish_pointcloud:
+        if self.publish_pointcloud_bool:
             # point_cloud variables
             self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
             PointField('y', 4, PointField.FLOAT32, 1),
@@ -509,8 +510,7 @@ class lime_rt_pub(object):
 
     # save data for local planner
     def save_data_for_local_planner(self):
-        # Saving data to .csv files for C++ node - local navigation planner
-        
+        # Saving data to .csv files for C++ node - local navigation planner   
         try:
             start = time.time()
             
@@ -931,7 +931,7 @@ class lime_rt_pub(object):
         end = time.time()
         print('TARGET CALC RUNTIME = ', round(end-start,3))
         
-        if self.publish_explanation_coeffs:
+        if self.publish_explanation_coeffs_bool:
             self.original_deviation = local_plan_deviation.iloc[0, 0]
             #print('\noriginal_deviation = ', self.original_deviation)
 
@@ -947,7 +947,7 @@ class lime_rt_pub(object):
         if self.load_data() == False:
             return
         
-        # save data for teb
+        # save data for the local planner
         if self.save_data_for_local_planner() == False:
             return
 
@@ -1011,7 +1011,7 @@ class lime_rt_pub(object):
 
             self.counter_global+=1    
 
-            if self.publish_explanation_coeffs:
+            if self.publish_explanation_coeffs_bool:
                 # publish explanation coefficients
                 exp_with_centroids = Float32MultiArray()
                 segs_unique = np.unique(self.segments)
@@ -1021,7 +1021,7 @@ class lime_rt_pub(object):
                 exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
                 self.pub_lime.publish(exp_with_centroids) # N_segments * (label, coefficient) + (original_deviation)
 
-            if self.publish_explanation_image:
+            if self.publish_explanation_image_bool:
                 exp_img_start = time.time()
                 
                 output = self.output[:, :, [2, 1, 0]] * 255.0 #.astype(np.uint8)
@@ -1032,7 +1032,7 @@ class lime_rt_pub(object):
                 exp_img_end = time.time()
                 print('PUBLISH EXPLANATION IMAGE RUNTIME = ', round(exp_img_end - exp_img_start,3))
 
-            if self.publish_pointcloud:
+            if self.publish_pointcloud_bool:
                 # publish explanation layer
                 points_start = time.time()
                 z = 0.0
@@ -1073,14 +1073,14 @@ class lime_rt_pub(object):
     
     # initialize publishers
     def main_(self):
-        if self.publish_explanation_image == True:
+        if self.publish_explanation_image_bool == True:
             self.pub_exp_image = rospy.Publisher('/lime_explanation_image', Image, queue_size=10)
             self.br = CvBridge()
 
-        if self.publish_pointcloud == True:
+        if self.publish_pointcloud_bool == True:
             self.pub_exp_pointcloud = rospy.Publisher("/lime_explanation_layer", PointCloud2)
 
-        if self.publish_explanation_coeffs == True:
+        if self.publish_explanation_coeffs_bool == True:
             # N_segments * (label, coefficient) + (original_deviation)
             self.pub_lime = rospy.Publisher("/lime_rt_exp", Float32MultiArray, queue_size=10)
 
