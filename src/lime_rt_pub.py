@@ -358,13 +358,10 @@ class lime_rt_pub(object):
         self.file_path_tf_odom_map = self.dir_main + '/' + self.dir_name + '/tf_odom_map.csv'
         self.file_path_tf_map_odom = self.dir_main + '/' + self.dir_name + '/tf_map_odom.csv'
         self.file_path_odom = self.dir_main + '/' + self.dir_name + '/odom.csv'
-        self.file_path_local_plan_xs = self.dir_main + '/' + self.dir_name + '/local_plan_xs.csv'
-        self.file_path_local_plan_ys = self.dir_main + '/' + self.dir_name + '/local_plan_ys.csv'
         self.file_path_local_plan = self.dir_main + '/' + self.dir_name + '/local_plan.csv'
         self.file_path_segments = self.dir_main + '/' + self.dir_name + '/segments.csv'
         self.file_path_data = self.dir_main + '/' + self.dir_name + '/data.csv'
         self.file_path_local_costmap = self.dir_main + '/' + self.dir_name + '/local_costmap.csv'
-        self.file_path_fudged_image = self.dir_main + '/' + self.dir_name + '/fudged_image.csv'
 
         # plans' variables
         self.local_plan = []
@@ -373,7 +370,6 @@ class lime_rt_pub(object):
         self.labels = np.array([]) 
         self.distances = np.array([])
         self.local_costmap_size = 160
-        self.pd_image_size = (self.local_costmap_size,self.local_costmap_size)
 
         # deviation
         self.original_deviation = 0
