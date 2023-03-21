@@ -843,7 +843,7 @@ class lime_rt_pub(object):
         elif sampled_instances_shape_len == 2:
             np.savetxt(self.dir_curr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instances, delimiter=",")
         end = time.time()
-        print('LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
+        print('classifier_fn: LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
 
         # calling ROS C++ node
         #print('\nC++ node started')
@@ -860,7 +860,7 @@ class lime_rt_pub(object):
         
         time.sleep(0.35)
         end = time.time()
-        print('REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
+        print('classifier_fn: REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
 
         #print('\nC++ node ended')
 
@@ -875,13 +875,13 @@ class lime_rt_pub(object):
         # load transformed global plan to /odom frame
         transformed_plan = np.array(pd.read_csv(self.dir_curr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
         end = time.time()
-        print('BETWEEN TEB AND TARGET RUNTIME = ', round(end-start,3))
-
-        local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
+        print('classifier_fn: RESULTS LOADING RUNTIME = ', round(end-start,3))
 
         # plot local planner outputs for every perturbation
         if self.plot_classifier_bool:
             self.plot_classifier(transformed_plan, local_plans, sampled_instances, sample_size)
+
+        local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
         start = time.time()
         #transformed_plan = np.array(transformed_plan)
@@ -929,7 +929,7 @@ class lime_rt_pub(object):
                 devs.append(min(local_diffs))   
             local_plan_deviation.iloc[i, 0] = sum(devs)
         end = time.time()
-        print('TARGET CALC RUNTIME = ', round(end-start,3))
+        print('classifier_fn: TARGET CALC RUNTIME = ', round(end-start,3))
         
         if self.publish_explanation_coeffs_bool:
             self.original_deviation = local_plan_deviation.iloc[0, 0]

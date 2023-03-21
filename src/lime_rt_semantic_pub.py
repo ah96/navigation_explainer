@@ -311,7 +311,7 @@ class lime_rt_pub(object):
 
         # plot bool vars
         self.plot_perturbations_bool = True 
-        self.plot_classification_bool = False
+        self.plot_classification_bool = True
         self.plot_explanation_bool = True
 
         # publish bool vars
@@ -540,7 +540,7 @@ class lime_rt_pub(object):
             #self.robot_orientation_map = np.array([0.0,0.0,self.amcl_pose.iloc[2],self.amcl_pose.iloc[3]])
 
             end = time.time()
-            print('\n\nDATA LOADING RUNTIME = ', round(end-start,3))
+            print('\n\nDATA LOADING RUNTIME = ', round(round(end-start,3),3))
 
         except Exception as e:
             print('exception = ', e)
@@ -586,7 +586,7 @@ class lime_rt_pub(object):
             self.odom.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
             end = time.time()
-            print('DATA LOCAL PLANNER SAVING RUNTIME = ', round(end-start,3))
+            print('DATA LOCAL PLANNER SAVING RUNTIME = ', round(round(end-start,3),3))
 
         except Exception as e:
             print('exception = ', e)
@@ -607,7 +607,7 @@ class lime_rt_pub(object):
             metric=distance_metric
         ).ravel()
         end = time.time()
-        print('DISTANCES CREATION RUNTIME = ', round(end-start,3))
+        print('DISTANCES CREATION RUNTIME = ', round(round(end-start,3),3))
 
     # call local planner
     def create_labels(self, classifier_fn):
@@ -777,7 +777,7 @@ class lime_rt_pub(object):
             self.labels = np.array(self.labels)
         
             end = time.time()
-            print('LABELS CREATION RUNTIME = ', round(end-start,3))
+            print('LABELS CREATION RUNTIME = ', round(round(end-start,3),3))
         
         except Exception as e:
             print('exception = ', e)
@@ -787,81 +787,104 @@ class lime_rt_pub(object):
         return True   
 
     # plot local planner outputs for every perturbation
-    def classifier_fn_plot(self, transformed_plan, local_plans, sampled_instance, sample_size):
+    def classifier_fn_plot(self, transformed_plan, local_plans, sampled_instances, sample_size):
+        start = time.time()
+
         dirCurr = self.classifier_dir + '/' + str(self.counter_global)
         try:
             os.mkdir(dirCurr)
         except FileExistsError:
             pass
 
-        transformed_plan_xs = []
-        transformed_plan_ys = []
+        robot_x = self.amcl_pose.iloc[0,0]
+        robot_y = self.amcl_pose.iloc[0,1]
+
+        robot_x_idx = int((robot_x - self.local_map_origin_x) / self.local_map_resolution)
+        robot_y_idx = self.local_map_size - 1 - int((robot_y - self.local_map_origin_y) / self.local_map_resolution)
+
+        robot_orient_z = self.amcl_pose.iloc[0,2]
+        robot_orient_w = self.amcl_pose.iloc[0,3]
+        # calculate Euler angles based on orientation quaternion
+        [robot_yaw, robot_pitch, robot_roll] = quaternion_to_euler(0.0, 0.0, robot_orient_z, robot_orient_w)
+        
+        # find yaw angles projections on x and y axes and save them to class variables
+        robot_yaw_x = math.cos(robot_yaw)
+        robot_yaw_y = math.sin(robot_yaw)
+
+        transformed_plan_xs_idx = []
+        transformed_plan_ys_idx = []
         for i in range(0, transformed_plan.shape[0]):
-            x_temp = int((transformed_plan[i, 0] - self.locallocal_mapOriginX) / self.locallocal_mapResolution)
-            y_temp = self.local_map_size - int((transformed_plan[i, 1] - self.locallocal_mapOriginY) / self.locallocal_mapResolution)
+            x_temp = int((transformed_plan[i, 0] - self.local_map_origin_x) / self.local_map_resolution)
+            y_temp = int((transformed_plan[i, 1] - self.local_map_origin_y) / self.local_map_resolution)
 
-            if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
-                transformed_plan_xs.append(x_temp)
-                transformed_plan_ys.append(y_temp)
+            if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
+                transformed_plan_xs_idx.append(x_temp)
+                transformed_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
 
-        fig = plt.figure(frameon=True)
-        w = 1.6*3
-        h = 1.6*3
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-
-        self.y_odom_index = [self.local_map_size - self.y_odom_index[0]]
-            
+        pd.DataFrame(transformed_plan_xs_idx).to_csv(dirCurr + '/transformed_plan_xs_idx.csv', index=False)#, header=False)
+        pd.DataFrame(transformed_plan_ys_idx).to_csv(dirCurr + '/transformed_plan_ys_idx.csv', index=False)#, header=False)
+        pd.DataFrame([robot_x_idx, robot_y_idx]).to_csv(dirCurr + '/robot_idx.csv', index=False)#, header=False)
+        
         for ctr in range(0, sample_size):
-            # indices of local plan's poses in local local_map
-            local_plan_x_list = []
-            local_plan_y_list = []
+            # indices of local plan's poses in local costmap
+            local_plan_xs_idx = []
+            local_plan_ys_idx = []
 
             # find if there is local plan
-            local_plans_local = local_plans.loc[local_plans['ID'] == ctr]
-            for j in range(0, local_plans_local.shape[0]):
-                    x_temp = int((local_plans_local.iloc[j, 0] - self.locallocal_mapOriginX) / self.locallocal_mapResolution)
-                    y_temp = self.local_map_size - int((local_plans_local.iloc[j, 1] - self.locallocal_mapOriginY) / self.locallocal_mapResolution)
+            local_plan = local_plans.loc[local_plans['ID'] == ctr]
+            for j in range(0, local_plan.shape[0]):
+                    x_temp = int((local_plan.iloc[j, 0] - self.local_map_origin_x) / self.local_map_resolution)
+                    y_temp = int((local_plan.iloc[j, 1] - self.local_map_origin_y) / self.local_map_resolution)
 
                     if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
-                        local_plan_x_list.append(x_temp)
-                        local_plan_y_list.append(y_temp)
+                        local_plan_xs_idx.append(x_temp)
+                        local_plan_ys_idx.append(self.local_map_size - 1 - y_temp)
 
-
-            fig.add_axes(ax)
-            img = np.flipud(sampled_instance[ctr])
-            ax.imshow(img.astype(np.uint8))
-            plt.scatter(transformed_plan_xs, transformed_plan_ys, c='blue', marker='x')
-            plt.scatter(local_plan_x_list, local_plan_y_list, c='red', marker='x')
-            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-            ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
-            fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png')
-            fig.clf()
+            #fig = plt.figure(frameon=True)
+            #w = 1.6*3
+            #h = 1.6*3
+            #fig.set_size_inches(w, h)
+            ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            self.fig.add_axes(ax)
+            img = np.flipud(sampled_instances[ctr]).astype(np.uint8)
+            ax.imshow(img)
+            plt.scatter(transformed_plan_xs_idx, transformed_plan_ys_idx, c='blue', marker='x')
+            plt.scatter(local_plan_xs_idx, local_plan_ys_idx, c='red', marker='x')
+            ax.scatter([robot_x_idx], [robot_y_idx], c='white', marker='o')
+            ax.text(robot_x_idx, robot_y_idx, 'robot', c='white')
+            ax.quiver(robot_x_idx, robot_y_idx, robot_yaw_x, robot_yaw_y, color='white')
+            self.fig.savefig(dirCurr + '/perturbation_' + str(ctr) + '.png')
+            self.fig.clf()
 
             pd.DataFrame(img).to_csv(dirCurr + '/perturbation_' + str(ctr) + '.csv', index=False)#, header=False)
+            pd.DataFrame(local_plan_xs_idx).to_csv(dirCurr + '/local_plan_xs_idx_' + str(ctr) + '.csv', index=False)#, header=False)
+            pd.DataFrame(local_plan_ys_idx).to_csv(dirCurr + '/local_plan_ys_idx_' + str(ctr) + '.csv', index=False)#, header=False)
+        
+        end = time.time()
+        print('PLOT CLASSIFIER RUNTIME = ', round(end-start,3))
 
     # classifier function for the explanation algorithm (LIME)
-    def classifier_fn(self, sampled_instance):
+    def classifier_fn(self, sampled_instances):
         # save perturbations for the local planner
         start = time.time()
-        sampled_instance_shape_len = len(sampled_instance.shape)
-        #print('sampled_instance.shape = ', sampled_instance.shape)
-        self.sample_size = 1 if sampled_instance_shape_len == 2 else sampled_instance.shape[0]
+        sampled_instance_shape_len = len(sampled_instances.shape)
+        #print('sampled_instances.shape = ', sampled_instances.shape)
+        sample_size = 1 if sampled_instance_shape_len == 2 else sampled_instances.shape[0]
         #print('sample_size = ', sample_size)
 
         if sampled_instance_shape_len > 3:
-            temp = np.delete(sampled_instance,2,3)
+            temp = np.delete(sampled_instances,2,3)
             temp = np.delete(temp,1,3)
             temp = temp.reshape(temp.shape[0]*160,160)
             np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/local_map_data.csv', temp, delimiter=",")
         elif sampled_instance_shape_len == 3:
-            temp = sampled_instance.reshape(sampled_instance.shape[0]*160,160)
+            temp = sampled_instances.reshape(sampled_instances.shape[0]*160,160)
             np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/local_map_data.csv', temp, delimiter=",")
         elif sampled_instance_shape_len == 2:
-            np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/local_map_data.csv', sampled_instance, delimiter=",")
+            np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/local_map_data.csv', sampled_instances, delimiter=",")
         end = time.time()
-        print('DATA PREPARATION TIME = ', end-start)
+        print('classifier_fn: LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
 
         # calling ROS C++ node
         #print('\nC++ node started')
@@ -876,10 +899,10 @@ class lime_rt_pub(object):
         # kill ROS node
         #Popen(shlex.split('rosnode kill /perturb_node_image'))
         
-        #time.sleep(0.45)
+        time.sleep(0.35)
         
         end = time.time()
-        print('TEB CALL TIME = ', end-start)
+        print('classifier_fn: REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
 
         #print('\nC++ node ended')
 
@@ -891,113 +914,78 @@ class lime_rt_pub(object):
         cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
 
         # load local plans - output from local planner
-        self.local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
+        local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
         #print('local_plans = ', local_plans)
-        # save original local plan for qsr_rt
-        #self.local_plan_full_perturbation = local_plans.loc[local_plans['ID'] == 0]
-        #print('self.local_plan_full_perturbation.shape = ', self.local_plan_full_perturbation.shape)
-        #local_plan_full_perturbation.to_csv(self.dirCurr + '/' + self.dirData + '/local_plan_full_perturbation.csv', index=False)#, header=False)
-
+        
         # load transformed global plan to /odom frame
-        self.transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
-        # save transformed plan for the qsr_rt
-        #transformed_plan.to_csv(self.dirCurr + '/' + self.dirData + '/transformed_plan.csv', index=False)#, header=False)
-
-        # transform transformed_plan to list
-        #self.transformed_plan_xs = []
-        #self.transformed_plan_ys = []
-        #for i in range(0, self.transformed_plan.shape[0]):
-        #    self.transformed_plan_xs.append(self.transformed_plan.iloc[i, 0])
-        #    self.transformed_plan_ys.append(self.transformed_plan.iloc[i, 1])
+        transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
        
         end = time.time()
-        print('CLASSIFIER_FN RESULTS LOADING TIME = ', end-start)
-
-        self.global_plan = np.array(self.global_plan)
-        self.local_plan = np.array(self.local_plan)
+        print('classifier_fn: RESULTS LOADING RUNTIME = ', round(end-start,3))
 
         if self.plot_classification_bool == True:
-            self.classifier_fn_plot(self.global_plan, self.local_plans, sampled_instance, self.sample_size)
+            self.classifier_fn_plot(transformed_plan, local_plans, sampled_instances, sample_size)
 
-
-        local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(self.sample_size), columns=['deviate'])
+        local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
         start = time.time()
         #transformed_plan = np.array(transformed_plan)
 
         # fill in deviation dataframe
-        local_plan_local = []
-
+        # transform transformed_plan to list
+        transformed_plan_xs = []
+        transformed_plan_ys = []
+        for i in range(0, transformed_plan.shape[0]):
+            transformed_plan_xs.append(transformed_plan[i, 0])
+            transformed_plan_ys.append(transformed_plan[i, 1])
         
-        for i in range(0, self.sample_size):
+        for i in range(0, sample_size):
             #print('i = ', i)
             
-            #local_plan_xs = []
-            #local_plan_ys = []
-            
-            # transform local_plan to list
-            if i != self.sample_size - 1:
-                local_plan_local = np.array(self.local_plans.loc[self.local_plans['ID'] == i])
-            else:
-                local_plan_local = self.local_plan
-                #print('LAST LOCAL PLAN: ', local_plan_local)
-                #print('LAST LOCAL PLAN.shape: ', local_plan_local.shape)
-
-            #local_plans_local = np.array(local_plans_local)
-            #for j in range(0, local_plans_local.shape[0]):
-            #        local_plan_xs.append(local_plans_local.iloc[j, 0])
-            #        local_plan_ys.append(local_plans_local.iloc[j, 1])
-
-            # if no local plan is created, that means 'no' deviation
-            if local_plan_local.shape[0] == 0:
-                local_plan_deviation.iloc[i, 0] = 0
+            # transform the current local_plan to list
+            local_plan = (local_plans.loc[local_plans['ID'] == i])
+            local_plan = np.array(local_plan)
+            #if i == 0:
+            #    local_plan = np.array(self.local_plan)
+            #else:
+            #    local_plan = np.array(local_plan)
+            if local_plan.shape[0] == 0:
+                local_plan_deviation.iloc[i, 0] = 0.0
                 continue
-
-            # local plan connectedness
-            #local_plan_connectedness = []
+            local_plan_xs = []
+            local_plan_ys = []
+            for j in range(0, local_plan.shape[0]):
+                local_plan_xs.append(local_plan[j, 0])
+                local_plan_ys.append(local_plan[j, 1])
             
             # find deviation as a sum of minimal point-to-point differences
             diff_x = 0
             diff_y = 0
             devs = []
-            for j in range(0, local_plan_local.shape[0]):
+            for j in range(0, local_plan.shape[0]):
                 local_diffs = []
-                for k in range(0, self.transformed_plan.shape[0]):
+                for k in range(0, len(transformed_plan)):
                     #diff_x = (local_plans_local[j, 0] - transformed_plan[k, 0]) ** 2
                     #diff_y = (local_plans_local[j, 1] - transformed_plan[k, 1]) ** 2
-                    diff_x = (local_plan_local[j][0] - self.transformed_plan[k][0]) ** 2
-                    diff_y = (local_plan_local[j][1] - self.transformed_plan[k][0]) ** 2
+                    diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
+                    diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
                     diff = math.sqrt(diff_x + diff_y)
                     local_diffs.append(diff)                        
-                devs.append(min(local_diffs))
-
-                # calculate local plan connectedness
-                #if j+1 < local_plan_local.shape[0]:
-                #    diff_x = (local_plan_local[j+1][0] - local_plan_local[j][0]) ** 2
-                #    diff_y = (local_plan_local[j+1][1] - local_plan_local[j][1]) ** 2
-                #    diff = math.sqrt(diff_x + diff_y)
-                #    local_plan_connectedness.append(diff)
-
-            # if local plan is not continuous --> a very big deviation
-            #smallest_difference = min(local_plan_connectedness)
-            #largest_difference = max(local_plan_connectedness)
-            #if largest_difference >= 10*smallest_difference:
-            #    local_plan_deviation.iloc[i, 0] = 500
-            #    continue
-
-            # if a local plan is normal, then calculate the deviation
-            local_plan_deviation.iloc[i, 0] = sum(devs) #max(devs)
+                devs.append(min(local_diffs))   
+            local_plan_deviation.iloc[i, 0] = sum(devs)
         end = time.time()
-        print('TARGET CALC TIME = ', end-start)
-        
-        self.original_deviation = local_plan_deviation.iloc[-1, 0]
-        #print('\noriginal_deviation = ', self.original_deviation)
+        print('classifier_fn: TARGET CALC TIME = ', round(end-start,3))
+
+        if self.publish_explanation_coeffs_bool:
+            self.original_deviation = local_plan_deviation.iloc[0, 0]
+            #print('\noriginal_deviation = ', self.original_deviation)
+
         if self.plot_classification_bool:
             dirCurr = self.classifier_dir + '/' + str(self.counter_global)
             pd.DataFrame(local_plan_deviation).to_csv(dirCurr + '/deviations.csv', index=False, header=False)
-
+        
+        # return local_plan_deviation
         cmd_vel_perturb['deviate'] = local_plan_deviation
-        #return local_plan_deviation
         return np.array(cmd_vel_perturb.iloc[:, 3:])
 
     # explain function
@@ -1052,13 +1040,13 @@ class lime_rt_pub(object):
                     model_regressor=model_regressor,
                     feature_selection=feature_selection)
             end = time.time()
-            print('\nMODEL FITTING TIME = ', end-start)
+            print('\nMODEL FITTING TIME = ', round(end-start,3))
 
             start = time.time()
             # get explanation image
             outputs, exp, weights, rgb_values = ret_exp.get_image_and_mask(label=0)
             end = time.time()
-            print('\nGET EXP PIC TIME = ', end-start)
+            print('\nGET EXP PIC TIME = ', round(end-start,3))
             print('exp: ', exp)
 
             centroids_for_plot = []
