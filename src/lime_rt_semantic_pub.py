@@ -311,7 +311,7 @@ class lime_rt_pub(object):
 
         # plot bool vars
         self.plot_perturbations_bool = True 
-        self.plot_classification_bool = True
+        self.plot_classification_bool = False
         self.plot_explanation_bool = True
 
         # publish bool vars
@@ -540,7 +540,7 @@ class lime_rt_pub(object):
             #self.robot_orientation_map = np.array([0.0,0.0,self.amcl_pose.iloc[2],self.amcl_pose.iloc[3]])
 
             end = time.time()
-            print('\n\nDATA LOADING RUNTIME = ', round(round(end-start,3),3))
+            print('\n\nDATA LOADING RUNTIME = ', round(end-start,3))
 
         except Exception as e:
             print('exception = ', e)
@@ -586,7 +586,7 @@ class lime_rt_pub(object):
             self.odom.to_csv('~/amar_ws/src/teb_local_planner/src/Data/odom.csv', index=False, header=False)
 
             end = time.time()
-            print('DATA LOCAL PLANNER SAVING RUNTIME = ', round(round(end-start,3),3))
+            print('DATA LOCAL PLANNER SAVING RUNTIME = ', round(end-start,3))
 
         except Exception as e:
             print('exception = ', e)
@@ -607,7 +607,7 @@ class lime_rt_pub(object):
             metric=distance_metric
         ).ravel()
         end = time.time()
-        print('DISTANCES CREATION RUNTIME = ', round(round(end-start,3),3))
+        print('DISTANCES CREATION RUNTIME = ', round(end-start,3))
 
     # call local planner
     def create_labels(self, classifier_fn):
@@ -666,6 +666,7 @@ class lime_rt_pub(object):
                     idx = zero_indices[j]
                     #print('idx = ', idx)
 
+                    # movability affordance 
                     # the object movability affordance is in its alternative state
                     # the object must be moved
                     if self.object_affordance_pairs[idx][2] == 'movability':
@@ -708,7 +709,12 @@ class lime_rt_pub(object):
 
                             #temp[door_tl_pixel_y:door_tl_pixel_y + x_size, door_tl_pixel_x:door_tl_pixel_x + y_size] = label
                             inflation_x = int((max(23, x_size) - x_size) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
-                            inflation_y = int((max(23, y_size) - y_size) / 2)                 
+                            inflation_y = int((max(23, y_size) - y_size) / 2)
+                            #print('error with door!!!')
+                            #print(max(0, door_tl_pixel_y-inflation_x))
+                            #print(min(self.local_map_size-1, door_tl_pixel_y+x_size+inflation_x))
+                            #print(max(0,door_tl_pixel_x-inflation_y))
+                            #print(min(self.local_map_size-1, door_tl_pixel_x+y_size+inflation_y))                 
                             temp[max(0, door_tl_pixel_y-inflation_x):min(self.local_map_size-1, door_tl_pixel_y+x_size+inflation_x), max(0,door_tl_pixel_x-inflation_y):min(self.local_map_size-1, door_tl_pixel_x+y_size+inflation_y)] = self.hard_obstacle
                                             
                         # MORAS DODATI U ONTOLOGY SA KOJE SE STRANE VRATA OD ORMARA OTVARAJU: TOP, LEFT, RIGHT, BOTTOM 
@@ -742,6 +748,11 @@ class lime_rt_pub(object):
                             inflation_y = int((max(23, self.ontology[label-1][5]) - self.ontology[label-1][5]) / 2) 
                             x_size = int(1.0 * self.ontology[label - 1][4] / self.local_map_resolution)
                             y_size = int(1.0 * self.ontology[label - 1][5] / self.local_map_resolution)
+                            #print('error with cabinet!!!')
+                            #print(max(0,cab_tl_pixel_y-inflation_y))
+                            #print(min(self.local_map_size-1, cab_tl_pixel_y+y_size+inflation_y))
+                            #print(max(0,cab_tl_pixel_x-inflation_x))
+                            #print(min(self.local_map_size-1, cab_tl_pixel_x+x_size+inflation_x))
                             if (0 <= cab_tl_pixel_x < self.local_map_size and 0 <= cab_tl_pixel_y < self.local_map_size):
                                 temp[max(0,cab_tl_pixel_y-inflation_y):min(self.local_map_size-1, cab_tl_pixel_y+y_size+inflation_y), max(0,cab_tl_pixel_x-inflation_x):min(self.local_map_size-1, cab_tl_pixel_x+x_size+inflation_x)] = self.hard_obstacle
                         
@@ -777,7 +788,7 @@ class lime_rt_pub(object):
             self.labels = np.array(self.labels)
         
             end = time.time()
-            print('LABELS CREATION RUNTIME = ', round(round(end-start,3),3))
+            print('LABELS CREATION RUNTIME = ', round(end-start,3))
         
         except Exception as e:
             print('exception = ', e)
@@ -817,9 +828,9 @@ class lime_rt_pub(object):
             x_temp = int((transformed_plan[i, 0] - self.local_map_origin_x) / self.local_map_resolution)
             y_temp = int((transformed_plan[i, 1] - self.local_map_origin_y) / self.local_map_resolution)
 
-            if 0 <= x_temp < self.local_costmap_size and 0 <= y_temp < self.local_costmap_size:
+            if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
                 transformed_plan_xs_idx.append(x_temp)
-                transformed_plan_ys_idx.append(self.local_costmap_size - 1 - y_temp)
+                transformed_plan_ys_idx.append(self.local_map_size - 1 - y_temp)
 
         pd.DataFrame(transformed_plan_xs_idx).to_csv(dirCurr + '/transformed_plan_xs_idx.csv', index=False)#, header=False)
         pd.DataFrame(transformed_plan_ys_idx).to_csv(dirCurr + '/transformed_plan_ys_idx.csv', index=False)#, header=False)
@@ -899,7 +910,7 @@ class lime_rt_pub(object):
         # kill ROS node
         #Popen(shlex.split('rosnode kill /perturb_node_image'))
         
-        time.sleep(0.35)
+        #time.sleep(0.35)
         
         end = time.time()
         print('classifier_fn: REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
@@ -976,13 +987,14 @@ class lime_rt_pub(object):
         end = time.time()
         print('classifier_fn: TARGET CALC TIME = ', round(end-start,3))
 
+        print(local_plan_deviation)
         if self.publish_explanation_coeffs_bool:
             self.original_deviation = local_plan_deviation.iloc[0, 0]
             #print('\noriginal_deviation = ', self.original_deviation)
 
         if self.plot_classification_bool:
             dirCurr = self.classifier_dir + '/' + str(self.counter_global)
-            pd.DataFrame(local_plan_deviation).to_csv(dirCurr + '/deviations.csv', index=False, header=False)
+            local_plan_deviation.to_csv(dirCurr + '/deviations.csv', index=False, header=False)
         
         # return local_plan_deviation
         cmd_vel_perturb['deviate'] = local_plan_deviation
@@ -1003,7 +1015,7 @@ class lime_rt_pub(object):
         self.local_map_origin_x = self.local_map_info.iloc[0,2]
         self.local_map_origin_y = self.local_map_info.iloc[0,3]
         self.local_map_resolution = self.local_map_info.iloc[0,1]
-        self.local_map_size = self.local_map_info.iloc[0,0]
+        self.local_map_size = int(self.local_map_info.iloc[0,0])
 
         # call the local planner
         self.labels=(0,)
