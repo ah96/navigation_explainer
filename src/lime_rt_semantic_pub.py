@@ -311,7 +311,7 @@ class lime_rt_pub(object):
 
         # plot bool vars
         self.plot_perturbations_bool = True 
-        self.plot_classification_bool = False
+        self.plot_classifier_bool = False
         self.plot_explanation_bool = True
 
         # publish bool vars
@@ -349,7 +349,7 @@ class lime_rt_pub(object):
             except FileExistsError:
                 pass
         
-        if self.plot_classification_bool == True:
+        if self.plot_classifier_bool == True:
             self.classifier_dir = self.dirMain + '/classifier_images'
             try:
                 os.mkdir(self.classifier_dir)
@@ -798,7 +798,7 @@ class lime_rt_pub(object):
         return True   
 
     # plot local planner outputs for every perturbation
-    def classifier_fn_plot(self, transformed_plan, local_plans, sampled_instances, sample_size):
+    def plot_classifier(self, transformed_plan, local_plans, sampled_instances, sample_size):
         start = time.time()
 
         dirCurr = self.classifier_dir + '/' + str(self.counter_global)
@@ -875,25 +875,24 @@ class lime_rt_pub(object):
         end = time.time()
         print('PLOT CLASSIFIER RUNTIME = ', round(end-start,3))
 
-    # classifier function for the explanation algorithm (LIME)
+    # classifier function for lime image
     def classifier_fn(self, sampled_instances):
         # save perturbations for the local planner
         start = time.time()
-        sampled_instance_shape_len = len(sampled_instances.shape)
-        #print('sampled_instances.shape = ', sampled_instances.shape)
-        sample_size = 1 if sampled_instance_shape_len == 2 else sampled_instances.shape[0]
-        #print('sample_size = ', sample_size)
+        sampled_instances_shape_len = len(sampled_instances.shape)
+        sample_size = 1 if sampled_instances_shape_len == 2 else sampled_instances.shape[0]
+        print('sample_size = ', sample_size)
 
-        if sampled_instance_shape_len > 3:
+        if sampled_instances_shape_len > 3:
             temp = np.delete(sampled_instances,2,3)
             temp = np.delete(temp,1,3)
             temp = temp.reshape(temp.shape[0]*160,160)
-            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/local_map_data.csv', temp, delimiter=",")
-        elif sampled_instance_shape_len == 3:
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+        elif sampled_instances_shape_len == 3:
             temp = sampled_instances.reshape(sampled_instances.shape[0]*160,160)
-            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/local_map_data.csv', temp, delimiter=",")
-        elif sampled_instance_shape_len == 2:
-            np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/local_map_data.csv', sampled_instances, delimiter=",")
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+        elif sampled_instances_shape_len == 2:
+            np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instances, delimiter=",")
         end = time.time()
         print('classifier_fn: LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
 
@@ -907,35 +906,36 @@ class lime_rt_pub(object):
         # Wait until perturb_node_image is finished
         #rospy.wait_for_service("/perturb_node_image/finished")
 
+        time.sleep(1.5)
+        
         # kill ROS node
         #Popen(shlex.split('rosnode kill /perturb_node_image'))
-        
-        #time.sleep(0.35)
         
         end = time.time()
         print('classifier_fn: REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
 
         #print('\nC++ node ended')
 
-       
         start = time.time()
-        
         # load local path planner's outputs
         # load command velocities - output from local planner
         cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
+        print('cmd_vel_perturb = ', cmd_vel_perturb)
 
         # load local plans - output from local planner
         local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
-        #print('local_plans = ', local_plans)
-        
+        print('local_plans = ', local_plans)
+
         # load transformed global plan to /odom frame
         transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
-       
+        print('transformed_plan = ', transformed_plan)
+
         end = time.time()
         print('classifier_fn: RESULTS LOADING RUNTIME = ', round(end-start,3))
 
-        if self.plot_classification_bool == True:
-            self.classifier_fn_plot(transformed_plan, local_plans, sampled_instances, sample_size)
+        # plot local planner outputs for every perturbation
+        if self.plot_classifier_bool:
+            self.plot_classifier(transformed_plan, local_plans, sampled_instances, sample_size)
 
         local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
@@ -985,19 +985,15 @@ class lime_rt_pub(object):
                 devs.append(min(local_diffs))   
             local_plan_deviation.iloc[i, 0] = sum(devs)
         end = time.time()
-        print('classifier_fn: TARGET CALC TIME = ', round(end-start,3))
-
-        print(local_plan_deviation)
+        print('classifier_fn: TARGET CALC RUNTIME = ', round(end-start,3))
+        
         if self.publish_explanation_coeffs_bool:
             self.original_deviation = local_plan_deviation.iloc[0, 0]
             #print('\noriginal_deviation = ', self.original_deviation)
 
-        if self.plot_classification_bool:
-            dirCurr = self.classifier_dir + '/' + str(self.counter_global)
-            local_plan_deviation.to_csv(dirCurr + '/deviations.csv', index=False, header=False)
+        cmd_vel_perturb['deviate'] = local_plan_deviation
         
         # return local_plan_deviation
-        cmd_vel_perturb['deviate'] = local_plan_deviation
         return np.array(cmd_vel_perturb.iloc[:, 3:])
 
     # explain function
