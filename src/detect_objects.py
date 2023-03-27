@@ -19,8 +19,8 @@ path_prefix = dirCurr + '/yolo_data/'
 print('torch.cuda.is_available() = ',torch.cuda.is_available())
 
 # Load YOLO model
-#model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
-model = torch.hub.load(path_prefix + '/yolov5_master/', 'custom', path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
+#model = torch.hub.load(path_prefix + '/yolov5_master/', 'custom', path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
 
 # some global variables
 image = []
