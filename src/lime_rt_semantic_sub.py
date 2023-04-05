@@ -66,8 +66,8 @@ class lime_rt_sub(object):
         self.use_local_costmap = True
 
         # whether to plot
-        self.plot_costmaps_bool = False
-        self.plot_semantic_map_bool = False
+        self.plot_costmaps_bool = True
+        self.plot_semantic_map_bool = True
         
         # global counter for plotting
         self.counter_global = 0
