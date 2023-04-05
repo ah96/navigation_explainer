@@ -310,9 +310,9 @@ class lime_rt_pub(object):
         self.counter_global = 0
 
         # plot bool vars
-        self.plot_perturbations_bool = True 
+        self.plot_perturbations_bool = False 
         self.plot_classifier_bool = False
-        self.plot_explanation_bool = True
+        self.plot_explanation_bool = False
 
         # publish bool vars
         self.publish_explanation_coeffs_bool = True  
@@ -1013,6 +1013,7 @@ class lime_rt_pub(object):
         self.local_map_resolution = self.local_map_info.iloc[0,1]
         self.local_map_size = int(self.local_map_info.iloc[0,0])
 
+        '''
         # call the local planner
         self.labels=(0,)
         self.top = self.labels
@@ -1024,7 +1025,6 @@ class lime_rt_pub(object):
 
         self.counter_global += 1
 
-        '''
         # Explanation variables
         top_labels=1 #10
         model_regressor = None
