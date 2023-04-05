@@ -411,6 +411,9 @@ class lime_rt_pub(object):
             # header
             self.header = Header()
 
+        self.data_build_block_1 = [[0],[1]]
+        self.data_build_block_2 = [[0, 1],[1, 0],[1, 1]]
+
     # initialize publishers
     def main_(self):
         if self.publish_explanation_image_bool:
@@ -600,14 +603,96 @@ class lime_rt_pub(object):
         start = time.time()
         # find distances
         # distance_metric = 'jaccard' - alternative distance metric
-        distance_metric='cosine'
+        distance_metric='euclidean'#'cosine'
         self.distances = sklearn.metrics.pairwise_distances(
             self.data,
-            self.data[0].reshape(1, -1),
+            self.data[-1].reshape(1, -1),# the last one is the original
             metric=distance_metric
         ).ravel()
         end = time.time()
         print('DISTANCES CREATION RUNTIME = ', round(end-start,3))
+        
+        # plot perturbations
+        if self.plot_perturbations_bool:
+            dirCurr = self.perturbation_dir + '/' + str(self.counter_global)
+            try:
+                os.mkdir(dirCurr)
+            except FileExistsError:
+                pass
+
+            pd.DataFrame(self.data).to_csv(dirCurr + '/data.csv', index=False)#, header=False)
+            pd.DataFrame(self.distances).to_csv(dirCurr + '/distances.csv', index=False)#, header=False)
+            pd.DataFrame(self.labels).to_csv(dirCurr + '/labels.csv', index=False)#, header=False)
+
+    # create encoded perturbation data
+    def create_data(self):
+        # create data (encoded perturbations)
+        # old approach
+        #n_features = self.object_affordance_pairs.shape[0]
+        #num_samples = 2**n_features
+        #lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
+        #self.data = np.array(lst).reshape((num_samples, n_features))
+        
+        # new approach
+        # explore all object-affordance perturbations
+        data_build_blocks = []
+        obj_aff_pairs_len = len(self.object_affordance_pairs)
+        i = 0
+        while i < obj_aff_pairs_len:
+            if i != obj_aff_pairs_len - 1:
+                if self.object_affordance_pairs[i, 0] == self.object_affordance_pairs[i+1, 0]:
+                    data_build_blocks.append(self.data_build_block_2)
+                    i += 2
+                    continue
+            data_build_blocks.append(self.data_build_block_1)
+            i += 1 
+
+        data_build_blocks_N = len(data_build_blocks)
+        #print('\n\ndata_build_blocks_N = ', data_build_blocks_N)
+        data_build_blocks_heights = [len(x) for x in data_build_blocks]
+        #print('data_build_heights = ', data_build_blocks_heights)
+        data_build_blocks_widths = [len(x[0]) for x in data_build_blocks]
+        #print('data_build_widths = ', data_build_blocks_widths)
+        data_height = np.prod(data_build_blocks_heights)
+        data_width = sum(data_build_blocks_widths)
+        #print('(data_height, data_width) = ', (data_height, data_width))
+        
+        self.data = np.array([[0]*data_width]*data_height)
+        data_width_ctr = 0
+        for b_b_ctr in range(0, data_build_blocks_N):
+            
+            if b_b_ctr < data_build_blocks_N - 1:
+                height_step = np.prod(data_build_blocks_heights[b_b_ctr + 1])
+            else:
+                height_step = 1
+
+            #print('\n')
+            #print('(b_b_ctr, height_step) = ', (b_b_ctr, height_step))
+                                    
+            for width_ctr in range(0, data_build_blocks_widths[b_b_ctr]):
+                
+                height_step_ctr = 0
+                height_ctr = 0
+                
+                for data_height_ctr in range(0, data_height):
+                    #print('\n')
+                    #print('(b_b_ctr, height_step, height_step_ctr) = ', (b_b_ctr, height_step, height_step_ctr))
+                    #print('(data_height_ctr, data_width_ctr) = ', (data_height_ctr, data_width_ctr))
+                    #print('(height_ctr, width_ctr) = ', (height_ctr, width_ctr))
+                    
+                    self.data[data_height_ctr, data_width_ctr] = copy.deepcopy(data_build_blocks[b_b_ctr][height_ctr][width_ctr])
+                    #print('self.data[data_height_ctr, data_width_ctr] = ', self.data[data_height_ctr][data_width_ctr])
+                    
+                    height_step_ctr += 1
+                    if height_step_ctr == height_step:
+                        height_step_ctr = 0
+                        height_ctr += 1
+                        if height_ctr == data_build_blocks_heights[b_b_ctr]:
+                            height_ctr = 0
+
+                #print('\nself.data = ', self.data)
+
+                data_width_ctr += 1
 
     # call local planner
     def create_labels(self, classifier_fn):
@@ -628,27 +713,12 @@ class lime_rt_pub(object):
             #self.semantic_map_inflated = np.array(pd.read_csv(self.dirCurr + '/' + self.dirData + '/semantic_map_inflated.csv'))
             #print('self.semantic_map_inflated.shape = ', self.semantic_map_inflated.shape)
 
-
-            # create data (encoded perturbations)
-            # 2**N semantic_map -- explore all object-affordance perturbations
-            n_features = self.object_affordance_pairs.shape[0]
-            num_samples = 2**n_features
-            lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
-            self.data = np.array(lst).reshape((num_samples, n_features))
-            #print('self.data = ', self.data)
-            #print('self.data.shape = ', self.data.shape)
-            #print('type(self.data) = ', type(self.data))
+            # create encoded perturbation data
+            self.create_data()
             
-            # N+1 or X=O(n) semantic_map
-            # explore arbitrary number of object-affordance perturbations with linear complexity in the numver of object-affordance pairs
-            #self.num_samples = self.n_features + 1
-            #lst = [[1]*self.n_features]
-            #for i in range(1, self.num_samples):
-            #    lst.append([1]*self.n_features)
-            #    lst[i][i-1] = 0    
-            #self.data = np.array(lst).reshape((self.num_samples, self.n_features))
-
-
+            num_samples = self.data.shape[0]
+            #n_features = data_width
+            
             # create perturbation semantic maps and get labels
             self.labels = []
             imgs = []
@@ -760,6 +830,8 @@ class lime_rt_pub(object):
 
             # plot perturbations
             if self.plot_perturbations_bool and len(imgs)>0:
+                start_ = time.time()
+                
                 dirCurr = self.perturbation_dir + '/' + str(self.counter_global)
                 try:
                     os.mkdir(dirCurr)
@@ -780,12 +852,18 @@ class lime_rt_pub(object):
                     fig.clf()
                     
                     pd.DataFrame(pert_img).to_csv(dirCurr + '/perturbation_' + str(i) + '.csv', index=False)#, header=False)
+
+                pd.DataFrame(self.object_affordance_pairs).to_csv(dirCurr + '/object_affordance_pairs.csv', index=False)#, header=False)
+                
+                end_ = time.time()
+                print('LABELS PLOT RUNTIME = ', round(end_-start_,3))
            
             # call predictor and store labels
-            if len(imgs) > 0:
-                preds = classifier_fn(np.array(imgs))
-                self.labels.extend(preds)
+            #if len(imgs) > 0:
+            #    preds = classifier_fn(np.array(imgs))
+            #    self.labels.extend(preds)
             self.labels = np.array(self.labels)
+            #print('labels = ', self.labels)
         
             end = time.time()
             print('LABELS CREATION RUNTIME = ', round(end-start,3))
@@ -1013,7 +1091,6 @@ class lime_rt_pub(object):
         self.local_map_resolution = self.local_map_info.iloc[0,1]
         self.local_map_size = int(self.local_map_info.iloc[0,0])
 
-        '''
         # call the local planner
         self.labels=(0,)
         self.top = self.labels
@@ -1025,6 +1102,7 @@ class lime_rt_pub(object):
 
         self.counter_global += 1
 
+        '''
         # Explanation variables
         top_labels=1 #10
         model_regressor = None

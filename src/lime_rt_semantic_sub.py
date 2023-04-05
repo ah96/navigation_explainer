@@ -67,7 +67,7 @@ class lime_rt_sub(object):
 
         # whether to plot
         self.plot_costmaps_bool = False
-        self.plot_semantic_map_bool = True
+        self.plot_semantic_map_bool = False
         
         # global counter for plotting
         self.counter_global = 0
