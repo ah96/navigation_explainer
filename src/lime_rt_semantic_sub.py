@@ -253,7 +253,8 @@ class lime_rt_sub(object):
             # update local_map params (origin cordinates)
             self.local_map_origin_x = self.robot_position_map.x - self.local_map_resolution * self.local_map_size * 0.5 
             self.local_map_origin_y = self.robot_position_map.y - self.local_map_resolution * self.local_map_size * 0.5
-            self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
+            #self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
+            self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y]#, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
             # create semantic data
             self.create_semantic_data()
@@ -300,7 +301,7 @@ class lime_rt_sub(object):
                     self.local_map_origin_y = self.robot_position_map.y - 0.5 * self.local_map_size * self.local_map_resolution
                     #self.local_map_resolution = msg.info.resolution
                     #self.local_map_size = self.local_map_size
-                    self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
+                    self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y]#, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
                     # create np.array local_map object
                     #self.local_map = np.zeros((self.local_map_size,self.local_map_size))
@@ -350,7 +351,7 @@ class lime_rt_sub(object):
             self.local_map_origin_y = msg.info.origin.position.y
             #self.local_map_resolution = msg.info.resolution
             #self.local_map_size = self.local_map_size
-            self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
+            self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
             # create np.array local_map object
             self.local_map = np.asarray(msg.data)

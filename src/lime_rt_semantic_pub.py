@@ -310,8 +310,8 @@ class lime_rt_pub(object):
         self.counter_global = 0
 
         # plot bool vars
-        self.plot_perturbations_bool = False 
-        self.plot_classifier_bool = False
+        self.plot_perturbations_bool = True 
+        self.plot_classifier_bool = True
         self.plot_explanation_bool = False
 
         # publish bool vars
@@ -859,9 +859,9 @@ class lime_rt_pub(object):
                 print('LABELS PLOT RUNTIME = ', round(end_-start_,3))
            
             # call predictor and store labels
-            #if len(imgs) > 0:
-            #    preds = classifier_fn(np.array(imgs))
-            #    self.labels.extend(preds)
+            if len(imgs) > 0:
+                preds = classifier_fn(np.array(imgs))
+                self.labels.extend(preds)
             self.labels = np.array(self.labels)
             #print('labels = ', self.labels)
         
@@ -984,7 +984,7 @@ class lime_rt_pub(object):
         # Wait until perturb_node_image is finished
         #rospy.wait_for_service("/perturb_node_image/finished")
 
-        time.sleep(1.5)
+        time.sleep(0.35)
         
         # kill ROS node
         #Popen(shlex.split('rosnode kill /perturb_node_image'))
@@ -998,15 +998,15 @@ class lime_rt_pub(object):
         # load local path planner's outputs
         # load command velocities - output from local planner
         cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
-        print('cmd_vel_perturb = ', cmd_vel_perturb)
+        #print('cmd_vel_perturb = ', cmd_vel_perturb)
 
         # load local plans - output from local planner
         local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
-        print('local_plans = ', local_plans)
+        #print('local_plans = ', local_plans)
 
         # load transformed global plan to /odom frame
         transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
-        print('transformed_plan = ', transformed_plan)
+        #print('transformed_plan = ', transformed_plan)
 
         end = time.time()
         print('classifier_fn: RESULTS LOADING RUNTIME = ', round(end-start,3))
@@ -1086,8 +1086,8 @@ class lime_rt_pub(object):
 
         # get current local costmap data
         #print(self.local_map_info)
-        self.local_map_origin_x = self.local_map_info.iloc[0,2]
-        self.local_map_origin_y = self.local_map_info.iloc[0,3]
+        self.local_map_origin_x = self.local_map_info.iloc[0,3]
+        self.local_map_origin_y = self.local_map_info.iloc[0,4]
         self.local_map_resolution = self.local_map_info.iloc[0,1]
         self.local_map_size = int(self.local_map_info.iloc[0,0])
 
