@@ -310,7 +310,7 @@ class lime_rt_pub(object):
         self.counter_global = 0
 
         # plot bool vars
-        self.plot_perturbations_bool = True 
+        self.plot_perturbations_bool = False 
         self.plot_classifier_bool = True
         self.plot_explanation_bool = False
 
@@ -732,7 +732,8 @@ class lime_rt_pub(object):
                 #print('zero_indices = ', zero_indices)
                 
                 for j in range(0, zero_indices.shape[0]):
-                    # if feature has 0 in self.data it is in its alternative affordance state (currently: either not there or opened) --> original semantic map must be modified
+                    # if feature has 0 in self.data it is in its alternative affordance state (currently: either not there or opened) 
+                    # --> original semantic map must be modified
                     idx = zero_indices[j]
                     #print('idx = ', idx)
 
@@ -748,14 +749,8 @@ class lime_rt_pub(object):
                     # openability affordance                
                     elif self.object_affordance_pairs[idx][2] == 'openability':
 
-                        # if the previous obj.-aff. pair was the same object with movability affordance, then do not draw it
-                        # if this is the first obj.-aff. pair then this object does not have movability affordance, because it goes before other affordances
-                        if j > 0:
-                            idx_previous = zero_indices[j-1]
-                            if self.object_affordance_pairs[idx_previous][2] == 'movability' and self.object_affordance_pairs[idx_previous][1] == self.object_affordance_pairs[idx][1]:
-                                continue
-                        
                         # objects are immediately inflated when opened
+                        # srediti otvaranje vrata
                         if self.object_affordance_pairs[idx][1] == 'door':
                             label = self.object_affordance_pairs[idx][0]
 
@@ -814,18 +809,29 @@ class lime_rt_pub(object):
                             cab_tr_pixel_y = int((tr_odom_y - self.local_map_origin_y) / self.local_map_resolution)
                             #print('(cab_tr_pixel_x, cab_tr_pixel_y) = ', (cab_tr_pixel_x, cab_tr_pixel_y))
 
-                            inflation_x = int((max(23, self.ontology[label-1][4]) - self.ontology[label-1][4]) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
-                            inflation_y = int((max(23, self.ontology[label-1][5]) - self.ontology[label-1][5]) / 2) 
-                            x_size = int(1.0 * self.ontology[label - 1][4] / self.local_map_resolution)
-                            y_size = int(1.0 * self.ontology[label - 1][5] / self.local_map_resolution)
+                            #inflation_x = int((max(23, self.ontology[label-1][4]) - self.ontology[label-1][4]) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
+                            #inflation_y = int((max(23, self.ontology[label-1][5]) - self.ontology[label-1][5]) / 2) 
+                            #x_size = int(1.0 * self.ontology[label - 1][4] / self.local_map_resolution)
+                            #y_size = int(1.0 * self.ontology[label - 1][5] / self.local_map_resolution)
                             #print('error with cabinet!!!')
                             #print(max(0,cab_tl_pixel_y-inflation_y))
                             #print(min(self.local_map_size-1, cab_tl_pixel_y+y_size+inflation_y))
                             #print(max(0,cab_tl_pixel_x-inflation_x))
                             #print(min(self.local_map_size-1, cab_tl_pixel_x+x_size+inflation_x))
-                            if (0 <= cab_tl_pixel_x < self.local_map_size and 0 <= cab_tl_pixel_y < self.local_map_size):
-                                temp[max(0,cab_tl_pixel_y-inflation_y):min(self.local_map_size-1, cab_tl_pixel_y+y_size+inflation_y), max(0,cab_tl_pixel_x-inflation_x):min(self.local_map_size-1, cab_tl_pixel_x+x_size+inflation_x)] = self.hard_obstacle
-                        
+                            #if (0 <= cab_tl_pixel_x < self.local_map_size and 0 <= cab_tl_pixel_y < self.local_map_size):
+                            #    temp[max(0,cab_tl_pixel_y-inflation_y):min(self.local_map_size-1, cab_tl_pixel_y+y_size+inflation_y), max(0,cab_tl_pixel_x-inflation_x):min(self.local_map_size-1, cab_tl_pixel_x+x_size+inflation_x)] = self.hard_obstacle
+
+                            # width and height
+                            x_size = int((0.2 * self.ontology[label - 1][4] / self.local_map_resolution + 23)*0.75)
+                            y_size = int((0.75 * self.ontology[label - 1][5] / self.local_map_resolution + 23)*0.75)
+                            #print('(x_size, y_size) = ', (x_size, y_size))
+                
+                            if (0 <= cab_tl_pixel_x < self.local_map_size and 0 <= cab_tl_pixel_y < self.local_map_size):                            
+                                temp[cab_tl_pixel_y-y_size:min(self.local_map_size-1, cab_tl_pixel_y+y_size), max(0, cab_tl_pixel_x-x_size):cab_tl_pixel_x+x_size] = self.hard_obstacle
+
+                            if (0 <= cab_tr_pixel_x < self.local_map_size and 0 <= cab_tl_pixel_y < self.local_map_size):
+                                temp[cab_tr_pixel_y-y_size:min(self.local_map_size-1, cab_tr_pixel_y+y_size), max(0, cab_tr_pixel_x-x_size):cab_tr_pixel_x+x_size] = self.hard_obstacle
+
                 imgs.append(temp)                        
 
             # plot perturbations
@@ -857,6 +863,19 @@ class lime_rt_pub(object):
                 
                 end_ = time.time()
                 print('LABELS PLOT RUNTIME = ', round(end_-start_,3))
+
+                # plot semantic_map_inflated
+                fig = plt.figure(frameon=False)
+                w = 1.6 * 3
+                h = 1.6 * 3
+                fig.set_size_inches(w, h)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+                img = np.flipud(self.semantic_map_inflated) 
+                ax.imshow(img.astype('float64'), aspect='auto')
+                fig.savefig(dirCurr + '/semantic_map_inflated.png', transparent=False)
+                fig.clf()
            
             # call predictor and store labels
             if len(imgs) > 0:
@@ -1088,8 +1107,8 @@ class lime_rt_pub(object):
         #print(self.local_map_info)
         self.local_map_origin_x = self.local_map_info.iloc[0,3]
         self.local_map_origin_y = self.local_map_info.iloc[0,4]
-        self.local_map_resolution = self.local_map_info.iloc[0,1]
-        self.local_map_size = int(self.local_map_info.iloc[0,0])
+        self.local_map_resolution = self.local_map_info.iloc[0,0]
+        self.local_map_size = int(self.local_map_info.iloc[0,1])
 
         # call the local planner
         self.labels=(0,)
