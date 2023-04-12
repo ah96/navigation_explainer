@@ -823,7 +823,7 @@ class lime_rt_pub(object):
 
                             # width and height
                             x_size = int((0.2 * self.ontology[label - 1][4] / self.local_map_resolution + 23)*0.75)
-                            y_size = int((0.75 * self.ontology[label - 1][5] / self.local_map_resolution + 23)*0.75)
+                            y_size = int((0.65 * self.ontology[label - 1][5] / self.local_map_resolution + 23)*0.75)
                             #print('(x_size, y_size) = ', (x_size, y_size))
                 
                             if (0 <= cab_tl_pixel_x < self.local_map_size and 0 <= cab_tl_pixel_y < self.local_map_size):                            

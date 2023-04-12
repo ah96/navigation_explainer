@@ -232,7 +232,7 @@ class lime_rt_sub(object):
     def odom_callback(self, msg):
         #print('odom_callback')
         
-        self.odom = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
+        self.odom = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
         
         self.robot_position_odom = msg.pose.pose.position
         self.robot_orientation_odom = msg.pose.pose.orientation
