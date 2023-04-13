@@ -73,5 +73,5 @@ def image_depth_callback(img):
 if __name__ == '__main__':
     rospy.init_node('camera_feed', anonymous=True)
     image_raw_sub = rospy.Subscriber('/xtion/rgb/image_raw', Image, image_raw_callback)
-    image_depth_sub = rospy.Subscriber('/xtion/depth_registered/image_raw', Image, image_depth_callback) #"32FC1"
+    #image_depth_sub = rospy.Subscriber('/xtion/depth_registered/image_raw', Image, image_depth_callback) #"32FC1"
     rospy.spin()

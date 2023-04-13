@@ -122,8 +122,8 @@ def yolov3(image):
         print(str(e))
 
 def yolov5(image):
-    #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
-    model = torch.hub.load(path_prefix + 'yolov5_master/', 'custom', path_prefix + 'models/yolov5s.pt', source='local')  # custom trained model
+    model = torch.hub.load('ultralytics/yolov5', 'yolov5x')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
+    #model = torch.hub.load(path_prefix + 'yolov5_master/', 'custom', path_prefix + 'models/best.pt', source='local')  # custom trained model
 
     start = time.time()
     # Inference
@@ -180,10 +180,11 @@ def yolov7(image):
 
 
 #image = cv2.imread(path_prefix + "images/indo.jpg")
-image = cv2.imread(path_prefix + "images/icml1.jpg")
+#image = cv2.imread(path_prefix + "images/icml1.jpg")
 #image = cv2.imread(path_prefix + "images/icml2.jpg")
 #image = cv2.imread(path_prefix + "images/ki.png")
+image = cv2.imread(path_prefix + "images/door.png")
 
-yolov3(image)
-#yolov5(image)
+#yolov3(image)
+yolov5(image)
 #yolov7(image)
