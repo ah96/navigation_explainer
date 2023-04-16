@@ -27,8 +27,12 @@ from scipy.spatial.transform import Rotation as R
 from matplotlib import pyplot as plt
 from geometry_msgs.msg import Pose, Twist, Point, Quaternion
 import itertools
+import cv2
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
+import struct
+from std_msgs.msg import Float32MultiArray
             
 # global variables
 PI = math.pi
@@ -311,8 +315,8 @@ class lime_rt_pub(object):
 
         # plot bool vars
         self.plot_perturbations_bool = False 
-        self.plot_classifier_bool = True
-        self.plot_explanation_bool = False
+        self.plot_classifier_bool = False
+        self.plot_explanation_bool = True
 
         # publish bool vars
         self.publish_explanation_coeffs_bool = True  
@@ -1093,6 +1097,66 @@ class lime_rt_pub(object):
         # return local_plan_deviation
         return np.array(cmd_vel_perturb.iloc[:, 3:])
 
+    # plot_explanation
+    def plot_explanation(self):
+        centroids_for_plot = []
+        lc_regions = regionprops(self.semantic_map.astype(int))
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            centroids_for_plot.append([v,cx,cy,self.ontology[v-1][1]])
+
+
+        self.dirPlotExp = self.explanation_dir + '/' + str(self.counter_global)
+        try:
+            os.mkdir(self.dirPlotExp)
+        except FileExistsError:
+            pass
+
+        fig = plt.figure(frameon=False)
+        w = 1.6 * 3
+        h = 1.6 * 3
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        
+        self.y_odom_index = [self.local_map_size - self.y_odom_index[0]]
+
+        local_plan_x_list = []
+        local_plan_y_list = []
+
+        # find if there is local plan
+        for j in range(0, self.local_plan.shape[0]):
+                x_temp = int((self.local_plan[j, 0] - self.locallocal_mapOriginX) / self.locallocal_mapResolution)
+                y_temp = self.local_map_size - int((self.local_plan[j, 1] - self.locallocal_mapOriginY) / self.locallocal_mapResolution)
+
+                if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
+                    local_plan_x_list.append(x_temp)
+                    local_plan_y_list.append(y_temp)
+
+        for k in range(0, len(self.outputs)):
+            output = self.outputs[k]
+            output[:,:,0] = np.flip(output[:,:,0], axis=0)
+            output[:,:,1] = np.flip(output[:,:,1], axis=0)
+            output[:,:,2] = np.flip(output[:,:,2], axis=0)
+
+            fig.add_axes(ax)
+            ax.scatter(self.global_plan_xs, self.global_plan_ys, c='blue', marker='x')
+            ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
+            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
+            ax.text(self.x_odom_index[0], self.local_map_size - self.y_odom_index[0], 'robot', c='white')
+            ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
+            ax.imshow(output.astype('float64'), aspect='auto')
+            for i in range(0, len(centroids_for_plot)):
+                ax.scatter(centroids_for_plot[i][1], self.local_map_size - centroids_for_plot[i][2], c='white', marker='o')   
+                ax.text(centroids_for_plot[i][1], self.local_map_size - centroids_for_plot[i][2], centroids_for_plot[i][3], c='white')
+            fig.savefig(self.dirPlotExp + '/explanation_' + self.object_affordance_pairs[k][1] + '_' + self.object_affordance_pairs[k][2] + '.png', transparent=False)
+            fig.clf()
+
+        pd.DataFrame(self.weights).to_csv(self.dirPlotExp + '/weights.csv')
+        pd.DataFrame(self.object_affordance_pairs).to_csv(self.dirPlotExp + '/object_affordance_pairs.csv')
+        pd.DataFrame(self.rgb_values).to_csv(self.dirPlotExp + '/rgb_values.csv')
+
     # explain function
     def explain(self):
         # if data not loaded do not explain
@@ -1119,9 +1183,8 @@ class lime_rt_pub(object):
         # create distances between the instance of interest and perturbations
         self.create_distances()
 
-        self.counter_global += 1
+        #self.counter_global += 1
 
-        '''
         # Explanation variables
         top_labels=1 #10
         model_regressor = None
@@ -1149,83 +1212,78 @@ class lime_rt_pub(object):
 
             start = time.time()
             # get explanation image
-            outputs, exp, weights, rgb_values = ret_exp.get_image_and_mask(label=0)
+            self.outputs, self.exp, self.weights, self.rgb_values = ret_exp.get_image_and_mask(label=0)
             end = time.time()
             print('\nGET EXP PIC TIME = ', round(end-start,3))
-            print('exp: ', exp)
+            print('exp: ', self.exp)
 
-            centroids_for_plot = []
-            lc_regions = regionprops(self.semantic_map.astype(int))
-            for lc_region in lc_regions:
-                v = lc_region.label
-                cy, cx = lc_region.centroid
-                centroids_for_plot.append([v,cx,cy,self.ontology[v-1][1]])
-
-
+            # plot explanation
             if self.plot_explanation_bool == True:
-                self.dirPlotExp = self.explanation_dir + '/' + str(self.counter_global)
-                try:
-                    os.mkdir(self.dirPlotExp)
-                except FileExistsError:
-                    pass
+                self.plot_explanation()
 
-                fig = plt.figure(frameon=False)
-                w = 1.6 * 3
-                h = 1.6 * 3
-                fig.set_size_inches(w, h)
-                ax = plt.Axes(fig, [0., 0., 1., 1.])
-                ax.set_axis_off()
+            self.counter_global+=1    
+
+            if self.publish_explanation_coeffs_bool:
+                # publish explanation coefficients
+                exp_with_centroids = Float32MultiArray()
+                segs_unique = np.unique(self.segments)
+                for k in range(0, len(self.exp)):
+                    exp_with_centroids.data.append(segs_unique[self.exp[k][0]])
+                    exp_with_centroids.data.append(self.exp[k][1]) 
+                exp_with_centroids.data.append(self.original_deviation) # append original deviation as the last element
+                self.pub_lime.publish(exp_with_centroids) # N_segments * (label, coefficient) + (original_deviation)
+
+            if self.publish_explanation_image_bool:
+                exp_img_start = time.time()
                 
-                self.y_odom_index = [self.local_map_size - self.y_odom_index[0]]
+                output = self.output[:, :, [2, 1, 0]] * 255.0 #.astype(np.uint8)
+                output_msg = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3
+                
+                self.pub_exp_image.publish(output_msg)
 
-                local_plan_x_list = []
-                local_plan_y_list = []
+                exp_img_end = time.time()
+                print('PUBLISH EXPLANATION IMAGE RUNTIME = ', round(exp_img_end - exp_img_start,3))
 
-                # find if there is local plan
-                for j in range(0, self.local_plan.shape[0]):
-                        x_temp = int((self.local_plan[j, 0] - self.locallocal_mapOriginX) / self.locallocal_mapResolution)
-                        y_temp = self.local_map_size - int((self.local_plan[j, 1] - self.locallocal_mapOriginY) / self.locallocal_mapResolution)
+            if self.publish_pointcloud_bool:
+                # publish explanation layer
+                points_start = time.time()
+                z = 0.0
+                a = 255                    
+                points = []
 
-                        if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
-                            local_plan_x_list.append(x_temp)
-                            local_plan_y_list.append(y_temp)
+                # flip the rgb image up-down
+                output = cv2.flip(self.output, 0)
+                #output = np.zeros(self.output.shape)
+                #print(output[:,:,0].shape)
+                #output[:,:,0] = np.flipud(self.output[:,:,0])
+                #output[:,:,1] = np.flipud(self.output[:,:,1])
+                #output[:,:,2] = np.flipud(self.output[:,:,2])
 
-                for k in range(0, len(outputs)):
-                    output = outputs[k]
-                    output[:,:,0] = np.flip(output[:,:,0], axis=0)
-                    output[:,:,1] = np.flip(output[:,:,1], axis=0)
-                    output[:,:,2] = np.flip(output[:,:,2], axis=0)
-
-                    fig.add_axes(ax)
-                    ax.scatter(self.global_plan_xs, self.global_plan_ys, c='blue', marker='x')
-                    ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
-                    ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-                    ax.text(self.x_odom_index[0], self.local_map_size - self.y_odom_index[0], 'robot', c='white')
-                    ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
-                    ax.imshow(output.astype('float64'), aspect='auto')
-                    for i in range(0, len(centroids_for_plot)):
-                        ax.scatter(centroids_for_plot[i][1], self.local_map_size - centroids_for_plot[i][2], c='white', marker='o')   
-                        ax.text(centroids_for_plot[i][1], self.local_map_size - centroids_for_plot[i][2], centroids_for_plot[i][3], c='white')
-                    fig.savefig(self.dirPlotExp + '/explanation_' + self.object_affordance_pairs[k][1] + '_' + self.object_affordance_pairs[k][2] + '.png', transparent=False)
-                    fig.clf()
-
-                pd.DataFrame(weights).to_csv(self.dirPlotExp + '/weights.csv')
-                pd.DataFrame(self.object_affordance_pairs).to_csv(self.dirPlotExp + '/object_affordance_pairs.csv')
-                pd.DataFrame(rgb_values).to_csv(self.dirPlotExp + '/rgb_values.csv')
-                    
-            explain_time_end = time.time()
-            with open(self.dirMain + '/explanation_time.csv','a') as file:
-                file.write(str(explain_time_end-explain_time_start))
-                file.write('\n')
-            
-    
-
+                output = output[:, :, [2, 1, 0]] * 255.0
+                output = output.astype(np.uint8)
+                for i in range(0, int(self.local_costmap_size)):
+                    for j in range(0, int(self.local_costmap_size)):
+                        x = self.local_costmap_origin_x + i * self.local_costmap_resolution
+                        y = self.local_costmap_origin_y + j * self.local_costmap_resolution
+                        r = int(output[j, i, 2])
+                        g = int(output[j, i, 1])
+                        b = int(output[j, i, 0])
+                        rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                        pt = [x, y, z, rgb]
+                        points.append(pt)
+                points_end = time.time()
+                print('POINT CLOUD RUNTIME = ', round(points_end - points_start,3))
+                self.header.frame_id = 'odom'
+                pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+                pc2.header.stamp = rospy.Time.now()
+                self.pub_exp_pointcloud.publish(pc2)
+                
         except Exception as e:
             print('Exception: ', e)
             #print('Exception - explanation is skipped!!!')
             return
-        '''
 
+                   
 # ----------main-----------
 # main function
 # define lime_rt_pub object
