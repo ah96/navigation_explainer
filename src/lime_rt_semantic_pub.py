@@ -230,7 +230,7 @@ class ImageExplanation(object):
         self.score = {}
 
         self.color_free_space = False
-        self.use_maximum_weight = True
+        self.use_maximum_weight = False
         self.all_weights_zero = False
 
 
@@ -247,6 +247,7 @@ class ImageExplanation(object):
             raise KeyError('Label not in explanation')
         
         exp = self.local_exp[label]
+        print('exp = ', exp)
 
         temp = np.zeros(self.image.shape)
 
@@ -267,15 +268,17 @@ class ImageExplanation(object):
 
         w_s = [0]*len(exp)
         f_s = [0]*len(exp)
-        imgs = [np.zeros(self.image.shape)]*len(exp)
+        imgs = [np.zeros((self.image.shape[0],self.image.shape[0],3))]*len(exp)
         rgb_values = []
         for f, w in exp:
             #print('(f, w): ', (f, w))
-            #print(self.object_affordance_pairs[f][1] + '_' + self.object_affordance_pairs[f][2] + ' has weight ' + str(w))
+            print(self.object_affordance_pairs[f][1] + '_' + self.object_affordance_pairs[f][2] + ' has coefficient ' + str(w))
             w_s[f] = w
 
-            temp = np.zeros(self.image.shape)
+            temp = np.zeros((self.image.shape[0],self.image.shape[0],3))
             v = self.object_affordance_pairs[f][0]
+            #print('temp.shape = ', temp.shape)
+            #print('v = ', v)
 
             # color free space with gray
             temp[self.semantic_map == 0, 0] = self.free_space_shade
@@ -298,7 +301,7 @@ class ImageExplanation(object):
                     temp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
                     rgb_values.append(self.val_high * abs(w) / w_sum_abs)
 
-            imgs[f] = temp    
+            imgs[f] = temp  
 
         #print('weights = ', w_s)
         #print('get image and mask ending')
@@ -319,9 +322,9 @@ class lime_rt_pub(object):
         self.plot_explanation_bool = True
 
         # publish bool vars
-        self.publish_explanation_coeffs_bool = True  
-        self.publish_explanation_image_bool = True
-        self.publish_pointcloud_bool = True
+        self.publish_explanation_coeffs_bool = False  
+        self.publish_explanation_image_bool = False
+        self.publish_pointcloud_bool = False
 
         self.hard_obstacle = 99
         
@@ -1099,6 +1102,43 @@ class lime_rt_pub(object):
 
     # plot_explanation
     def plot_explanation(self):
+        robot_x = self.amcl_pose.iloc[0,0]
+        robot_y = self.amcl_pose.iloc[0,1]
+
+        robot_x_idx = int((robot_x - self.local_map_origin_x) / self.local_map_resolution)
+        robot_y_idx = self.local_map_size - 1 - int((robot_y - self.local_map_origin_y) / self.local_map_resolution)
+
+        robot_orient_z = self.amcl_pose.iloc[0,2]
+        robot_orient_w = self.amcl_pose.iloc[0,3]
+        # calculate Euler angles based on orientation quaternion
+        [robot_yaw, robot_pitch, robot_roll] = quaternion_to_euler(0.0, 0.0, robot_orient_z, robot_orient_w)
+        
+        # find yaw angles projections on x and y axes and save them to class variables
+        robot_yaw_x = math.cos(robot_yaw)
+        robot_yaw_y = math.sin(robot_yaw)
+
+        global_plan = np.array(self.global_plan)
+        global_plan_xs_idx = []
+        global_plan_ys_idx = []
+        for i in range(0, global_plan.shape[0]):
+            x_temp = int((global_plan[i, 0] - self.local_map_origin_x) / self.local_map_resolution)
+            y_temp = int((global_plan[i, 1] - self.local_map_origin_y) / self.local_map_resolution)
+
+            if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
+                global_plan_xs_idx.append(x_temp)
+                global_plan_ys_idx.append(self.local_map_size - 1 - y_temp)
+
+        local_plan = np.array(self.local_plan)
+        local_plan_xs_idx = []
+        local_plan_ys_idx = []
+        for i in range(0, local_plan.shape[0]):
+            x_temp = int((local_plan[i, 0] - self.local_map_origin_x) / self.local_map_resolution)
+            y_temp = int((local_plan[i, 1] - self.local_map_origin_y) / self.local_map_resolution)
+
+            if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
+                local_plan_xs_idx.append(x_temp)
+                local_plan_ys_idx.append(self.local_map_size - 1 - y_temp)
+
         centroids_for_plot = []
         lc_regions = regionprops(self.semantic_map.astype(int))
         for lc_region in lc_regions:
@@ -1119,33 +1159,22 @@ class lime_rt_pub(object):
         fig.set_size_inches(w, h)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
-        
-        self.y_odom_index = [self.local_map_size - self.y_odom_index[0]]
-
-        local_plan_x_list = []
-        local_plan_y_list = []
-
-        # find if there is local plan
-        for j in range(0, self.local_plan.shape[0]):
-                x_temp = int((self.local_plan[j, 0] - self.locallocal_mapOriginX) / self.locallocal_mapResolution)
-                y_temp = self.local_map_size - int((self.local_plan[j, 1] - self.locallocal_mapOriginY) / self.locallocal_mapResolution)
-
-                if 0 <= x_temp < self.local_map_size and 0 <= y_temp < self.local_map_size:
-                    local_plan_x_list.append(x_temp)
-                    local_plan_y_list.append(y_temp)
 
         for k in range(0, len(self.outputs)):
             output = self.outputs[k]
             output[:,:,0] = np.flip(output[:,:,0], axis=0)
             output[:,:,1] = np.flip(output[:,:,1], axis=0)
             output[:,:,2] = np.flip(output[:,:,2], axis=0)
+            #print('k = ', k)
+            #print('output.shape = ', output.shape)
 
             fig.add_axes(ax)
-            ax.scatter(self.global_plan_xs, self.global_plan_ys, c='blue', marker='x')
-            ax.scatter(local_plan_x_list, local_plan_y_list, c='yellow', marker='o')
-            ax.scatter(self.x_odom_index, self.y_odom_index, c='white', marker='o')
-            ax.text(self.x_odom_index[0], self.local_map_size - self.y_odom_index[0], 'robot', c='white')
-            ax.quiver(self.x_odom_index, self.y_odom_index, self.yaw_odom_x, self.yaw_odom_y, color='white')
+            ax.scatter(global_plan_xs_idx, global_plan_ys_idx, c='blue', marker='x')
+            ax.scatter(local_plan_xs_idx, local_plan_ys_idx, c='yellow', marker='o')
+            ax.scatter([robot_x_idx], [robot_y_idx], c='white', marker='o')
+            ax.text(robot_x_idx, robot_y_idx, 'robot', c='white')
+            ax.quiver(robot_x_idx, robot_y_idx, robot_yaw_x, robot_yaw_y, color='white')
+            ax.imshow(output.astype('float64'), aspect='auto')
             ax.imshow(output.astype('float64'), aspect='auto')
             for i in range(0, len(centroids_for_plot)):
                 ax.scatter(centroids_for_plot[i][1], self.local_map_size - centroids_for_plot[i][2], c='white', marker='o')   
@@ -1194,7 +1223,7 @@ class lime_rt_pub(object):
         try:
             start = time.time()
             # find explanation
-            ret_exp = ImageExplanation(self.image_rgb, self.semantic_map, self.object_affordance_pairs, self.ontology)
+            ret_exp = ImageExplanation(self.local_map, self.semantic_map, self.object_affordance_pairs, self.ontology)
             if top_labels:
                 top = np.argsort(self.labels[0])[-top_labels:]
                 ret_exp.top_labels = list(top)
@@ -1261,10 +1290,10 @@ class lime_rt_pub(object):
 
                 output = output[:, :, [2, 1, 0]] * 255.0
                 output = output.astype(np.uint8)
-                for i in range(0, int(self.local_costmap_size)):
-                    for j in range(0, int(self.local_costmap_size)):
-                        x = self.local_costmap_origin_x + i * self.local_costmap_resolution
-                        y = self.local_costmap_origin_y + j * self.local_costmap_resolution
+                for i in range(0, int(self.local_map_size)):
+                    for j in range(0, int(self.local_map_size)):
+                        x = self.local_map_origin_x + i * self.local_map_resolution
+                        y = self.local_map_origin_y + j * self.local_map_resolution
                         r = int(output[j, i, 2])
                         g = int(output[j, i, 1])
                         b = int(output[j, i, 0])
