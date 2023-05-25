@@ -66,8 +66,8 @@ class lime_rt_sub(object):
         self.use_local_costmap = True
 
         # whether to plot
-        self.plot_costmaps_bool = False
-        self.plot_semantic_map_bool = False
+        self.plot_costmaps_bool = True
+        self.plot_semantic_map_bool = True
         
         # global counter for plotting
         self.counter_global = 0
@@ -189,9 +189,9 @@ class lime_rt_sub(object):
             self.model = torch.hub.load(self.path_prefix + '/yolov5_master/', 'custom', self.path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
 
         # semantic part
-        ontology_name = 'ont1' #'ont1-4'
+        scenario_name = 'scenario1' #'scenario1-4'
         # load ontology
-        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + ontology_name + '/' + 'ontology.csv'))
+        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + scenario_name + '/' + 'ontology.csv'))
 
         # gazebo vars
         if self.simulation:
@@ -199,7 +199,7 @@ class lime_rt_sub(object):
             self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
 
             # load gazebo tags
-            self.gazebo_tags = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/ontologies/' + ontology_name + '/' + 'gazebo_tags.csv')) 
+            self.gazebo_tags = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + scenario_name + '/' + 'gazebo_tags.csv')) 
             
     # camera feed callback
     def camera_feed_callback(self, img, depth_img, info):
