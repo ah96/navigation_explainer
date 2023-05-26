@@ -15,11 +15,10 @@ dirCurr = os.getcwd()
 
 create_dataset = True
 dirMain = 'camera_feed_dataset'
-if create_dataset == True:
-    try:
-        os.mkdir(dirMain)
-    except FileExistsError:
-        pass
+try:
+    os.mkdir(dirMain)
+except FileExistsError:
+    pass
 
 # save the RGB image from the robot's camera as .png
 def saveImage(image):
@@ -31,7 +30,7 @@ def saveImage(image):
 # callback function
 # get the RGB image from the robot's camera
 def image_raw_callback(img):
-    print('\nimage_raw_callback')
+    print('\n' + str(img_ctr))
 
     # in the case if the image must be undistorted
     #camera_info_K = np.array(camera_info.K).reshape([3, 3])
@@ -73,5 +72,7 @@ def image_depth_callback(img):
 if __name__ == '__main__':
     rospy.init_node('camera_feed', anonymous=True)
     image_raw_sub = rospy.Subscriber('/xtion/rgb/image_raw', Image, image_raw_callback)
-    #image_depth_sub = rospy.Subscriber('/xtion/depth_registered/image_raw', Image, image_depth_callback) #"32FC1"
+    image_depth_sub = rospy.Subscriber('/xtion/depth_registered/image_raw', Image, image_depth_callback) #"32FC1"
+    #ts = message_filters.ApproximateTimeSynchronizer([image_sub, info_sub], 10, 0.2)
+    #ts.registerCallback(callback)
     rospy.spin()
