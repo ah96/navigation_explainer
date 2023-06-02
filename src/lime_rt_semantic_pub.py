@@ -268,17 +268,28 @@ class ImageExplanation(object):
 
         w_s = [0]*len(exp)
         f_s = [0]*len(exp)
+        v_s = []
         imgs = [np.zeros((self.image.shape[0],self.image.shape[0],3))]*len(exp)
         rgb_values = []
+
+        all_obstacles_exp = np.zeros((self.image.shape[0],self.image.shape[0],3))
+        # color free space with gray
+        all_obstacles_exp[self.semantic_map == 0, 0] = self.free_space_shade
+        all_obstacles_exp[self.semantic_map == 0, 1] = self.free_space_shade
+        all_obstacles_exp[self.semantic_map == 0, 2] = self.free_space_shade
+
         for f, w in exp:
             #print('(f, w): ', (f, w))
             print(self.object_affordance_pairs[f][1] + '_' + self.object_affordance_pairs[f][2] + ' has coefficient ' + str(w))
             w_s[f] = w
 
             temp = np.zeros((self.image.shape[0],self.image.shape[0],3))
+            #temp = copy.deepcopy(self.image[0])
+            
             v = self.object_affordance_pairs[f][0]
             #print('temp.shape = ', temp.shape)
             #print('v = ', v)
+            #v_s.append(v)
 
             # color free space with gray
             temp[self.semantic_map == 0, 0] = self.free_space_shade
@@ -290,18 +301,27 @@ class ImageExplanation(object):
                 if self.use_maximum_weight:
                     temp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                     rgb_values.append(self.val_high * w / max_w_abs)
+                    all_obstacles_exp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                 else:
                     temp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
                     rgb_values.append(self.val_high * w / w_sum_abs)
+                    all_obstacles_exp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
             elif w < 0:
                 if self.use_maximum_weight:
                     temp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                     rgb_values.append(self.val_high * abs(w) / max_w_abs)
+                    all_obstacles_exp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
                 else:
                     temp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
                     rgb_values.append(self.val_high * abs(w) / w_sum_abs)
+                    all_obstacles_exp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
+            #elif w == 0:
+            #    temp[self.semantic_map == v, 0] = self.val_low
+            #    rgb_values.append(self.val_low * abs(w) / w_sum_abs)
 
-            imgs[f] = temp  
+            imgs[f] = temp
+
+        imgs.append(all_obstacles_exp)
 
         #print('weights = ', w_s)
         #print('get image and mask ending')
@@ -319,12 +339,12 @@ class lime_rt_pub(object):
         # plot bool vars
         self.plot_perturbations_bool = False 
         self.plot_classifier_bool = False
-        self.plot_explanation_bool = True
+        self.plot_explanation_bool = False
 
         # publish bool vars
-        self.publish_explanation_coeffs_bool = False  
-        self.publish_explanation_image_bool = False
-        self.publish_pointcloud_bool = False
+        self.publish_explanation_coeffs_bool = True  
+        self.publish_explanation_image_bool = True
+        self.publish_pointcloud_bool = True
 
         self.hard_obstacle = 99
         
@@ -1245,7 +1265,7 @@ class lime_rt_pub(object):
             end = time.time()
             print('\nGET EXP PIC TIME = ', round(end-start,3))
             print('exp: ', self.exp)
-
+            #print(0)
             # plot explanation
             if self.plot_explanation_bool == True:
                 self.plot_explanation()
@@ -1255,7 +1275,7 @@ class lime_rt_pub(object):
             if self.publish_explanation_coeffs_bool:
                 # publish explanation coefficients
                 exp_with_centroids = Float32MultiArray()
-                segs_unique = np.unique(self.segments)
+                segs_unique = np.unique(self.semantic_map)
                 for k in range(0, len(self.exp)):
                     exp_with_centroids.data.append(segs_unique[self.exp[k][0]])
                     exp_with_centroids.data.append(self.exp[k][1]) 
@@ -1264,12 +1284,14 @@ class lime_rt_pub(object):
 
             if self.publish_explanation_image_bool:
                 exp_img_start = time.time()
-                
-                output = self.output[:, :, [2, 1, 0]] * 255.0 #.astype(np.uint8)
+                print(type(self.outputs))
+                #print(self.outputs.shape)
+                output = self.outputs[-1][:, :, [2, 1, 0]] * 255.0 #.astype(np.uint8)
+                #print(1)
                 output_msg = self.br.cv2_to_imgmsg(output.astype(np.uint8)) #,encoding="rgb8: CV_8UC3") - encoding not supported in Python3
-                
-                self.pub_exp_image.publish(output_msg)
-
+                #print(2)
+                self.pub_exp_image.publish(output_msg)          
+                #print(3)
                 exp_img_end = time.time()
                 print('PUBLISH EXPLANATION IMAGE RUNTIME = ', round(exp_img_end - exp_img_start,3))
 
@@ -1281,7 +1303,7 @@ class lime_rt_pub(object):
                 points = []
 
                 # flip the rgb image up-down
-                output = cv2.flip(self.output, 0)
+                output = cv2.flip(self.outputs[-1], 0)
                 #output = np.zeros(self.output.shape)
                 #print(output[:,:,0].shape)
                 #output[:,:,0] = np.flipud(self.output[:,:,0])
