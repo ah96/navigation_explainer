@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <sdf version="1.5">
-  <model name="library_bookshelf">
+  <model name="library_bookshelf_onesided_small">
     <static>true</static>
     <link name="link">
       <inertial>
@@ -10,15 +10,15 @@
         <pose>0 0.005 0.6 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.9 0.01 1.2</size>
+            <size>0.9 0.01 1.2</size>
           </box>
         </geometry>
       </collision>
-      <visual name="back">
+      <visual name="visual1">
         <pose>0 0.005 0.6 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.9 0.01 1.2</size>
+            <size>0.9 0.01 1.2</size>
           </box>
         </geometry>
         <material>
@@ -29,15 +29,15 @@
         </material>
       </visual>
       <collision name="left_side">
-        <pose>0.95 -0.195 0.6 0 0 0</pose>
+        <pose>0.45 -0.195 0.6 0 0 0</pose>
         <geometry>
           <box>
             <size>0.02 0.4 1.2</size>
           </box>
         </geometry>
       </collision>
-      <visual name="left_side">
-        <pose>0.95 -0.195 0.6 0 0 0</pose>
+      <visual name="visual2">
+        <pose>0.45 -0.195 0.6 0 0 0</pose>
         <geometry>
           <box>
             <size>0.02 0.4 1.2</size>
@@ -51,15 +51,15 @@
         </material>
       </visual>
       <collision name="right_side">
-        <pose>-0.95 -0.195 0.6 0 0 0</pose>
+        <pose>-0.45 -0.195 0.6 0 0 0</pose>
         <geometry>
           <box>
             <size>0.02 0.4 1.2</size>
           </box>
         </geometry>
       </collision>
-      <visual name="right_side">
-        <pose>-0.95 -0.195 0.6 0 0 0</pose>
+      <visual name="visual3">
+        <pose>-0.45 -0.195 0.6 0 0 0</pose>
         <geometry>
           <box>
             <size>0.02 0.4 1.2</size>
@@ -76,15 +76,15 @@
         <pose>0 -0.195 0.03 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.06</size>
+            <size>0.88 0.4 0.06</size>
           </box>
         </geometry>
       </collision>
-      <visual name="bottom">
+      <visual name="visual4">
         <pose>0 -0.195 0.03 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.06</size>
+            <size>0.88 0.4 0.06</size>
           </box>
         </geometry>
         <material>
@@ -98,15 +98,15 @@
         <pose>0 -0.195 1.19 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.02</size>
+            <size>0.88 0.4 0.02</size>
           </box>
         </geometry>
       </collision>
-      <visual name="top">
+      <visual name="visual5">
         <pose>0 -0.195 1.19 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.02</size>
+            <size>0.88 0.4 0.02</size>
           </box>
         </geometry>
         <material>
@@ -120,15 +120,15 @@
         <pose>0 -0.195 0.43 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.02</size>
+            <size>0.88 0.4 0.02</size>
           </box>
         </geometry>
       </collision>
-      <visual name="low_shelf">
+      <visual name="visual6">
         <pose>0 -0.195 0.43 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.02</size>
+            <size>0.88 0.4 0.02</size>
           </box>
         </geometry>
         <material>
@@ -142,15 +142,15 @@
         <pose>0 -0.195 0.8 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.02</size>
+            <size>0.88 0.4 0.02</size>
           </box>
         </geometry>
       </collision>
-      <visual name="high_shelf">
+      <visual name="visual7">
         <pose>0 -0.195 0.8 0 0 0</pose>
         <geometry>
           <box>
-            <size>1.88 0.4 0.02</size>
+            <size>0.88 0.4 0.02</size>
           </box>
         </geometry>
         <material>
