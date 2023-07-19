@@ -1,4 +1,4 @@
-# rostopic pub /move_base_simple/goal geometry_msgs/PoseStamped '{header: {stamp: now, frame_id: "map"}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}'
+# rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped '{header: {stamp: now, frame_id: "map"}, pose: {position: {x: -8.0, y: 8.0, z: 0.0}, orientation: {w: 1.0}}}'
 
 
 #!/usr/bin/env python
@@ -11,12 +11,13 @@ def goal_publisher():
     rospy.init_node('goal_publisher', anonymous=True)
 
     # Create a publisher with the topic '/goal_pose' and message type 'PoseStamped'
-    goal_pub = rospy.Publisher('/goal_pose', PoseStamped, queue_size=10)
+    goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
 
     # Set the publishing rate in Hz
-    rate = rospy.Rate(1)
+    rate = rospy.Rate(2)
 
-    while not rospy.is_shutdown():
+    #while not rospy.is_shutdown():
+    for i in range(0,3):
         # Create a PoseStamped message object
         goal_msg = PoseStamped()
 
@@ -25,8 +26,8 @@ def goal_publisher():
         goal_msg.header.frame_id = 'map'  # Replace 'map' with your desired frame ID
 
         # Set the pose information
-        goal_msg.pose.position.x = 1.0  # x-coordinate
-        goal_msg.pose.position.y = 2.0  # y-coordinate
+        goal_msg.pose.position.x = -8.0  # x-coordinate
+        goal_msg.pose.position.y = 8.0  # y-coordinate
         goal_msg.pose.position.z = 0.0  # z-coordinate
 
         goal_msg.pose.orientation.x = 0.0  # x-orientation
@@ -36,6 +37,8 @@ def goal_publisher():
 
         # Publish the goal pose
         goal_pub.publish(goal_msg)
+
+        print('published!')
 
         # Sleep for the specified time to achieve the desired publishing rate
         rate.sleep()
