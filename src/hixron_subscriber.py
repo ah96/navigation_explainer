@@ -22,46 +22,8 @@ import torch
 
 # lc -- local costmap
 
-# rotation matrix to quaternion
-def rotationMatrixToQuaternion(m):
-    #q0 = qw
-    t = np.matrix.trace(m)
-    q = np.asarray([0.0, 0.0, 0.0, 0.0], dtype=np.float64)
-
-    if(t > 0):
-        t = np.sqrt(t + 1)
-        q[3] = 0.5 * t
-        t = 0.5/t
-        q[0] = (m[2,1] - m[1,2]) * t
-        q[1] = (m[0,2] - m[2,0]) * t
-        q[2] = (m[1,0] - m[0,1]) * t
-
-    else:
-        i = 0
-        if (m[1,1] > m[0,0]):
-            i = 1
-        if (m[2,2] > m[i,i]):
-            i = 2
-        j = (i+1)%3
-        k = (j+1)%3
-
-        t = np.sqrt(m[i,i] - m[j,j] - m[k,k] + 1)
-        q[i] = 0.5 * t
-        t = 0.5 / t
-        q[3] = (m[k,j] - m[j,k]) * t
-        q[j] = (m[j,i] + m[i,j]) * t
-        q[k] = (m[k,i] + m[i,k]) * t
-
-    q = Quaternion(q[0],q[1],q[2],q[3])
-    return q
-
-# hixron datatype
-class hixron_object:
-    def __init__(self):
-        pass
-
-# hixron_get_data class
-class hixron_get_data(object):
+# hixron_subscriber class
+class hixron_subscriber(object):
     # constructor
     def __init__(self):
         # simulation or real-world experiment
@@ -81,9 +43,9 @@ class hixron_get_data(object):
         
         # data directories
         self.dirCurr = os.getcwd()
-        self.path_prefix = self.dirCurr + '/yolo_data/'
+        self.yoloDir = self.dirCurr + '/yolo_data/'
 
-        self.dirMain = 'explanation_data'
+        self.dirMain = 'hixron_data'
         try:
             os.mkdir(self.dirMain)
         except FileExistsError:
@@ -103,9 +65,9 @@ class hixron_get_data(object):
                 pass
 
         if self.plot_costmaps_bool == True and self.use_local_costmap == True:
-            self.costmap_dir = self.dirMain + '/costmap_images'
+            self.local_costmap_dir = self.dirMain + '/local_costmap_images'
             try:
-                os.mkdir(self.costmap_dir)
+                os.mkdir(self.local_costmap_dir)
             except FileExistsError:
                 pass
 
@@ -145,7 +107,7 @@ class hixron_get_data(object):
         self.local_map = np.zeros((self.local_map_size,self.local_map_size))
 
         # semantic part
-        scenario_name = 'scenario1' #'scenario1'
+        self.scenario_name = 'library' #'scenario1', 'library'
         # load ontology
         self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + scenario_name + '/' + 'ontology.csv'))
 
@@ -215,7 +177,7 @@ class hixron_get_data(object):
             self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
 
             # load gazebo tags
-            self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + scenario_name + '/' + 'gazebo_tags.csv')) 
+            self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'gazebo_tags.csv')) 
             
     # camera feed callback
     def camera_feed_callback(self, img, depth_img, info):
@@ -393,7 +355,7 @@ class hixron_get_data(object):
     def plot_costmaps(self):
         start = time.time()
 
-        dirCurr = self.costmap_dir + '/' + str(self.counter_global)
+        dirCurr = self.local_costmap_dir + '/' + str(self.counter_global)
         try:
             os.mkdir(dirCurr)
         except FileExistsError:
@@ -950,12 +912,12 @@ class hixron_get_data(object):
 
 def main():
     # ----------main-----------
-    rospy.init_node('hixron_get_data', anonymous=False)
+    rospy.init_node('hixron_subscriber', anonymous=False)
 
-    # define hixron_get_data object
-    hixron_get_data_obj = hixron_get_data()
+    # define hixron_subscriber object
+    hixron_subscriber_obj = hixron_subscriber()
     # call main to initialize subscribers
-    hixron_get_data_obj.main_()
+    hixron_subscriber_obj.main_()
 
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
     while not rospy.is_shutdown():
