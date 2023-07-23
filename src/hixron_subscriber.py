@@ -31,7 +31,7 @@ class hixron_subscriber(object):
 
         # whether to plot
         self.plot_costmaps_bool = False
-        self.plot_semantic_map_bool = False
+        self.plot_semantic_map_bool = True
         
         # global counter for plotting
         self.counter_global = 0
@@ -40,6 +40,13 @@ class hixron_subscriber(object):
         # use local and/or global costmap
         self.use_local_costmap = False
         self.use_global_costmap = False
+
+        # use local and/or global (semantic) map
+        self.use_local_map = False
+        self.use_global_map = True
+        
+        # use camera
+        self.use_camera = False
         
         # data directories
         self.dirCurr = os.getcwd()
@@ -91,8 +98,6 @@ class hixron_subscriber(object):
         self.robot_position_odom = Point(0.0,0.0,0.0)        
         self.robot_orientation_odom = Quaternion(0.0,0.0,0.0,1.0)
         self.footprint = []  
-        self.amcl_pose = [] 
-        self.odom = []
 
         # plans' variables
         self.local_plan = []
@@ -109,16 +114,16 @@ class hixron_subscriber(object):
         # semantic part
         self.scenario_name = 'library' #'scenario1', 'library'
         # load ontology
-        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + scenario_name + '/' + 'ontology.csv'))
+        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv'))
 
         # load global map info
-        self.global_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + scenario_name + '/' + 'gazebo_tags.csv')) 
+        self.global_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
         # global map vars
-        self.global_map_origin_x = self.global_map_info(0,3) 
-        self.global_map_origin_y = self.global_map_info(0,4) 
-        self.global_map_resolution = self.global_map_info(0,0)
-        self.global_map_size = [self.global_map_info(0,2), self.global_map_info(0,1)]
-        self.global_map = np.zeros((self.global_map_size[0],self.global_map_size[1]))
+        self.global_map_origin_x = self.global_map_info[0,3] 
+        self.global_map_origin_y = self.global_map_info[0,4] 
+        self.global_map_resolution = self.global_map_info[0,0]
+        self.global_map_size = [int(self.global_map_info[0,2]), int(self.global_map_info[0,1])]
+        self.global_map = np.zeros((self.global_map_size[0],self.global_map_size[1]), dtype=float)
 
         # semantic map variables
         self.local_semantic_map = np.array([])
@@ -144,11 +149,11 @@ class hixron_subscriber(object):
 
         # subscribers
         # local plan subscriber
-        self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
+        #self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
         # global plan subscriber 
         self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
         # robot footprint subscriber
-        self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
+        #self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
         # odometry subscriber
         self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
         # global-amcl pose subscriber
@@ -162,14 +167,15 @@ class hixron_subscriber(object):
 
         # CV part
         # robot camera subscribers
-        self.camera_image_sub = message_filters.Subscriber('/xtion/rgb/image_raw', Image)
-        self.depth_sub = message_filters.Subscriber('/xtion/depth_registered/image_raw', Image) #"32FC1"
-        self.camera_info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_image_sub, self.depth_sub, self.camera_info_sub], 10, 1.0)
-        self.ts.registerCallback(self.camera_feed_callback)
-        # Load YOLO model
-        #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
-        self.model = torch.hub.load(self.path_prefix + '/yolov5_master/', 'custom', self.path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
+        if self.use_camera == True:
+            self.camera_image_sub = message_filters.Subscriber('/xtion/rgb/image_raw', Image)
+            self.depth_sub = message_filters.Subscriber('/xtion/depth_registered/image_raw', Image) #"32FC1"
+            self.camera_info_sub = message_filters.Subscriber('/xtion/rgb/camera_info', CameraInfo)
+            self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_image_sub, self.depth_sub, self.camera_info_sub], 10, 1.0)
+            self.ts.registerCallback(self.camera_feed_callback)
+            # Load YOLO model
+            #model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5n - yolov5x6, custom, yolov5n(6)-yolov5s(6)-yolov5m(6)-yolov5l(6)-yolov5x(6)
+            self.model = torch.hub.load(self.path_prefix + '/yolov5_master/', 'custom', self.path_prefix + '/models/yolov5s.pt', source='local')  # custom trained model
 
         # gazebo vars
         if self.simulation:
@@ -210,16 +216,14 @@ class hixron_subscriber(object):
     def odom_callback(self, msg):
         #print('odom_callback')
         
-        self.odom = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w, msg.twist.twist.linear.x, msg.twist.twist.angular.z]
-        
         self.robot_position_odom = msg.pose.pose.position
         self.robot_orientation_odom = msg.pose.pose.orientation
+        self.robot_twist_linear = msg.twist.twist.linear
+        self.robot_twist_angular = msg.twist.twist.angular
 
     # amcl (global) pose callback
     def amcl_callback(self, msg):
         #print('amcl_callback')
-        
-        self.amcl_pose = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
 
         self.robot_position_map = msg.pose.pose.position
         self.robot_orientation_map = msg.pose.pose.orientation
@@ -239,28 +243,34 @@ class hixron_subscriber(object):
 
     # global plan callback
     def global_plan_callback(self, msg):
-        #print('\nglobal_plan_callback!')
+        print('\nglobal_plan_callback!')
         
         self.global_plan = []
-
         for i in range(0,len(msg.poses)):
             self.global_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-
-        pd.DataFrame(self.global_plan).to_csv(self.dirCurr + '/' + self.dirData + '/global_plan.csv', index=False)#, header=False)
+        #pd.DataFrame(self.global_plan).to_csv(self.dirCurr + '/' + self.dirData + '/global_plan.csv', index=False)#, header=False)
 
         # potential place to make a local semantic map, if local costmap is not used
-        if self.use_local_costmap == False:
+        if self.use_local_costmap == False and self.use_local_map:
+
             # update local_map params (origin cordinates)
             self.local_map_origin_x = self.robot_position_map.x - self.local_map_resolution * self.local_map_size * 0.5 
             self.local_map_origin_y = self.robot_position_map.y - self.local_map_resolution * self.local_map_size * 0.5
-            #self.local_map_info = [self.local_map_size, self.local_map_resolution, self.local_map_origin_x, self.local_map_origin_y]
-            self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y]#, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
-
+            self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y]
+            
             # create semantic data
             self.create_semantic_data()
 
             # increase the global counter (needed for plotting numeration)
             self.counter_global += 1
+
+        elif self.use_global_costmap == False and self.use_global_map:
+
+            # create semantic data
+            self.create_semantic_data()
+
+            # increase the global counter (needed for plotting numeration)
+            self.counter_global += 1        
         
     # local plan callback
     def local_plan_callback(self, msg):
@@ -340,6 +350,32 @@ class hixron_subscriber(object):
             # Turn inflated area to free space and 100s to 99s
             self.local_map[self.local_map == 100] = 99
             self.local_map[self.local_map <= 98] = 0
+
+            # create semantic map
+            self.create_semantic_data()
+
+            # increase the global counter
+            self.counter_global += 1
+
+        except Exception as e:
+            print('exception = ', e)
+            return
+
+    # local costmap callback
+    def global_costmap_callback(self, msg):
+        print('\nglobal_costmap_callback')
+        
+        try:          
+            # create np.array global_map object
+            self.global_map = np.asarray(msg.data)
+            self.global_map.resize((self.global_map_size,self.global_map_size))
+
+            if self.plot_costmaps_bool == True:
+                self.plot_costmaps()
+                
+            # Turn inflated area to free space and 100s to 99s
+            self.global_map[self.global_map == 100] = 99
+            self.global_map[self.global_map <= 98] = 0
 
             # create semantic map
             self.create_semantic_data()
@@ -433,65 +469,95 @@ class hixron_subscriber(object):
         end = time.time()
         print('costmaps plotting runtime = ' + str(round(end-start,3)) + ' seconds')
 
+    # create semantic data
+    def create_semantic_data(self):
+        # update ontology
+        self.update_ontology()
+
+        # create semantic map
+        if self.use_local_map == True:
+            self.create_local_semantic_map()
+        if self.use_global_map ==  True:
+            self.create_global_semantic_map()
+
+        # plot semantic_map
+        if self.plot_semantic_map_bool == True:
+            self.plot_semantic_map()
+
+        # create interpretable features
+        self.create_interpretable_features()
+
     # update ontology
     def update_ontology(self):
         # check if any object changed its position from simulation or from object detection (and tracking)
 
         # simulation relying on Gazebo
         if self.simulation:
+            update_custom = False
+
             for i in range(0, self.ontology.shape[0]):
                 # if the object has some affordance (etc. movability, openability), then it may have changed its position 
-                if self.ontology[i][6] == 1 or self.ontology[i][7] == 1:
+                if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
                     # get the object's new position from Gazebo
                     obj_gazebo_name = self.gazebo_labels[i][0]
                     obj_idx = self.gazebo_names.index(obj_gazebo_name)
                     obj_x_new = self.gazebo_poses[obj_idx].position.x
                     obj_y_new = self.gazebo_poses[obj_idx].position.y
 
-                    obj_x_size = copy.deepcopy(self.ontology[i][4])
-                    obj_y_size = copy.deepcopy(self.ontology[i][5])
+                    obj_x_size = copy.deepcopy(self.ontology[i][5])
+                    obj_y_size = copy.deepcopy(self.ontology[i][6])
 
-                    obj_x_current = self.ontology[i][2]
-                    obj_y_current = self.ontology[i][3]
+                    obj_x_current = self.ontology[i][3]
+                    obj_y_current = self.ontology[i][4]
+
+                    if update_custom == False:
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > 0.1 or diff_y > 0.1:
+                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
                     
-                    # update ontology
-                    # almost every object type in Gazebo has a different center of mass
-                    if 'table' in obj_gazebo_name:
-                        # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
-                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][2] = obj_x_new + 0.5*obj_x_size
-                            self.ontology[i][3] = obj_y_new - 0.5*obj_y_size 
-                    elif 'wardrobe' in obj_gazebo_name:
-                        # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(obj_x_new - 0.5*obj_x_size - obj_x_current)
-                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][2] = obj_x_new - 0.5*obj_x_size
-                            self.ontology[i][3] = obj_y_new - 0.5*obj_y_size 
-                    elif 'door' in obj_gazebo_name:
-                        # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(obj_x_new - obj_x_current)
-                        diff_y = abs(obj_y_new - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
-                            # if the doors are opened/closed they are shifted for 90 degrees
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][4] = obj_y_size
-                            self.ontology[i][5] = obj_x_size
-
-                            self.ontology[i][2] = obj_x_new
-                            self.ontology[i][3] = obj_y_new 
                     else:
-                        # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(obj_x_new - obj_x_current)
-                        diff_y = abs(obj_y_new - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][2] = obj_x_new
-                            self.ontology[i][3] = obj_y_new 
+                        # update ontology
+                        # almost every object type in Gazebo has a different center of mass
+                        if 'table' in obj_gazebo_name:
+                            # check whether the (centroid) coordinates of the object are changed (enough)
+                            diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
+                            diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
+                            if diff_x > 0.1 or diff_y > 0.1:
+                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                                self.ontology[i][3] = obj_x_new + 0.5*obj_x_size
+                                self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
+                        elif 'wardrobe' in obj_gazebo_name:
+                            # check whether the (centroid) coordinates of the object are changed (enough)
+                            diff_x = abs(obj_x_new - 0.5*obj_x_size - obj_x_current)
+                            diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
+                            if diff_x > 0.1 or diff_y > 0.1:
+                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                                self.ontology[i][3] = obj_x_new - 0.5*obj_x_size
+                                self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
+                        elif 'door' in obj_gazebo_name:
+                            # check whether the (centroid) coordinates of the object are changed (enough)
+                            diff_x = abs(obj_x_new - obj_x_current)
+                            diff_y = abs(obj_y_new - obj_y_current)
+                            if diff_x > 0.1 or diff_y > 0.1:
+                                # if the doors are opened/closed they are shifted for 90 degrees
+                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                                self.ontology[i][5] = obj_y_size
+                                self.ontology[i][6] = obj_x_size
+
+                                self.ontology[i][3] = obj_x_new
+                                self.ontology[i][4] = obj_y_new 
+                        else:
+                            # check whether the (centroid) coordinates of the object are changed (enough)
+                            diff_x = abs(obj_x_new - obj_x_current)
+                            diff_y = abs(obj_y_new - obj_y_current)
+                            if diff_x > 0.1 or diff_y > 0.1:
+                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                                self.ontology[i][3] = obj_x_new
+                                self.ontology[i][4] = obj_y_new 
 
         # real world or simulation relying on object detection
         elif self.simulation == False:
@@ -568,24 +634,9 @@ class hixron_subscriber(object):
 
         # save the updated ontology for the publisher
         pd.DataFrame(self.ontology).to_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv', index=False)#, header=False)
-        
-    # create semantic data
-    def create_semantic_data(self):
-        # update ontology
-        self.update_ontology()
-
-        # create semantic map
-        self.create_semantic_map()
-
-        # plot semantic_map
-        if self.plot_semantic_map_bool == True:
-            self.plot_semantic_map()
-
-        # create interpretable features
-        self.create_interpretable_features()
-
-    # create semantic map
-    def create_semantic_map(self):
+    
+    # create local semantic map
+    def create_local_semantic_map(self):
         # GET transformations between coordinate frames
         # tf from map to odom
         t_mo = np.asarray([self.tf_map_odom[0],self.tf_map_odom[1],self.tf_map_odom[2]])
@@ -628,7 +679,7 @@ class hixron_subscriber(object):
         start = time.time()
         self.semantic_map = np.zeros(self.local_map.shape)
         self.semantic_map_inflated = np.zeros(self.local_map.shape)
-        widening_factor = 0
+        inflation_factor = 0
         for i in range(0, self.ontology.shape[0]):
             # object's vertices from /map to /odom and /lc
             # top left vertex
@@ -734,7 +785,7 @@ class hixron_subscriber(object):
 
             if obstacle_in_neighborhood == True:
                 # semantic map
-                self.semantic_map[max(0, y_1-widening_factor):min(self.local_map_size-1, y_2+widening_factor), max(0,x_1-widening_factor):min(self.local_map_size-1, x_2+widening_factor)] = i+1
+                self.semantic_map[max(0, y_1-inflation_factor):min(self.local_map_size-1, y_2+inflation_factor), max(0,x_1-inflation_factor):min(self.local_map_size-1, x_2+inflation_factor)] = i+1
                 
                 # inflate semantic map using heuristics
                 inflation_x = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
@@ -776,6 +827,96 @@ class hixron_subscriber(object):
         # save local and semantic maps data
         pd.DataFrame(self.local_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/local_map_info.csv', index=False)#, header=False)
         pd.DataFrame(self.local_map).to_csv(self.dirCurr + '/' + self.dirData + '/local_map.csv', index=False) #, header=False)
+        pd.DataFrame(self.semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map.csv', index=False)#, header=False)
+        pd.DataFrame(self.semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map_inflated.csv', index=False)#, header=False)
+
+    # create global semantic map
+    def create_global_semantic_map(self):
+        start = time.time()
+        self.semantic_map = np.zeros(self.global_map.shape)
+        self.semantic_map_inflated = np.zeros(self.global_map.shape)
+        inflation_factor = 0
+        for i in range(0, self.ontology.shape[0]):
+            # object's vertices from /map to /odom and /lc
+            # top left vertex
+            x_size = self.ontology[i][5]
+            y_size = self.ontology[i][6]
+            c_map_x = self.ontology[i][3]
+            c_map_y = self.ontology[i][4]
+
+            # top left vertex
+            tl_map_x = c_map_x - 0.5*x_size
+            tl_map_y = c_map_y + 0.5*y_size
+            tl_pixel_x = int((tl_map_x - self.global_map_origin_x) / self.global_map_resolution)
+            tl_pixel_y = int((tl_map_y - self.global_map_origin_y) / self.global_map_resolution)
+
+            # bottom right vertex
+            br_map_x = c_map_x + 0.5*x_size
+            br_map_y = c_map_y - 0.5*y_size
+            br_pixel_x = int((br_map_x - self.global_map_origin_x) / self.global_map_resolution)
+            br_pixel_y = int((br_map_y - self.global_map_origin_y) / self.global_map_resolution)
+            
+            # top right vertex
+            tr_map_x = c_map_x + 0.5*x_size
+            tr_map_y = c_map_y + 0.5*y_size
+            tr_pixel_x = int((tr_map_x - self.global_map_origin_x) / self.global_map_resolution)
+            tr_pixel_y = int((tr_map_y - self.global_map_origin_y) / self.global_map_resolution)
+
+            # bottom left vertex
+            bl_map_x = c_map_x - 0.5*x_size
+            bl_map_y = c_map_y - 0.5*y_size
+            bl_pixel_x = int((bl_map_x - self.global_map_origin_x) / self.global_map_resolution)
+            bl_pixel_y = int((bl_map_y - self.global_map_origin_y) / self.global_map_resolution)
+
+            # object's sides coordinates
+            object_left = bl_pixel_x
+            object_top = tr_pixel_y
+            object_right = tr_pixel_x
+            object_bottom = bl_pixel_y
+
+            # semantic map
+            self.semantic_map[max(0, object_bottom-inflation_factor):min(self.local_map_size-1, object_top+inflation_factor), max(0,object_left-inflation_factor):min(self.local_map_size-1, object_right+inflation_factor)] = i+1
+            
+            # inflate semantic map using heuristics
+            inflation_x = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
+            inflation_y = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2)                 
+            self.semantic_map_inflated[max(0, object_bottom-inflation_y):min(self.local_map_size-1, object_top+inflation_y), max(0,object_left-inflation_x):min(self.local_map_size-1, object_right+inflation_x)] = i+1
+       
+        end = time.time()
+        print('semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
+
+
+        # find centroids of the objects in the semantic map
+        lc_regions = regionprops(self.semantic_map.astype(int))
+        #print('\nlen(lc_regions) = ', len(lc_regions))
+        self.centroids_semantic_map = []
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            self.centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
+
+        # inflate using the remaining obstacle points of the local costmap            
+        if self.use_local_costmap == True:
+            for i in range(self.semantic_map.shape[0]):
+                for j in range(0, self.semantic_map.shape[1]):
+                    if self.local_map[i, j] > 98 and self.semantic_map_inflated[i, j] == 0:
+                        distances_to_centroids = []
+                        distances_indices = []
+                        for k in range(0, len(self.centroids_semantic_map)):
+                            dx = abs(j - self.centroids_semantic_map[k][1])
+                            dy = abs(i - self.centroids_semantic_map[k][2])
+                            distances_to_centroids.append(dx + dy) # L1
+                            #distances_to_centroids.append(math.sqrt(dx**2 + dy**2)) # L2
+                            distances_indices.append(k)
+                        idx = distances_to_centroids.index(min(distances_to_centroids))
+                        self.semantic_map_inflated[i, j] = self.centroids_semantic_map[idx][0]
+
+            # turn pixels in the inflated semantic_map, which are zero in the local costmap, to zero
+            self.semantic_map_inflated[self.local_map == 0] = 0
+
+        # save local and semantic maps data
+        pd.DataFrame(self.global_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/global_map_info.csv', index=False)#, header=False)
+        pd.DataFrame(self.global_map).to_csv(self.dirCurr + '/' + self.dirData + '/global_map.csv', index=False) #, header=False)
         pd.DataFrame(self.semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map.csv', index=False)#, header=False)
         pd.DataFrame(self.semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map_inflated.csv', index=False)#, header=False)
 
@@ -888,6 +1029,22 @@ class hixron_subscriber(object):
             self.fig.clf()
 
             pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
+
+        if self.use_global_costmap:
+            #fig = plt.figure(frameon=False)
+            #w = 1.6 * 3
+            #h = 1.6 * 3
+            #fig.set_size_inches(w, h)
+            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+            self.ax.set_axis_off()
+            self.fig.add_axes(self.ax)
+            img = np.flip(self.global_map, axis=0)
+            self.ax.imshow(img.astype('float64'), aspect='auto')
+
+            self.fig.savefig(dirCurr + '/' + 'global_costmap' + '.png', transparent=False)
+            self.fig.clf()
+
+            pd.DataFrame(img).to_csv(dirCurr + '/global_costmap.csv', index=False)#, header=False)
 
         end = time.time()
         print('semantic map plotting runtime = ' + str(round(end-start,3)) + ' seconds')
