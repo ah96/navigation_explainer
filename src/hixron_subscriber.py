@@ -19,6 +19,11 @@ from geometry_msgs.msg import Point, Quaternion
 from sensor_msgs.msg import CameraInfo, Image
 import message_filters
 import torch
+from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
+import cv2
+from sensor_msgs import point_cloud2
+import struct
 
 # lc -- local costmap
 
@@ -30,8 +35,9 @@ class hixron_subscriber(object):
         self.simulation = True
 
         # whether to plot
-        self.plot_costmaps_bool = False
-        self.plot_semantic_map_bool = True
+        self.plot_local_costmap_bool = False
+        self.plot_global_costmap_bool = True
+        self.plot_semantic_map_bool = False
         
         # global counter for plotting
         self.counter_global = 0
@@ -39,7 +45,7 @@ class hixron_subscriber(object):
 
         # use local and/or global costmap
         self.use_local_costmap = False
-        self.use_global_costmap = False
+        self.use_global_costmap = True
 
         # use local and/or global (semantic) map
         self.use_local_map = False
@@ -50,6 +56,9 @@ class hixron_subscriber(object):
 
         # inflation
         self.inflation_radius = 0.275
+
+        # explanation layer
+        self.explanation_layer_bool = True
         
         # data directories
         self.dirCurr = os.getcwd()
@@ -74,10 +83,17 @@ class hixron_subscriber(object):
             except FileExistsError:
                 pass
 
-        if self.plot_costmaps_bool == True and self.use_local_costmap == True:
+        if self.plot_local_costmap_bool == True and self.use_local_costmap == True:
             self.local_costmap_dir = self.dirMain + '/local_costmap_images'
             try:
                 os.mkdir(self.local_costmap_dir)
+            except FileExistsError:
+                pass
+
+        if self.plot_global_costmap_bool == True and self.use_global_costmap == True:
+            self.global_costmap_dir = self.dirMain + '/global_costmap_images'
+            try:
+                os.mkdir(self.global_costmap_dir)
             except FileExistsError:
                 pass
 
@@ -128,6 +144,7 @@ class hixron_subscriber(object):
         self.global_map_size = [int(self.global_map_info[0,3]), int(self.global_map_info[0,2])]
         self.global_map = np.zeros((self.global_map_size[0],self.global_map_size[1]), dtype=float)
         #print(self.global_map_origin_x, self.global_map_origin_y, self.global_map_resolution, self.global_map_size)
+        self.global_costmap = np.zeros((self.global_map_size[0],self.global_map_size[1]), dtype=float)
 
         # semantic map variables
         self.local_semantic_map = np.array([])
@@ -142,32 +159,52 @@ class hixron_subscriber(object):
     # declare subscribers
     def main_(self):
         # if plotting==True create the base plot structure
-        if (self.plot_costmaps_bool == True and self.use_local_costmap == True) or self.plot_semantic_map_bool == True:
-            self.fig = plt.figure(frameon=False)
-            self.w = 1.6 * 3
-            self.h = 1.6 * 3
-            self.fig.set_size_inches(self.w, self.h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
+        #if (self.plot_costmaps_bool == True and self.use_local_costmap == True) or self.plot_semantic_map_bool == True:
+            #self.fig = plt.figure(frameon=False)
+            #self.w = 1.6 * 3
+            #self.h = 1.6 * 3
+            #self.fig.set_size_inches(self.w, self.h)
+            #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+            #self.ax.set_axis_off()
+            #self.fig.add_axes(self.ax)
 
         # subscribers
         # local plan subscriber
         #self.sub_local_plan = rospy.Subscriber("/move_base/TebLocalPlannerROS/local_plan", Path, self.local_plan_callback)
+
         # global plan subscriber 
         self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
+
         # robot footprint subscriber
         #self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
+
         # odometry subscriber
         self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
+
         # global-amcl pose subscriber
         self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
+
         # local costmap subscriber
         if self.use_local_costmap == True:
             self.sub_local_costmap = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self.local_costmap_callback)
+
         # global costmap subscriber
         if self.use_global_costmap == True:
             self.sub_global_costmap = rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.global_costmap_callback)
+
+        # explanation layer
+        if self.explanation_layer_bool:
+            self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2)
+        
+            # point_cloud variables
+            self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
+            PointField('y', 4, PointField.FLOAT32, 1),
+            PointField('z', 8, PointField.FLOAT32, 1),
+            PointField('rgba', 12, PointField.UINT32, 1),
+            ]
+
+            # header
+            self.header = Header()
 
         # CV part
         # robot camera subscribers
@@ -370,31 +407,29 @@ class hixron_subscriber(object):
         print('\nglobal_costmap_callback')
         
         try:
-            print(msg.info)
-
             # create np.array global_map object
-            #self.global_map = np.asarray(msg.data)
-            #self.global_map.resize((self.global_map_size,self.global_map_size))
+            self.global_costmap = np.asarray(msg.data)
+            self.global_costmap.resize((self.global_map_size[0],self.global_map_size[1]))
 
-            #if self.plot_costmaps_bool == True:
-            #    self.plot_costmaps()
+            if self.plot_global_costmap_bool == True:
+                self.plot_global_costmap()
                 
             # Turn inflated area to free space and 100s to 99s
-            #self.global_map[self.global_map == 100] = 99
-            #self.global_map[self.global_map <= 98] = 0
+            #self.global_costmap[self.global_costmap == 100] = 99
+            #self.global_costmap[self.global_costmap <= 98] = 0
 
             # create semantic map
             #self.create_semantic_data()
 
             # increase the global counter
-            #self.counter_global += 1
+            self.counter_global += 1
 
         except Exception as e:
             print('exception = ', e)
             return
 
-    # plot costmaps
-    def plot_costmaps(self):
+    # plot local costmap
+    def plot_local_costmap(self):
         start = time.time()
 
         dirCurr = self.local_costmap_dir + '/' + str(self.counter_global)
@@ -475,6 +510,88 @@ class hixron_subscriber(object):
         end = time.time()
         print('costmaps plotting runtime = ' + str(round(end-start,3)) + ' seconds')
 
+    # plot global costmap
+    def plot_global_costmap(self):
+        start = time.time()
+
+        dirCurr = self.global_costmap_dir + '/' + str(self.counter_global)
+        try:
+            os.mkdir(dirCurr)
+        except FileExistsError:
+            pass
+        
+        #local_map_99s_100s = copy.deepcopy(self.local_map)
+        #local_map_99s_100s[local_map_99s_100s < 99] = 0        
+        #self.fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #self.ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        #local_map_99s_100s = np.flip(local_map_99s_100s, 0)
+        #self.ax.imshow(local_map_99s_100s.astype('float64'), aspect='auto')
+        #self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
+        #self.fig.clf()
+        
+        #global_costmap_original = copy.deepcopy(self.global_costmap)
+        self.fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        #global_costmap_original = np.flip(self.global_costmap, 0)
+        self.ax.imshow(self.global_costmap, aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'global_costmap_original.png', transparent=False)
+        #self.fig.clf()
+        
+        #local_map_100s = copy.deepcopy(self.local_map)
+        #local_map_100s[local_map_100s != 100] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(ax)
+        #local_map_100s = np.flip(local_map_100s, 0)
+        #self.ax.imshow(local_map_100s.astype('float64'), aspect='auto')
+        #self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
+        #self.fig.clf()
+        
+        #local_map_99s = copy.deepcopy(self.local_map)
+        #local_map_99s[local_map_99s != 99] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        #local_map_99s = np.flip(local_map_99s, 0)
+        #self.ax.imshow(local_map_99s.astype('float64'), aspect='auto')
+        #self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
+        #self.fig.clf()
+        
+        #local_map_less_than_99 = copy.deepcopy(self.local_map)
+        #local_map_less_than_99[local_map_less_than_99 >= 99] = 0
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #self.fig.set_size_inches(w, h)
+        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        #local_map_less_than_99 = np.flip(local_map_less_than_99, 0)
+        #self.ax.imshow(local_map_less_than_99.astype('float64'), aspect='auto')
+        #self.fig.savefig(dirCurr + '/' + 'local_costmap_less_than_99.png', transparent=False)
+        #self.fig.clf()
+        
+        end = time.time()
+        print('global costmap plotting runtime = ' + str(round(end-start,3)) + ' seconds')
+
     # create semantic data
     def create_semantic_data(self):
         # update ontology
@@ -493,6 +610,9 @@ class hixron_subscriber(object):
         # create interpretable features
         self.create_interpretable_features()
 
+        if self.publish_explanation_layer:
+            self.publish_explanation_layer()
+        
     # update ontology
     def update_ontology(self):
         # check if any object changed its position from simulation or from object detection (and tracking)
@@ -1078,6 +1198,38 @@ class hixron_subscriber(object):
         # save object-affordance pairs for publisher
         pd.DataFrame(object_affordance_pairs).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs.csv', index=False)#, header=False)
 
+    # publish explanation layer
+    def publish_explanation_layer(self):
+        points_start = time.time()
+        z = 0.0
+        a = 255                    
+        points = []
+
+        # define output
+        output = self.semantic_map * 255.0
+        #output = output[:, :, [2, 1, 0]] * 255.0
+        output = output.astype(np.uint8)
+
+        # draw layer
+        for i in range(0, int(self.global_map_size[1])):
+            for j in range(0, int(self.global_map_size[0])):
+                x = self.global_map_origin_x + i * self.global_map_resolution
+                y = self.global_map_origin_y + j * self.global_map_resolution
+                r = int(output[j, i])
+                g = int(output[j, i])
+                b = int(output[j, i])
+                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                pt = [x, y, z, rgb]
+                points.append(pt)
+
+        points_end = time.time()
+        print('Explanation layer runtime = ', round(points_end - points_start,3))
+        
+        # publish
+        self.header.frame_id = 'map'
+        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+        pc2.header.stamp = rospy.Time.now()
+        self.pub_explanation_layer.publish(pc2)
 
 def main():
     # ----------main-----------
