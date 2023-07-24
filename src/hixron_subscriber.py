@@ -36,20 +36,22 @@ class hixron_subscriber(object):
 
         # whether to plot
         self.plot_local_costmap_bool = False
-        self.plot_global_costmap_bool = True
-        self.plot_semantic_map_bool = False
-        
+        self.plot_global_costmap_bool = False
+        self.plot_local_semantic_map_bool = False
+        self.plot_global_semantic_map_bool = False
+
         # global counter for plotting
         self.counter_global = 0
         self.local_plan_counter = 0
+        self.global_costmap_counter = 0
 
         # use local and/or global costmap
         self.use_local_costmap = False
-        self.use_global_costmap = True
+        self.use_global_costmap = False
 
         # use local and/or global (semantic) map
-        self.use_local_map = False
-        self.use_global_map = True
+        self.use_local_semantic_map = False
+        self.use_global_semantic_map = True
         
         # use camera
         self.use_camera = False
@@ -76,10 +78,17 @@ class hixron_subscriber(object):
         except FileExistsError:
             pass
 
-        if self.plot_semantic_map_bool == True:
-            self.segmentation_dir = self.dirMain + '/semantic_map_images'
+        if self.plot_local_semantic_map_bool == True:
+            self.local_semantic_map_dir = self.dirMain + '/local_semantic_map_images'
             try:
-                os.mkdir(self.segmentation_dir)
+                os.mkdir(self.local_semantic_map_dir)
+            except FileExistsError:
+                pass
+
+        if self.plot_global_semantic_map_bool == True:
+            self.global_semantic_map_dir = self.dirMain + '/global_semantic_map_images'
+            try:
+                os.mkdir(self.global_semantic_map_dir)
             except FileExistsError:
                 pass
 
@@ -122,33 +131,28 @@ class hixron_subscriber(object):
         self.local_plan = []
         self.global_plan = [] 
                 
-        # local map vars
-        self.local_map_origin_x = 0 
-        self.local_map_origin_y = 0 
-        self.local_map_resolution = 0.025
-        self.local_map_size = 160
-        self.local_map_info = []
-        self.local_map = np.zeros((self.local_map_size,self.local_map_size))
+        # local semantic map vars
+        self.local_semantic_map_origin_x = 0 
+        self.local_semantic_map_origin_y = 0 
+        self.local_semantic_map_resolution = 0.025
+        self.local_semantic_map_size = 160
+        self.local_semantic_map_info = []
+        self.local_semantic_map = np.zeros((self.local_semantic_map_size, self.local_semantic_map_size))
 
-        # semantic part
+        # ontology part
         self.scenario_name = 'library' #'scenario1', 'library'
         # load ontology
         self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv'))
 
-        # load global map info
-        self.global_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
-        # global map vars
-        self.global_map_origin_x = float(self.global_map_info[0,4]) 
-        self.global_map_origin_y = float(self.global_map_info[0,5]) 
-        self.global_map_resolution = float(self.global_map_info[0,1])
-        self.global_map_size = [int(self.global_map_info[0,3]), int(self.global_map_info[0,2])]
-        self.global_map = np.zeros((self.global_map_size[0],self.global_map_size[1]), dtype=float)
-        #print(self.global_map_origin_x, self.global_map_origin_y, self.global_map_resolution, self.global_map_size)
-        self.global_costmap = np.zeros((self.global_map_size[0],self.global_map_size[1]), dtype=float)
-
-        # semantic map variables
-        self.local_semantic_map = np.array([])
-        self.global_semantic_map = np.array([])
+        # load global semantic map info
+        self.global_semantic_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
+        # global semantic map vars
+        self.global_semantic_map_origin_x = float(self.global_semantic_map_info[0,4]) 
+        self.global_semantic_map_origin_y = float(self.global_semantic_map_info[0,5]) 
+        self.global_map_resolution = float(self.global_semantic_map_info[0,1])
+        self.global_semantic_map_size = [int(self.global_semantic_map_info[0,3]), int(self.global_semantic_map_info[0,2])]
+        self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]), dtype=float)
+        #print(self.global_semantic_map_origin_x, self.global_semantic_map_origin_y, self.global_map_resolution, self.global_semantic_map_size)
 
         # camera variables
         self.camera_image = np.array([])
@@ -158,15 +162,15 @@ class hixron_subscriber(object):
 
     # declare subscribers
     def main_(self):
-        # if plotting==True create the base plot structure
-        #if (self.plot_costmaps_bool == True and self.use_local_costmap == True) or self.plot_semantic_map_bool == True:
-            #self.fig = plt.figure(frameon=False)
+        # create the base plot structure
+        if self.plot_local_costmap_bool == True or self.plot_global_costmap_bool == True or self.plot_local_semantic_map_bool == True or self.plot_global_semantic_map_bool == True:
+            self.fig = plt.figure(frameon=False)
             #self.w = 1.6 * 3
             #self.h = 1.6 * 3
             #self.fig.set_size_inches(self.w, self.h)
-            #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            #self.ax.set_axis_off()
-            #self.fig.add_axes(self.ax)
+            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+            self.ax.set_axis_off()
+            self.fig.add_axes(self.ax)
 
         # subscribers
         # local plan subscriber
@@ -292,12 +296,12 @@ class hixron_subscriber(object):
         #pd.DataFrame(self.global_plan).to_csv(self.dirCurr + '/' + self.dirData + '/global_plan.csv', index=False)#, header=False)
 
         # potential place to make a local semantic map, if local costmap is not used
-        if self.use_local_costmap == False and self.use_local_map:
+        if self.use_local_costmap == False and self.use_local_semantic_map:
 
             # update local_map params (origin cordinates)
-            self.local_map_origin_x = self.robot_position_map.x - self.local_map_resolution * self.local_map_size * 0.5 
-            self.local_map_origin_y = self.robot_position_map.y - self.local_map_resolution * self.local_map_size * 0.5
-            self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y]
+            self.local_semantic_map_origin_x = self.robot_position_map.x - self.local_semantic_map_resolution * self.local_semantic_map_size * 0.5 
+            self.local_semantic_map_origin_y = self.robot_position_map.y - self.local_semantic_map_resolution * self.local_semantic_map_size * 0.5
+            self.local_semantic_map_info = [self.local_semantic_map_resolution, self.local_semantic_map_size, self.local_semantic_map_size, self.local_semantic_map_origin_x, self.local_semantic_map_origin_y]
             
             # create semantic data
             self.create_semantic_data()
@@ -305,7 +309,7 @@ class hixron_subscriber(object):
             # increase the global counter (needed for plotting numeration)
             self.counter_global += 1
 
-        elif self.use_global_costmap == False and self.use_global_map:
+        elif self.use_global_semantic_map:
             
             # create semantic data
             self.create_semantic_data()
@@ -348,14 +352,14 @@ class hixron_subscriber(object):
 
                 if self.local_plan_counter == 20:
                     # update local_map (costmap) data
-                    self.local_map_origin_x = self.robot_position_map.x - 0.5 * self.local_map_size * self.local_map_resolution
-                    self.local_map_origin_y = self.robot_position_map.y - 0.5 * self.local_map_size * self.local_map_resolution
-                    #self.local_map_resolution = msg.info.resolution
-                    #self.local_map_size = self.local_map_size
-                    self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y]#, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
+                    self.local_semantic_map_origin_x = self.robot_position_map.x - 0.5 * self.local_semantic_map_size * self.local_semantic_map_resolution
+                    self.local_semantic_map_origin_y = self.robot_position_map.y - 0.5 * self.local_semantic_map_size * self.local_semantic_map_resolution
+                    #self.local_semantic_map_resolution = msg.info.resolution
+                    #self.local_semantic_map_size = self.local_semantic_map_size
+                    self.local_semantic_map_info = [self.local_semantic_map_resolution, self.local_semantic_map_size, self.local_semantic_map_size, self.local_semantic_map_origin_x, self.local_semantic_map_origin_y]#, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
                     # create np.array local_map object
-                    #self.local_map = np.zeros((self.local_map_size,self.local_map_size))
+                    #self.local_semantic_map = np.zeros((self.local_semantic_map_size,self.local_semantic_map_size))
 
                     # create semantic data
                     self.create_semantic_data()
@@ -375,22 +379,22 @@ class hixron_subscriber(object):
         
         try:          
             # update local_map data
-            self.local_map_origin_x = msg.info.origin.position.x
-            self.local_map_origin_y = msg.info.origin.position.y
-            #self.local_map_resolution = msg.info.resolution
-            #self.local_map_size = self.local_map_size
-            self.local_map_info = [self.local_map_resolution, self.local_map_size, self.local_map_size, self.local_map_origin_x, self.local_map_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
+            self.local_semantic_map_origin_x = msg.info.origin.position.x
+            self.local_semantic_map_origin_y = msg.info.origin.position.y
+            #self.local_semantic_map_resolution = msg.info.resolution
+            #self.local_semantic_map_size = self.local_semantic_map_size
+            self.local_semantic_map_info = [self.local_semantic_map_resolution, self.local_semantic_map_size, self.local_semantic_map_size, self.local_semantic_map_origin_x, self.local_semantic_map_origin_y, msg.info.origin.orientation.z, msg.info.origin.orientation.w]
 
             # create np.array local_map object
-            self.local_map = np.asarray(msg.data)
-            self.local_map.resize((self.local_map_size,self.local_map_size))
+            self.local_semantic_map = np.asarray(msg.data)
+            self.local_semantic_map.resize((self.local_semantic_map_size,self.local_semantic_map_size))
 
             if self.plot_costmaps_bool == True:
                 self.plot_costmaps()
                 
             # Turn inflated area to free space and 100s to 99s
-            self.local_map[self.local_map == 100] = 99
-            self.local_map[self.local_map <= 98] = 0
+            self.local_semantic_map[self.local_semantic_map == 100] = 99
+            self.local_semantic_map[self.local_semantic_map <= 98] = 0
 
             # create semantic map
             self.create_semantic_data()
@@ -409,20 +413,13 @@ class hixron_subscriber(object):
         try:
             # create np.array global_map object
             self.global_costmap = np.asarray(msg.data)
-            self.global_costmap.resize((self.global_map_size[0],self.global_map_size[1]))
+            self.global_costmap.resize((msg.info.width,msg.info.height))
 
             if self.plot_global_costmap_bool == True:
                 self.plot_global_costmap()
-                
-            # Turn inflated area to free space and 100s to 99s
-            #self.global_costmap[self.global_costmap == 100] = 99
-            #self.global_costmap[self.global_costmap <= 98] = 0
 
-            # create semantic map
-            #self.create_semantic_data()
-
-            # increase the global counter
-            self.counter_global += 1
+            # increase the global costmap counter
+            self.counter_global_costmap += 1
 
         except Exception as e:
             print('exception = ', e)
@@ -438,7 +435,7 @@ class hixron_subscriber(object):
         except FileExistsError:
             pass
         
-        local_map_99s_100s = copy.deepcopy(self.local_map)
+        local_map_99s_100s = copy.deepcopy(self.local_semantic_map)
         local_map_99s_100s[local_map_99s_100s < 99] = 0        
         #self.fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -452,7 +449,7 @@ class hixron_subscriber(object):
         self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
         #self.fig.clf()
         
-        local_map_original = copy.deepcopy(self.local_map)
+        local_map_original = copy.deepcopy(self.local_semantic_map)
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
         #h = 1.6 * 3
@@ -465,7 +462,7 @@ class hixron_subscriber(object):
         self.fig.savefig(dirCurr + '/' + 'local_costmap_original.png', transparent=False)
         #self.fig.clf()
         
-        local_map_100s = copy.deepcopy(self.local_map)
+        local_map_100s = copy.deepcopy(self.local_semantic_map)
         local_map_100s[local_map_100s != 100] = 0
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -479,7 +476,7 @@ class hixron_subscriber(object):
         self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
         #self.fig.clf()
         
-        local_map_99s = copy.deepcopy(self.local_map)
+        local_map_99s = copy.deepcopy(self.local_semantic_map)
         local_map_99s[local_map_99s != 99] = 0
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -493,7 +490,7 @@ class hixron_subscriber(object):
         self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
         #self.fig.clf()
         
-        local_map_less_than_99 = copy.deepcopy(self.local_map)
+        local_map_less_than_99 = copy.deepcopy(self.local_semantic_map)
         local_map_less_than_99[local_map_less_than_99 >= 99] = 0
         #fig = plt.figure(frameon=False)
         #w = 1.6 * 3
@@ -514,80 +511,15 @@ class hixron_subscriber(object):
     def plot_global_costmap(self):
         start = time.time()
 
-        dirCurr = self.global_costmap_dir + '/' + str(self.counter_global)
+        dirCurr = self.global_costmap_dir + '/' + str(self.counter_global_costmap)
         try:
             os.mkdir(dirCurr)
         except FileExistsError:
             pass
-        
-        #local_map_99s_100s = copy.deepcopy(self.local_map)
-        #local_map_99s_100s[local_map_99s_100s < 99] = 0        
-        #self.fig = plt.figure(frameon=False)
-        #w = 1.6 * 3
-        #h = 1.6 * 3
-        #self.fig.set_size_inches(w, h)
-        #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-        #self.ax.set_axis_off()
-        #self.fig.add_axes(self.ax)
-        #local_map_99s_100s = np.flip(local_map_99s_100s, 0)
-        #self.ax.imshow(local_map_99s_100s.astype('float64'), aspect='auto')
-        #self.fig.savefig(dirCurr + '/' + 'local_costmap_99s_100s.png', transparent=False)
-        #self.fig.clf()
-        
-        #global_costmap_original = copy.deepcopy(self.global_costmap)
-        self.fig = plt.figure(frameon=False)
-        #w = 1.6 * 3
-        #h = 1.6 * 3
-        #self.fig.set_size_inches(w, h)
-        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-        self.ax.set_axis_off()
-        self.fig.add_axes(self.ax)
-        #global_costmap_original = np.flip(self.global_costmap, 0)
+
         self.ax.imshow(self.global_costmap, aspect='auto')
         self.fig.savefig(dirCurr + '/' + 'global_costmap_original.png', transparent=False)
-        #self.fig.clf()
-        
-        #local_map_100s = copy.deepcopy(self.local_map)
-        #local_map_100s[local_map_100s != 100] = 0
-        #fig = plt.figure(frameon=False)
-        #w = 1.6 * 3
-        #h = 1.6 * 3
-        #self.fig.set_size_inches(w, h)
-        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-        #ax.set_axis_off()
-        #self.fig.add_axes(ax)
-        #local_map_100s = np.flip(local_map_100s, 0)
-        #self.ax.imshow(local_map_100s.astype('float64'), aspect='auto')
-        #self.fig.savefig(dirCurr + '/' + 'local_costmap_100s.png', transparent=False)
-        #self.fig.clf()
-        
-        #local_map_99s = copy.deepcopy(self.local_map)
-        #local_map_99s[local_map_99s != 99] = 0
-        #fig = plt.figure(frameon=False)
-        #w = 1.6 * 3
-        #h = 1.6 * 3
-        #self.fig.set_size_inches(w, h)
-        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-        #ax.set_axis_off()
-        #self.fig.add_axes(self.ax)
-        #local_map_99s = np.flip(local_map_99s, 0)
-        #self.ax.imshow(local_map_99s.astype('float64'), aspect='auto')
-        #self.fig.savefig(dirCurr + '/' + 'local_costmap_99s.png', transparent=False)
-        #self.fig.clf()
-        
-        #local_map_less_than_99 = copy.deepcopy(self.local_map)
-        #local_map_less_than_99[local_map_less_than_99 >= 99] = 0
-        #fig = plt.figure(frameon=False)
-        #w = 1.6 * 3
-        #h = 1.6 * 3
-        #self.fig.set_size_inches(w, h)
-        #ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-        #ax.set_axis_off()
-        #self.fig.add_axes(self.ax)
-        #local_map_less_than_99 = np.flip(local_map_less_than_99, 0)
-        #self.ax.imshow(local_map_less_than_99.astype('float64'), aspect='auto')
-        #self.fig.savefig(dirCurr + '/' + 'local_costmap_less_than_99.png', transparent=False)
-        #self.fig.clf()
+        self.fig.clf()
         
         end = time.time()
         print('global costmap plotting runtime = ' + str(round(end-start,3)) + ' seconds')
@@ -598,14 +530,16 @@ class hixron_subscriber(object):
         self.update_ontology()
 
         # create semantic map
-        if self.use_local_map == True:
+        if self.use_local_semantic_map == True:
             self.create_local_semantic_map()
-        if self.use_global_map ==  True:
+        if self.use_global_semantic_map ==  True:
             self.create_global_semantic_map()
 
         # plot semantic_map
-        if self.plot_semantic_map_bool == True:
-            self.plot_semantic_map()
+        if self.plot_local_semantic_map_bool == True:
+            self.plot_local_semantic_map()
+        if self.plot_global_semantic_map_bool == True:
+            self.plot_global_semantic_map()
 
         # create interpretable features
         self.create_interpretable_features()
@@ -780,16 +714,16 @@ class hixron_subscriber(object):
 
         # convert LC points from /odom to /map
         # LC origin is a bottom-left point
-        lc_bl_odom_x = self.local_map_origin_x
-        lc_bl_odom_y = self.local_map_origin_y
+        lc_bl_odom_x = self.local_semantic_map_origin_x
+        lc_bl_odom_y = self.local_semantic_map_origin_y
         lc_p_odom = np.array([lc_bl_odom_x, lc_bl_odom_y, 0.0])#
         lc_p_map = lc_p_odom.dot(r_om) + t_om#
         lc_map_bl_x = lc_p_map[0]
         lc_map_bl_y = lc_p_map[1]
         
         # LC's top-right point
-        lc_tr_odom_x = self.local_map_origin_x + self.local_map_size * self.local_map_resolution
-        lc_tr_odom_y = self.local_map_origin_y + self.local_map_size * self.local_map_resolution
+        lc_tr_odom_x = self.local_semantic_map_origin_x + self.local_semantic_map_size * self.local_semantic_map_resolution
+        lc_tr_odom_y = self.local_semantic_map_origin_y + self.local_semantic_map_size * self.local_semantic_map_resolution
         lc_p_odom = np.array([lc_tr_odom_x, lc_tr_odom_y, 0.0])#
         lc_p_map = lc_p_odom.dot(r_om) + t_om#
         lc_map_tr_x = lc_p_map[0]
@@ -803,8 +737,8 @@ class hixron_subscriber(object):
         #print('(lc_map_left, lc_map_right, lc_map_bottom, lc_map_top) = ', (lc_map_left, lc_map_right, lc_map_bottom, lc_map_top))
 
         start = time.time()
-        self.semantic_map = np.zeros(self.local_map.shape)
-        self.semantic_map_inflated = np.zeros(self.local_map.shape)
+        self.semantic_map = np.zeros(self.local_semantic_map.shape)
+        self.semantic_map_inflated = np.zeros(self.local_semantic_map.shape)
         inflation_factor = 0
         for i in range(0, self.ontology.shape[0]):
             # object's vertices from /map to /odom and /lc
@@ -829,8 +763,8 @@ class hixron_subscriber(object):
             p_odom = p_map.dot(r_mo) + t_mo#
             tr_odom_x = p_odom[0]#
             tr_odom_y = p_odom[1]#
-            tr_pixel_x = int((tr_odom_x - self.local_map_origin_x) / self.local_map_resolution)
-            tr_pixel_y = int((tr_odom_y - self.local_map_origin_y) / self.local_map_resolution)
+            tr_pixel_x = int((tr_odom_x - self.local_semantic_map_origin_x) / self.local_semantic_map_resolution)
+            tr_pixel_y = int((tr_odom_y - self.local_semantic_map_origin_y) / self.local_semantic_map_resolution)
 
             # bottom left vertex
             bl_map_x = c_map_x - 0.5*x_size
@@ -839,8 +773,8 @@ class hixron_subscriber(object):
             p_odom = p_map.dot(r_mo) + t_mo#
             bl_odom_x = p_odom[0]#
             bl_odom_y = p_odom[1]#
-            bl_pixel_x = int((bl_odom_x - self.local_map_origin_x) / self.local_map_resolution)
-            bl_pixel_y = int((bl_odom_y - self.local_map_origin_y) / self.local_map_resolution)
+            bl_pixel_x = int((bl_odom_x - self.local_semantic_map_origin_x) / self.local_semantic_map_resolution)
+            bl_pixel_y = int((bl_odom_y - self.local_semantic_map_origin_y) / self.local_semantic_map_resolution)
 
             # object's sides coordinates
             object_left = bl_pixel_x
@@ -857,9 +791,9 @@ class hixron_subscriber(object):
             # centroid in LC
             if lc_map_left < c_map_x < lc_map_right and lc_map_bottom < c_map_y < lc_map_top:            
                 x_1 = max(0,object_left)
-                x_2 = min(self.local_map_size-1,object_right)
+                x_2 = min(self.local_semantic_map_size-1,object_right)
                 y_1 = max(0,object_bottom)
-                y_2 = min(self.local_map_size-1,object_top)
+                y_2 = min(self.local_semantic_map_size-1,object_top)
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
@@ -868,7 +802,7 @@ class hixron_subscriber(object):
             # top-left(tl) in LC
             elif lc_map_left < tl_map_x < lc_map_right and lc_map_bottom < tl_map_y < lc_map_top:
                 x_1 = object_left
-                x_2 = min(self.local_map_size-1,object_right)
+                x_2 = min(self.local_semantic_map_size-1,object_right)
                 y_1 = max(0,object_bottom)
                 y_2 = object_top
                 #print('(y_1, y_2) = ', (y_1, y_2))
@@ -879,9 +813,9 @@ class hixron_subscriber(object):
             # bottom-left(bl) in LC
             elif lc_map_left < bl_map_x < lc_map_right and lc_map_bottom < bl_map_y < lc_map_top:
                 x_1 = object_left
-                x_2 = min(self.local_map_size-1,object_right)
+                x_2 = min(self.local_semantic_map_size-1,object_right)
                 y_1 = object_bottom
-                y_2 = min(self.local_map_size-1,object_top)
+                y_2 = min(self.local_semantic_map_size-1,object_top)
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
@@ -892,7 +826,7 @@ class hixron_subscriber(object):
                 x_1 = max(0,object_left)
                 x_2 = object_right
                 y_1 = object_bottom
-                y_2 = min(self.local_map_size-1,object_top)
+                y_2 = min(self.local_semantic_map_size-1,object_top)
                 #print('(y_1, y_2) = ', (y_1, y_2))
                 #print('(x_1, x_2) = ', (x_1, x_2))
 
@@ -911,12 +845,12 @@ class hixron_subscriber(object):
 
             if obstacle_in_neighborhood == True:
                 # semantic map
-                self.semantic_map[max(0, y_1-inflation_factor):min(self.local_map_size-1, y_2+inflation_factor), max(0,x_1-inflation_factor):min(self.local_map_size-1, x_2+inflation_factor)] = i+1
+                self.semantic_map[max(0, y_1-inflation_factor):min(self.local_semantic_map_size-1, y_2+inflation_factor), max(0,x_1-inflation_factor):min(self.local_semantic_map_size-1, x_2+inflation_factor)] = i+1
                 
                 # inflate semantic map using heuristics
                 inflation_x = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
                 inflation_y = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2)                 
-                self.semantic_map_inflated[max(0, y_1-inflation_y):min(self.local_map_size-1, y_2+inflation_y), max(0,x_1-inflation_x):min(self.local_map_size-1, x_2+inflation_x)] = i+1
+                self.semantic_map_inflated[max(0, y_1-inflation_y):min(self.local_semantic_map_size-1, y_2+inflation_y), max(0,x_1-inflation_x):min(self.local_semantic_map_size-1, x_2+inflation_x)] = i+1
        
         end = time.time()
         print('semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
@@ -935,7 +869,7 @@ class hixron_subscriber(object):
         if self.use_local_costmap == True:
             for i in range(self.semantic_map.shape[0]):
                 for j in range(0, self.semantic_map.shape[1]):
-                    if self.local_map[i, j] > 98 and self.semantic_map_inflated[i, j] == 0:
+                    if self.local_semantic_map[i, j] > 98 and self.semantic_map_inflated[i, j] == 0:
                         distances_to_centroids = []
                         distances_indices = []
                         for k in range(0, len(self.centroids_semantic_map)):
@@ -948,115 +882,95 @@ class hixron_subscriber(object):
                         self.semantic_map_inflated[i, j] = self.centroids_semantic_map[idx][0]
 
             # turn pixels in the inflated semantic_map, which are zero in the local costmap, to zero
-            self.semantic_map_inflated[self.local_map == 0] = 0
+            self.semantic_map_inflated[self.local_semantic_map == 0] = 0
 
         # save local and semantic maps data
-        pd.DataFrame(self.local_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/local_map_info.csv', index=False)#, header=False)
-        pd.DataFrame(self.local_map).to_csv(self.dirCurr + '/' + self.dirData + '/local_map.csv', index=False) #, header=False)
+        pd.DataFrame(self.local_semantic_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/local_map_info.csv', index=False)#, header=False)
+        pd.DataFrame(self.local_semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/local_map.csv', index=False) #, header=False)
         pd.DataFrame(self.semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map.csv', index=False)#, header=False)
         pd.DataFrame(self.semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map_inflated.csv', index=False)#, header=False)
 
     # create global semantic map
     def create_global_semantic_map(self):
         start = time.time()
-        self.semantic_map = np.zeros(self.global_map.shape)
-        self.semantic_map_inflated = np.zeros(self.global_map.shape)
-        #print('self.semantic_map.shape = ', self.semantic_map.shape)
-        #print('(self.global_map_origin_x, self.global_map_origin_y): ', (self.global_map_origin_x, self.global_map_origin_y))
-        inflation_factor = 0
+        
+        self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
+        self.global_semantic_map_inflated = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
+        #print('(self.global_semantic_map_size[0],self.global_semantic_map_size[1]) = ', (self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
+        
         for i in range(0, self.ontology.shape[0]):
+            if self.ontology[i][2] != 'chair':
+                continue
             # IMPORTANT OBJECT'S POINTS
             # centroid and size
             c_map_x = self.ontology[i][3]
             c_map_y = self.ontology[i][4]
             #print('(i, name) = ', (i, self.ontology[i][2]))
-            #print('(c_map_x, c_map_y) = ', (c_map_x, c_map_y))
             x_size = self.ontology[i][5]
             y_size = self.ontology[i][6]
-            #print('(x_size, y_size) = ', (x_size, y_size))
-
+            
             # top left vertex
             #tl_map_x = c_map_x - 0.5*x_size
             #tl_map_y = c_map_y - 0.5*y_size
-            #tl_pixel_x = int((tl_map_x - self.global_map_origin_x) / self.global_map_resolution)
-            #tl_pixel_y = int((tl_map_y - self.global_map_origin_y) / self.global_map_resolution)
+            #tl_pixel_x = int((tl_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
+            #tl_pixel_y = int((tl_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
 
             # bottom right vertex
             #br_map_x = c_map_x + 0.5*x_size
             #br_map_y = c_map_y + 0.5*y_size
-            #br_pixel_x = int((br_map_x - self.global_map_origin_x) / self.global_map_resolution)
-            #br_pixel_y = int((br_map_y - self.global_map_origin_y) / self.global_map_resolution)
+            #br_pixel_x = int((br_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
+            #br_pixel_y = int((br_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
             
             # top right vertex
             tr_map_x = c_map_x + 0.5*x_size
             tr_map_y = c_map_y - 0.5*y_size
-            tr_pixel_x = int((tr_map_x - self.global_map_origin_x) / self.global_map_resolution)
-            tr_pixel_y = int((tr_map_y - self.global_map_origin_y) / self.global_map_resolution)
+            tr_pixel_x = int((tr_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
+            tr_pixel_y = int((tr_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
 
             # bottom left vertex
             bl_map_x = c_map_x - 0.5*x_size
             bl_map_y = c_map_y + 0.5*y_size
-            bl_pixel_x = int((bl_map_x - self.global_map_origin_x) / self.global_map_resolution)
-            bl_pixel_y = int((bl_map_y - self.global_map_origin_y) / self.global_map_resolution)
+            bl_pixel_x = int((bl_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
+            bl_pixel_y = int((bl_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
 
             # object's sides coordinates
             object_left = bl_pixel_x
             object_top = tr_pixel_y
             object_right = tr_pixel_x
             object_bottom = bl_pixel_y
-            #print('(object_left,object_right,object_top,object_bottom) = ', (object_left,object_right,object_top,object_bottom))
 
-            # semantic map
-            self.semantic_map[max(0, object_top):min(self.global_map_size[1], object_bottom), max(0, object_left):min(self.global_map_size[0], object_right)] = i+1
+            # global semantic map
+            self.global_semantic_map[max(0, object_top):min(self.global_semantic_map_size[0], object_bottom), max(0, object_left):min(self.global_semantic_map_size[1], object_right)] = i+1
 
-            # inflate semantic map
+            # inflate global semantic map
             inflation_x = int(self.inflation_radius / self.global_map_resolution) 
             inflation_y = int(self.inflation_radius / self.global_map_resolution)
-            self.semantic_map_inflated[max(0, object_top-inflation_y):min(self.global_map_size[1], object_bottom+inflation_y), max(0, object_left-inflation_x):min(self.global_map_size[0], object_right+inflation_x)] = i+1
+            self.global_semantic_map_inflated[max(0, object_top-inflation_y):min(self.global_semantic_map_size[0], object_bottom+inflation_y), max(0, object_left-inflation_x):min(self.global_semantic_map_size[1], object_right+inflation_x)] = i+1
 
         end = time.time()
-        print('semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
+        print('global semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
 
+        #self.global_semantic_map[232:270,63:71] = 40
 
         # find centroids of the objects in the semantic map
-        lc_regions = regionprops(self.semantic_map.astype(int))
+        lc_regions = regionprops(self.global_semantic_map.astype(int))
         #print('\nlen(lc_regions) = ', len(lc_regions))
-        self.centroids_semantic_map = []
+        self.centroids_global_semantic_map = []
         for lc_region in lc_regions:
             v = lc_region.label
             cy, cx = lc_region.centroid
-            self.centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][2]])
-
-        # inflate using the remaining obstacle points of the local costmap            
-        if self.use_local_costmap == True:
-            for i in range(self.semantic_map.shape[0]):
-                for j in range(0, self.semantic_map.shape[1]):
-                    if self.local_map[i, j] > 98 and self.semantic_map_inflated[i, j] == 0:
-                        distances_to_centroids = []
-                        distances_indices = []
-                        for k in range(0, len(self.centroids_semantic_map)):
-                            dx = abs(j - self.centroids_semantic_map[k][1])
-                            dy = abs(i - self.centroids_semantic_map[k][2])
-                            distances_to_centroids.append(dx + dy) # L1
-                            #distances_to_centroids.append(math.sqrt(dx**2 + dy**2)) # L2
-                            distances_indices.append(k)
-                        idx = distances_to_centroids.index(min(distances_to_centroids))
-                        self.semantic_map_inflated[i, j] = self.centroids_semantic_map[idx][0]
-
-            # turn pixels in the inflated semantic_map, which are zero in the local costmap, to zero
-            self.semantic_map_inflated[self.local_map == 0] = 0
+            self.centroids_global_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
 
         # save local and semantic maps data
-        pd.DataFrame(self.global_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/global_map_info.csv', index=False)#, header=False)
-        pd.DataFrame(self.global_map).to_csv(self.dirCurr + '/' + self.dirData + '/global_map.csv', index=False) #, header=False)
-        pd.DataFrame(self.semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map.csv', index=False)#, header=False)
-        pd.DataFrame(self.semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/semantic_map_inflated.csv', index=False)#, header=False)
+        pd.DataFrame(self.global_semantic_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/global_semantic_map_info.csv', index=False)#, header=False)
+        pd.DataFrame(self.global_semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/global_semantic_map.csv', index=False) #, header=False)
+        pd.DataFrame(self.global_semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/global_semantic_map_inflated.csv', index=False)#, header=False)
 
-    # plot semantic_map
-    def plot_semantic_map(self):
+    # plot local semantic_map
+    def plot_local_semantic_map(self):
         start = time.time()
 
-        dirCurr = self.segmentation_dir + '/' + str(self.counter_global)            
+        dirCurr = self.local_semantic_map_dir + '/' + str(self.counter_global)            
         try:
             os.mkdir(dirCurr)
         except FileExistsError:
@@ -1145,91 +1059,174 @@ class hixron_subscriber(object):
         self.fig.clf()
 
         pd.DataFrame(centroids_semantic_map_inflated).to_csv(dirCurr + '/centroids_semantic_map_inflated.csv', index=False)#, header=False)
+
+        end = time.time()
+        print('semantic map plotting runtime = ' + str(round(end-start,3)) + ' seconds')
+
+    # plot global semantic_map
+    def plot_global_semantic_map(self):
+        start = time.time()
+
+        dirCurr = self.global_semantic_map_dir + '/' + str(self.counter_global)            
+        try:
+            os.mkdir(dirCurr)
+        except FileExistsError:
+            pass
+
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        segs = np.flip(self.global_semantic_map, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        self.fig.savefig(dirCurr + '/' + 'global_semantic_map_without_labels' + '.png', transparent=False)
+        #self.fig.clf()
+        pd.DataFrame(segs).to_csv(dirCurr + '/global_semantic_map.csv', index=False)#, header=False)
+
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #self.ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        segs = np.flip(self.global_semantic_map_inflated, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
+
+        self.fig.savefig(dirCurr + '/' + 'global_semantic_map_inflated_without_labels' + '.png', transparent=False)
+        #self.fig.clf()
+        pd.DataFrame(segs).to_csv(dirCurr + '/global_semantic_map_inflated.csv', index=False)#, header=False)
         
-        if self.use_local_costmap:
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
-            img = np.flip(self.local_map, axis=0)
-            self.ax.imshow(img.astype('float64'), aspect='auto')
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        #self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        #self.ax.set_axis_off()
+        #self.fig.add_axes(self.ax)
+        segs = np.flip(self.global_semantic_map, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-            self.fig.savefig(dirCurr + '/' + 'local_costmap' + '.png', transparent=False)
-            self.fig.clf()
+        # find centroids_in_LC of the objects' areas
+        lc_regions = regionprops(segs.astype(int))
+        #print('\nlen(lc_regions) = ', len(lc_regions))
+        centroids_global_semantic_map = []
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            centroids_global_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
 
-            pd.DataFrame(img).to_csv(dirCurr + '/local_costmap.csv', index=False)#, header=False)
+        for i in range(0, len(centroids_global_semantic_map)):
+            self.ax.scatter(centroids_global_semantic_map[i][1], centroids_global_semantic_map[i][2], c='white', marker='o')   
+            self.ax.text(centroids_global_semantic_map[i][1], centroids_global_semantic_map[i][2], centroids_global_semantic_map[i][3], c='white')
 
-        if self.use_global_costmap:
-            #fig = plt.figure(frameon=False)
-            #w = 1.6 * 3
-            #h = 1.6 * 3
-            #fig.set_size_inches(w, h)
-            self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
-            self.ax.set_axis_off()
-            self.fig.add_axes(self.ax)
-            img = np.flip(self.global_map, axis=0)
-            self.ax.imshow(img.astype('float64'), aspect='auto')
+        self.fig.savefig(dirCurr + '/' + 'global_semantic_map_with_labels' + '.png', transparent=False)
+        self.fig.clf()
 
-            self.fig.savefig(dirCurr + '/' + 'global_costmap' + '.png', transparent=False)
-            self.fig.clf()
+        pd.DataFrame(centroids_global_semantic_map).to_csv(dirCurr + '/global_centroids_semantic_map.csv', index=False)#, header=False)
+        
+        #fig = plt.figure(frameon=False)
+        #w = 1.6 * 3
+        #h = 1.6 * 3
+        #fig.set_size_inches(w, h)
+        self.ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        self.ax.set_axis_off()
+        self.fig.add_axes(self.ax)
+        segs = np.flip(self.global_semantic_map_inflated, axis=0)
+        self.ax.imshow(segs.astype('float64'), aspect='auto')
 
-            pd.DataFrame(img).to_csv(dirCurr + '/global_costmap.csv', index=False)#, header=False)
+        # find centroids_in_LC of the objects' areas
+        lc_regions = regionprops(segs.astype(int))
+        #print('\nlen(lc_regions) = ', len(lc_regions))
+        centroids_global_semantic_map_inflated = []
+        for lc_region in lc_regions:
+            v = lc_region.label
+            cy, cx = lc_region.centroid
+            centroids_global_semantic_map_inflated.append([v,cx,cy,self.ontology[v-1][1]])
+
+        for i in range(0, len(centroids_global_semantic_map_inflated)):
+            self.ax.scatter(centroids_global_semantic_map_inflated[i][1], centroids_global_semantic_map_inflated[i][2], c='white', marker='o')   
+            self.ax.text(centroids_global_semantic_map_inflated[i][1], centroids_global_semantic_map_inflated[i][2], centroids_global_semantic_map_inflated[i][3], c='white')
+
+        self.fig.savefig(dirCurr + '/' + 'global_semantic_map_inflated_with_labels' + '.png', transparent=False)
+        self.fig.clf()
+
+        pd.DataFrame(centroids_global_semantic_map_inflated).to_csv(dirCurr + '/global_centroids_semantic_map_inflated.csv', index=False)#, header=False)
 
         end = time.time()
         print('semantic map plotting runtime = ' + str(round(end-start,3)) + ' seconds')
 
     # create interpretable features
     def create_interpretable_features(self):
-        # list of labels of objects in local costmap
-        labels_in_lc = np.unique(self.semantic_map)
-        object_affordance_pairs = [] # [label, object, affordance]
-        # get object-affordance pairs in the current lc
-        for i in range(0, self.ontology.shape[0]):
-            if self.ontology[i][0] in labels_in_lc:
-                if self.ontology[i][6] == 1:
-                    object_affordance_pairs.append([self.ontology[i][0], self.ontology[i][1], 'movability'])
+        if self.use_global_semantic_map:
+            # list of labels of objects in global semantic map
+            labels = np.unique(self.global_semantic_map)
+            object_affordance_pairs_global = [] # [label, object, affordance]
+            # get object-affordance pairs in the current global semantic map
+            for i in range(0, self.ontology.shape[0]):
+                if self.ontology[i][0] in labels:
+                    if self.ontology[i][6] == 1:
+                        object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'movability'])
 
-                if self.ontology[i][7] == 1:
-                    object_affordance_pairs.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
+                    if self.ontology[i][7] == 1:
+                        object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
 
-        # save object-affordance pairs for publisher
-        pd.DataFrame(object_affordance_pairs).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs.csv', index=False)#, header=False)
+            # save object-affordance pairs for publisher
+            pd.DataFrame(object_affordance_pairs_global).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs_global.csv', index=False)#, header=False)
+
+        if self.use_local_semantic_map:
+            # list of labels of objects in local semantic map
+            labels = np.unique(self.local_semantic_map)
+            object_affordance_pairs_local = [] # [label, object, affordance]
+            # get object-affordance pairs in the current local semantic map
+            for i in range(0, self.ontology.shape[0]):
+                if self.ontology[i][0] in labels:
+                    if self.ontology[i][6] == 1:
+                        object_affordance_pairs_local.append([self.ontology[i][0], self.ontology[i][1], 'movability'])
+
+                    if self.ontology[i][7] == 1:
+                        object_affordance_pairs_local.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
+
+            # save object-affordance pairs for publisher
+            pd.DataFrame(object_affordance_pairs_global).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs_global.csv', index=False)#, header=False)
 
     # publish explanation layer
     def publish_explanation_layer(self):
-        points_start = time.time()
-        z = 0.0
-        a = 255                    
-        points = []
+        if self.use_global_semantic_map:
+            points_start = time.time()
+            z = 0.0
+            a = 255                    
+            points = []
 
-        # define output
-        output = self.semantic_map * 255.0
-        #output = output[:, :, [2, 1, 0]] * 255.0
-        output = output.astype(np.uint8)
+            # define output
+            output = self.global_semantic_map * 255.0
+            #output = output[:, :, [2, 1, 0]] * 255.0
+            output = output.astype(np.uint8)
 
-        # draw layer
-        for i in range(0, int(self.global_map_size[1])):
-            for j in range(0, int(self.global_map_size[0])):
-                x = self.global_map_origin_x + i * self.global_map_resolution
-                y = self.global_map_origin_y + j * self.global_map_resolution
-                r = int(output[j, i])
-                g = int(output[j, i])
-                b = int(output[j, i])
-                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
-                pt = [x, y, z, rgb]
-                points.append(pt)
+            # draw layer
+            for i in range(0, int(self.global_semantic_map_size[1])):
+                for j in range(0, int(self.global_semantic_map_size[0])):
+                    x = self.global_semantic_map_origin_x + i * self.global_map_resolution
+                    y = self.global_semantic_map_origin_y + j * self.global_map_resolution
+                    r = int(output[j, i])
+                    g = int(output[j, i])
+                    b = int(output[j, i])
+                    rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                    pt = [x, y, z, rgb]
+                    points.append(pt)
 
-        points_end = time.time()
-        print('Explanation layer runtime = ', round(points_end - points_start,3))
-        
-        # publish
-        self.header.frame_id = 'map'
-        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
-        pc2.header.stamp = rospy.Time.now()
-        self.pub_explanation_layer.publish(pc2)
+            points_end = time.time()
+            print('Explanation layer runtime = ', round(points_end - points_start,3))
+            
+            # publish
+            self.header.frame_id = 'map'
+            pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+            pc2.header.stamp = rospy.Time.now()
+            self.pub_explanation_layer.publish(pc2)
 
 def main():
     # ----------main-----------
