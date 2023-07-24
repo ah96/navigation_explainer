@@ -47,6 +47,9 @@ class hixron_subscriber(object):
         
         # use camera
         self.use_camera = False
+
+        # inflation
+        self.inflation_radius = 0.275
         
         # data directories
         self.dirCurr = os.getcwd()
@@ -119,11 +122,12 @@ class hixron_subscriber(object):
         # load global map info
         self.global_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
         # global map vars
-        self.global_map_origin_x = self.global_map_info[0,3] 
-        self.global_map_origin_y = self.global_map_info[0,4] 
-        self.global_map_resolution = self.global_map_info[0,0]
-        self.global_map_size = [int(self.global_map_info[0,2]), int(self.global_map_info[0,1])]
+        self.global_map_origin_x = float(self.global_map_info[0,4]) 
+        self.global_map_origin_y = float(self.global_map_info[0,5]) 
+        self.global_map_resolution = float(self.global_map_info[0,1])
+        self.global_map_size = [int(self.global_map_info[0,3]), int(self.global_map_info[0,2])]
         self.global_map = np.zeros((self.global_map_size[0],self.global_map_size[1]), dtype=float)
+        #print(self.global_map_origin_x, self.global_map_origin_y, self.global_map_resolution, self.global_map_size)
 
         # semantic map variables
         self.local_semantic_map = np.array([])
@@ -265,7 +269,7 @@ class hixron_subscriber(object):
             self.counter_global += 1
 
         elif self.use_global_costmap == False and self.use_global_map:
-
+            
             # create semantic data
             self.create_semantic_data()
 
@@ -361,27 +365,29 @@ class hixron_subscriber(object):
             print('exception = ', e)
             return
 
-    # local costmap callback
+    # global costmap callback
     def global_costmap_callback(self, msg):
         print('\nglobal_costmap_callback')
         
-        try:          
-            # create np.array global_map object
-            self.global_map = np.asarray(msg.data)
-            self.global_map.resize((self.global_map_size,self.global_map_size))
+        try:
+            print(msg.info)
 
-            if self.plot_costmaps_bool == True:
-                self.plot_costmaps()
+            # create np.array global_map object
+            #self.global_map = np.asarray(msg.data)
+            #self.global_map.resize((self.global_map_size,self.global_map_size))
+
+            #if self.plot_costmaps_bool == True:
+            #    self.plot_costmaps()
                 
             # Turn inflated area to free space and 100s to 99s
-            self.global_map[self.global_map == 100] = 99
-            self.global_map[self.global_map <= 98] = 0
+            #self.global_map[self.global_map == 100] = 99
+            #self.global_map[self.global_map <= 98] = 0
 
             # create semantic map
-            self.create_semantic_data()
+            #self.create_semantic_data()
 
             # increase the global counter
-            self.counter_global += 1
+            #self.counter_global += 1
 
         except Exception as e:
             print('exception = ', e)
@@ -835,36 +841,41 @@ class hixron_subscriber(object):
         start = time.time()
         self.semantic_map = np.zeros(self.global_map.shape)
         self.semantic_map_inflated = np.zeros(self.global_map.shape)
+        #print('self.semantic_map.shape = ', self.semantic_map.shape)
+        #print('(self.global_map_origin_x, self.global_map_origin_y): ', (self.global_map_origin_x, self.global_map_origin_y))
         inflation_factor = 0
         for i in range(0, self.ontology.shape[0]):
-            # object's vertices from /map to /odom and /lc
-            # top left vertex
-            x_size = self.ontology[i][5]
-            y_size = self.ontology[i][6]
+            # IMPORTANT OBJECT'S POINTS
+            # centroid and size
             c_map_x = self.ontology[i][3]
             c_map_y = self.ontology[i][4]
+            #print('(i, name) = ', (i, self.ontology[i][2]))
+            #print('(c_map_x, c_map_y) = ', (c_map_x, c_map_y))
+            x_size = self.ontology[i][5]
+            y_size = self.ontology[i][6]
+            #print('(x_size, y_size) = ', (x_size, y_size))
 
             # top left vertex
-            tl_map_x = c_map_x - 0.5*x_size
-            tl_map_y = c_map_y + 0.5*y_size
-            tl_pixel_x = int((tl_map_x - self.global_map_origin_x) / self.global_map_resolution)
-            tl_pixel_y = int((tl_map_y - self.global_map_origin_y) / self.global_map_resolution)
+            #tl_map_x = c_map_x - 0.5*x_size
+            #tl_map_y = c_map_y - 0.5*y_size
+            #tl_pixel_x = int((tl_map_x - self.global_map_origin_x) / self.global_map_resolution)
+            #tl_pixel_y = int((tl_map_y - self.global_map_origin_y) / self.global_map_resolution)
 
             # bottom right vertex
-            br_map_x = c_map_x + 0.5*x_size
-            br_map_y = c_map_y - 0.5*y_size
-            br_pixel_x = int((br_map_x - self.global_map_origin_x) / self.global_map_resolution)
-            br_pixel_y = int((br_map_y - self.global_map_origin_y) / self.global_map_resolution)
+            #br_map_x = c_map_x + 0.5*x_size
+            #br_map_y = c_map_y + 0.5*y_size
+            #br_pixel_x = int((br_map_x - self.global_map_origin_x) / self.global_map_resolution)
+            #br_pixel_y = int((br_map_y - self.global_map_origin_y) / self.global_map_resolution)
             
             # top right vertex
             tr_map_x = c_map_x + 0.5*x_size
-            tr_map_y = c_map_y + 0.5*y_size
+            tr_map_y = c_map_y - 0.5*y_size
             tr_pixel_x = int((tr_map_x - self.global_map_origin_x) / self.global_map_resolution)
             tr_pixel_y = int((tr_map_y - self.global_map_origin_y) / self.global_map_resolution)
 
             # bottom left vertex
             bl_map_x = c_map_x - 0.5*x_size
-            bl_map_y = c_map_y - 0.5*y_size
+            bl_map_y = c_map_y + 0.5*y_size
             bl_pixel_x = int((bl_map_x - self.global_map_origin_x) / self.global_map_resolution)
             bl_pixel_y = int((bl_map_y - self.global_map_origin_y) / self.global_map_resolution)
 
@@ -873,15 +884,16 @@ class hixron_subscriber(object):
             object_top = tr_pixel_y
             object_right = tr_pixel_x
             object_bottom = bl_pixel_y
+            #print('(object_left,object_right,object_top,object_bottom) = ', (object_left,object_right,object_top,object_bottom))
 
             # semantic map
-            self.semantic_map[max(0, object_bottom-inflation_factor):min(self.local_map_size-1, object_top+inflation_factor), max(0,object_left-inflation_factor):min(self.local_map_size-1, object_right+inflation_factor)] = i+1
-            
-            # inflate semantic map using heuristics
-            inflation_x = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2) #int(0.33 * (object_right - object_left)) #int((1.66 * (object_right - object_left) - (object_right - object_left)) / 2) 
-            inflation_y = int((max(23, abs(object_bottom - object_top)) - abs(object_bottom - object_top)) / 2)                 
-            self.semantic_map_inflated[max(0, object_bottom-inflation_y):min(self.local_map_size-1, object_top+inflation_y), max(0,object_left-inflation_x):min(self.local_map_size-1, object_right+inflation_x)] = i+1
-       
+            self.semantic_map[max(0, object_top):min(self.global_map_size[1], object_bottom), max(0, object_left):min(self.global_map_size[0], object_right)] = i+1
+
+            # inflate semantic map
+            inflation_x = int(self.inflation_radius / self.global_map_resolution) 
+            inflation_y = int(self.inflation_radius / self.global_map_resolution)
+            self.semantic_map_inflated[max(0, object_top-inflation_y):min(self.global_map_size[1], object_bottom+inflation_y), max(0, object_left-inflation_x):min(self.global_map_size[0], object_right+inflation_x)] = i+1
+
         end = time.time()
         print('semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
 
@@ -893,7 +905,7 @@ class hixron_subscriber(object):
         for lc_region in lc_regions:
             v = lc_region.label
             cy, cx = lc_region.centroid
-            self.centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
+            self.centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][2]])
 
         # inflate using the remaining obstacle points of the local costmap            
         if self.use_local_costmap == True:
@@ -975,7 +987,7 @@ class hixron_subscriber(object):
         for lc_region in lc_regions:
             v = lc_region.label
             cy, cx = lc_region.centroid
-            centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
+            centroids_semantic_map.append([v,cx,cy,self.ontology[v-1][2]])
 
         for i in range(0, len(centroids_semantic_map)):
             self.ax.scatter(centroids_semantic_map[i][1], centroids_semantic_map[i][2], c='white', marker='o')   
