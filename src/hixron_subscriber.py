@@ -106,8 +106,7 @@ class hixron_subscriber(object):
             except FileExistsError:
                 pass
 
-        # semantic variables
-        self.ontology = []
+        # simulation variables
         if self.simulation:
             # gazebo vars
             self.gazebo_names = []
@@ -143,9 +142,10 @@ class hixron_subscriber(object):
         self.scenario_name = 'library' #'scenario1', 'library'
         # load ontology
         self.ontology = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv')
-        cols = ['c_map_x', 'c_map_y', 'd_map_x', 'd_map_y']
-        self.ontology[cols] = self.ontology[cols].astype(float)
+        #cols = ['c_map_x', 'c_map_y', 'd_map_x', 'd_map_y']
+        #self.ontology[cols] = self.ontology[cols].astype(float)
         self.ontology = np.array(self.ontology)
+        #print(self.ontology)
 
         # load global semantic map info
         self.global_semantic_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
@@ -562,10 +562,10 @@ class hixron_subscriber(object):
                 # if the object has some affordance (etc. movability, openability), then it may have changed its position 
                 if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
                     # get the object's new position from Gazebo
-                    obj_gazebo_name = self.gazebo_labels[i][0]
-                    obj_idx = self.gazebo_names.index(obj_gazebo_name)
-                    obj_x_new = self.gazebo_poses[obj_idx].position.x
-                    obj_y_new = self.gazebo_poses[obj_idx].position.y
+                    obj_gazebo_name = self.ontology[i][1]
+                    obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
+                    obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
+                    obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
 
                     obj_x_size = copy.deepcopy(self.ontology[i][5])
                     obj_y_size = copy.deepcopy(self.ontology[i][6])
@@ -577,7 +577,7 @@ class hixron_subscriber(object):
                         # check whether the (centroid) coordinates of the object are changed (enough)
                         diff_x = abs(obj_x_new - obj_x_current)
                         diff_y = abs(obj_y_new - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
+                        if diff_x > obj_x_size or diff_y > obj_y_size:
                             #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
@@ -589,7 +589,7 @@ class hixron_subscriber(object):
                             # check whether the (centroid) coordinates of the object are changed (enough)
                             diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
                             diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                            if diff_x > 0.1 or diff_y > 0.1:
+                            if diff_x > self.ontology.shape[6] or diff_y > self.ontology.shape[7]:
                                 #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
                                 self.ontology[i][3] = obj_x_new + 0.5*obj_x_size
                                 self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
@@ -899,11 +899,11 @@ class hixron_subscriber(object):
         
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         self.global_semantic_map_inflated = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
-        print('(self.global_semantic_map_size[0],self.global_semantic_map_size[1]) = ', (self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
+        #print('(self.global_semantic_map_size[0],self.global_semantic_map_size[1]) = ', (self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         
         for i in range(0, self.ontology.shape[0]):
-            if self.ontology[i][2] != 'chair':
-                continue
+            #if self.ontology[i][2] != 'chair':
+            #    continue
             # IMPORTANT OBJECT'S POINTS
             # centroid and size
             c_map_x = float(self.ontology[i][3])
@@ -942,9 +942,9 @@ class hixron_subscriber(object):
             object_right = tr_pixel_x
             object_bottom = bl_pixel_y
             #if self.ontology[i][1] == 'kitchen_chair_clone_4_clone_5':
-            print('\n(i, name) = ', (i, self.ontology[i][1]))
+            #print('\n(i, name) = ', (i, self.ontology[i][1]))
             #print('(object_left,object_right,object_top,object_bottom) = ', (object_left,object_right,object_top,object_bottom))
-            print('(c_map_x,c_map_y,x_size,y_size) = ', (c_map_x,c_map_y,x_size,y_size))
+            #print('(c_map_x,c_map_y,x_size,y_size) = ', (c_map_x,c_map_y,x_size,y_size))
 
             # global semantic map
             self.global_semantic_map[max(0, object_top):min(self.global_semantic_map_size[0], object_bottom), max(0, object_left):min(self.global_semantic_map_size[1], object_right)] = i+1
