@@ -25,8 +25,6 @@ import cv2
 from sensor_msgs import point_cloud2
 import struct
 
-# lc -- local costmap
-
 # hixron_subscriber class
 class hixron_subscriber(object):
     # constructor

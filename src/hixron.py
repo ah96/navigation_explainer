@@ -1,3 +1,30 @@
+#!/usr/bin/env python3
+
+from nav_msgs.msg import OccupancyGrid, Odometry, Path
+from geometry_msgs.msg import PolygonStamped, PoseWithCovarianceStamped, PoseStamped, Pose
+import rospy
+import numpy as np
+from matplotlib import pyplot as plt
+plt.switch_backend('agg')
+import time
+import pandas as pd
+from scipy.spatial.transform import Rotation as R
+import copy
+import tf2_ros
+import os
+from gazebo_msgs.msg import ModelStates
+import math
+from skimage.measure import regionprops
+from geometry_msgs.msg import Point, Quaternion
+from sensor_msgs.msg import CameraInfo, Image
+import message_filters
+import torch
+from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
+import cv2
+from sensor_msgs import point_cloud2
+import struct
+import math
 
 def what_to_explain(control_param, locality_param):
     """
@@ -61,38 +88,8 @@ def how_long_to_explain(control_param):
     """
     pass
 
-
-#!/usr/bin/env python3
-
-from nav_msgs.msg import OccupancyGrid, Odometry, Path
-from geometry_msgs.msg import PolygonStamped, PoseWithCovarianceStamped
-import rospy
-import numpy as np
-from matplotlib import pyplot as plt
-plt.switch_backend('agg')
-import time
-import pandas as pd
-from scipy.spatial.transform import Rotation as R
-import copy
-import tf2_ros
-import os
-from gazebo_msgs.msg import ModelStates
-import math
-from skimage.measure import regionprops
-from geometry_msgs.msg import Point, Quaternion
-from sensor_msgs.msg import CameraInfo, Image
-import message_filters
-import torch
-from sensor_msgs.msg import PointCloud2, PointField
-from std_msgs.msg import Header
-import cv2
-from sensor_msgs import point_cloud2
-import struct
-
-# lc -- local costmap
-
 # hixron_subscriber class
-class hixron_subscriber(object):
+class hixron(object):
     # constructor
     def __init__(self):
         # simulation or real-world experiment
@@ -124,7 +121,7 @@ class hixron_subscriber(object):
         self.inflation_radius = 0.275
 
         # explanation layer
-        self.semantic_layer_bool = True
+        self.explanation_layer_bool = True
         
         # data directories
         self.dirCurr = os.getcwd()
@@ -192,7 +189,15 @@ class hixron_subscriber(object):
 
         # plans' variables
         self.local_plan = []
-        self.global_plan = [] 
+        self.global_plan_current = Path() 
+        self.global_plan_history = []
+
+        # deviation & failure variables
+        self.global_plans_deviation = False
+
+        # goal pose
+        self.goal_pose_current = Pose()
+        self.goal_pose_history = []
                 
         # local semantic map vars
         self.local_semantic_map_origin_x = 0 
@@ -246,6 +251,9 @@ class hixron_subscriber(object):
         # global plan subscriber 
         self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
 
+        # goal pose subscriber 
+        self.sub_goal_pose = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_pose_callback)
+
         # robot footprint subscriber
         #self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
 
@@ -264,8 +272,8 @@ class hixron_subscriber(object):
             self.sub_global_costmap = rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.global_costmap_callback)
 
         # explanation layer
-        if self.semantic_layer_bool:
-            self.pub_semantic_layer = rospy.Publisher("/semantic_layer", PointCloud2)
+        if self.explanation_layer_bool:
+            self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2)
         
             # point_cloud variables
             self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
@@ -340,6 +348,13 @@ class hixron_subscriber(object):
         self.robot_position_map = msg.pose.pose.position
         self.robot_orientation_map = msg.pose.pose.orientation
 
+    # goal pose callback
+    def goal_pose_callback(self, msg):
+        print('goal_pose_callback')
+
+        self.goal_pose_current = msg.pose
+        self.goal_pose_history.append(msg.pose)
+
     # robot footprint callback
     def footprint_callback(self, msg):
         #print('local_plan_callback')  
@@ -357,10 +372,25 @@ class hixron_subscriber(object):
     def global_plan_callback(self, msg):
         print('\nglobal_plan_callback!')
         
-        self.global_plan = []
-        for i in range(0,len(msg.poses)):
-            self.global_plan.append([msg.poses[i].pose.position.x,msg.poses[i].pose.position.y,msg.poses[i].pose.orientation.z,msg.poses[i].pose.orientation.w,5])
-        #pd.DataFrame(self.global_plan).to_csv(self.dirCurr + '/' + self.dirData + '/global_plan.csv', index=False)#, header=False)
+        # save global plan to 
+        self.global_plan_current = msg    
+        self.global_plan_history.append(self.global_plan_current)
+        
+        # test if there is deviation between current and previous
+        self.global_plans_deviation = False
+        if len(self.global_plan_history) > 1:
+            global_plan_previous = self.global_plan_history[-2]
+            min_plan_length = min(len(self.global_plan_current.poses), len(global_plan_previous.poses))
+            global_dev = 0
+            for i in range(0, min_plan_length):
+                dev_x = self.global_plan_current.poses[i].pose.position.x - global_plan_previous.poses[i].pose.position.x
+                dev_y = self.global_plan_current.poses[i].pose.position.y - global_plan_previous.poses[i].pose.position.y
+                local_dev = dev_x**2 + dev_y**2
+                global_dev += local_dev
+            global_dev = math.sqrt(global_dev)
+            if global_dev > 10.0:
+                print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                self.global_plans_deviation = True
 
         # potential place to make a local semantic map, if local costmap is not used
         if self.use_local_costmap == False and self.use_local_semantic_map:
@@ -611,8 +641,8 @@ class hixron_subscriber(object):
         # create interpretable features
         self.create_interpretable_features()
 
-        if self.semantic_layer_bool:
-            self.publish_semantic_layer()
+        if self.explanation_layer_bool:
+            self.publish_explanation_layer()
         
     # update ontology
     def update_ontology(self):
@@ -959,7 +989,7 @@ class hixron_subscriber(object):
 
     # create global semantic map
     def create_global_semantic_map(self):
-        start = time.time()
+        #start = time.time()
         
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         self.global_semantic_map_inflated = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
@@ -1018,8 +1048,8 @@ class hixron_subscriber(object):
             inflation_y = int(self.inflation_radius / self.global_map_resolution)
             self.global_semantic_map_inflated[max(0, object_top-inflation_y):min(self.global_semantic_map_size[0], object_bottom+inflation_y), max(0, object_left-inflation_x):min(self.global_semantic_map_size[1], object_right+inflation_x)] = i+1
 
-        end = time.time()
-        print('global semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
+        #end = time.time()
+        #print('global semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
 
         #self.global_semantic_map[232:270,63:71] = 40
 
@@ -1031,11 +1061,6 @@ class hixron_subscriber(object):
             v = lc_region.label
             cy, cx = lc_region.centroid
             self.centroids_global_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
-
-        # save local and semantic maps data
-        pd.DataFrame(self.global_semantic_map_info).to_csv(self.dirCurr + '/' + self.dirData + '/global_semantic_map_info.csv', index=False)#, header=False)
-        pd.DataFrame(self.global_semantic_map).to_csv(self.dirCurr + '/' + self.dirData + '/global_semantic_map.csv', index=False) #, header=False)
-        pd.DataFrame(self.global_semantic_map_inflated).to_csv(self.dirCurr + '/' + self.dirData + '/global_semantic_map_inflated.csv', index=False)#, header=False)
 
     # plot local semantic_map
     def plot_local_semantic_map(self):
@@ -1136,7 +1161,7 @@ class hixron_subscriber(object):
 
     # plot global semantic_map
     def plot_global_semantic_map(self):
-        start = time.time()
+        #start = time.time()
 
         dirCurr = self.global_semantic_map_dir + '/' + str(self.counter_global)            
         try:
@@ -1228,8 +1253,8 @@ class hixron_subscriber(object):
 
         pd.DataFrame(centroids_global_semantic_map_inflated).to_csv(dirCurr + '/global_centroids_semantic_map_inflated.csv', index=False)#, header=False)
 
-        end = time.time()
-        print('semantic map plotting runtime = ' + str(round(end-start,3)) + ' seconds')
+        #end = time.time()
+        #print('semantic map plotting runtime = ' + str(round(end-start,3)) + ' seconds')
 
     # create interpretable features
     def create_interpretable_features(self):
@@ -1266,9 +1291,10 @@ class hixron_subscriber(object):
             pd.DataFrame(object_affordance_pairs_global).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs_global.csv', index=False)#, header=False)
 
     # publish semantic layer
-    def publish_semantic_layer(self):
+    def publish_explanation_layer(self):
         if self.use_global_semantic_map:
-            points_start = time.time()
+            #points_start = time.time()
+            
             z = 0.0
             a = 255                    
             points = []
@@ -1291,21 +1317,21 @@ class hixron_subscriber(object):
                     pt = [x, y, z, rgb]
                     points.append(pt)
 
-            points_end = time.time()
-            print('Semantic layer runtime = ', round(points_end - points_start,3))
+            #points_end = time.time()
+            #print('explanation layer runtime = ', round(points_end - points_start,3))
             
             # publish
             self.header.frame_id = 'map'
             pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
             pc2.header.stamp = rospy.Time.now()
-            self.pub_semantic_layer.publish(pc2)
+            self.pub_explanation_layer.publish(pc2)
 
 def main():
     # ----------main-----------
-    rospy.init_node('hixron_subscriber', anonymous=False)
+    rospy.init_node('hixron', anonymous=False)
 
-    # define hixron_subscriber object
-    hixron_subscriber_obj = hixron_subscriber()
+    # define hixron object
+    hixron_subscriber_obj = hixron()
     # call main to initialize subscribers
     hixron_subscriber_obj.main_()
 
