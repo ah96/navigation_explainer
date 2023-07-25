@@ -60,7 +60,7 @@ class hixron_subscriber(object):
         self.inflation_radius = 0.275
 
         # explanation layer
-        self.explanation_layer_bool = True
+        self.semantic_layer_bool = True
         
         # data directories
         self.dirCurr = os.getcwd()
@@ -200,8 +200,8 @@ class hixron_subscriber(object):
             self.sub_global_costmap = rospy.Subscriber("/move_base/global_costmap/costmap", OccupancyGrid, self.global_costmap_callback)
 
         # explanation layer
-        if self.explanation_layer_bool:
-            self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2)
+        if self.semantic_layer_bool:
+            self.pub_semantic_layer = rospy.Publisher("/semantic_layer", PointCloud2)
         
             # point_cloud variables
             self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
@@ -547,8 +547,8 @@ class hixron_subscriber(object):
         # create interpretable features
         self.create_interpretable_features()
 
-        if self.publish_explanation_layer:
-            self.publish_explanation_layer()
+        if self.semantic_layer_bool:
+            self.publish_semantic_layer()
         
     # update ontology
     def update_ontology(self):
@@ -1176,10 +1176,10 @@ class hixron_subscriber(object):
             # get object-affordance pairs in the current global semantic map
             for i in range(0, self.ontology.shape[0]):
                 if self.ontology[i][0] in labels:
-                    if self.ontology[i][6] == 1:
+                    if self.ontology[i][7] == 1:
                         object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'movability'])
 
-                    if self.ontology[i][7] == 1:
+                    if self.ontology[i][8] == 1:
                         object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
 
             # save object-affordance pairs for publisher
@@ -1201,8 +1201,8 @@ class hixron_subscriber(object):
             # save object-affordance pairs for publisher
             pd.DataFrame(object_affordance_pairs_global).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs_global.csv', index=False)#, header=False)
 
-    # publish explanation layer
-    def publish_explanation_layer(self):
+    # publish semantic layer
+    def publish_semantic_layer(self):
         if self.use_global_semantic_map:
             points_start = time.time()
             z = 0.0
@@ -1210,7 +1210,8 @@ class hixron_subscriber(object):
             points = []
 
             # define output
-            output = self.global_semantic_map * 255.0
+            #output = self.global_semantic_map * 255.0
+            output = self.global_semantic_map_inflated * 255.0
             #output = output[:, :, [2, 1, 0]] * 255.0
             output = output.astype(np.uint8)
 
@@ -1227,13 +1228,13 @@ class hixron_subscriber(object):
                     points.append(pt)
 
             points_end = time.time()
-            print('Explanation layer runtime = ', round(points_end - points_start,3))
+            print('Semantic layer runtime = ', round(points_end - points_start,3))
             
             # publish
             self.header.frame_id = 'map'
             pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
             pc2.header.stamp = rospy.Time.now()
-            self.pub_explanation_layer.publish(pc2)
+            self.pub_semantic_layer.publish(pc2)
 
 def main():
     # ----------main-----------
