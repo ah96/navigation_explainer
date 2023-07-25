@@ -142,7 +142,10 @@ class hixron_subscriber(object):
         # ontology part
         self.scenario_name = 'library' #'scenario1', 'library'
         # load ontology
-        self.ontology = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv'))
+        self.ontology = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv')
+        cols = ['c_map_x', 'c_map_y', 'd_map_x', 'd_map_y']
+        self.ontology[cols] = self.ontology[cols].astype(float)
+        self.ontology = np.array(self.ontology)
 
         # load global semantic map info
         self.global_semantic_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
@@ -896,18 +899,18 @@ class hixron_subscriber(object):
         
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         self.global_semantic_map_inflated = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
-        #print('(self.global_semantic_map_size[0],self.global_semantic_map_size[1]) = ', (self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
+        print('(self.global_semantic_map_size[0],self.global_semantic_map_size[1]) = ', (self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         
         for i in range(0, self.ontology.shape[0]):
             if self.ontology[i][2] != 'chair':
                 continue
             # IMPORTANT OBJECT'S POINTS
             # centroid and size
-            c_map_x = self.ontology[i][3]
-            c_map_y = self.ontology[i][4]
+            c_map_x = float(self.ontology[i][3])
+            c_map_y = float(self.ontology[i][4])
             #print('(i, name) = ', (i, self.ontology[i][2]))
-            x_size = self.ontology[i][5]
-            y_size = self.ontology[i][6]
+            x_size = float(self.ontology[i][5])
+            y_size = float(self.ontology[i][6])
             
             # top left vertex
             #tl_map_x = c_map_x - 0.5*x_size
@@ -938,6 +941,10 @@ class hixron_subscriber(object):
             object_top = tr_pixel_y
             object_right = tr_pixel_x
             object_bottom = bl_pixel_y
+            #if self.ontology[i][1] == 'kitchen_chair_clone_4_clone_5':
+            print('\n(i, name) = ', (i, self.ontology[i][1]))
+            #print('(object_left,object_right,object_top,object_bottom) = ', (object_left,object_right,object_top,object_bottom))
+            print('(c_map_x,c_map_y,x_size,y_size) = ', (c_map_x,c_map_y,x_size,y_size))
 
             # global semantic map
             self.global_semantic_map[max(0, object_top):min(self.global_semantic_map_size[0], object_bottom), max(0, object_left):min(self.global_semantic_map_size[1], object_right)] = i+1
