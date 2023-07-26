@@ -554,71 +554,64 @@ class hixron_subscriber(object):
 
         # simulation relying on Gazebo
         if self.simulation:
-            update_custom = False
+            respect_mass_centre = True
 
             for i in range(0, self.ontology.shape[0]):
-                # if the object has some affordance (etc. movability, openability), then it may have changed its position 
-                if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
-                    # get the object's new position from Gazebo
-                    obj_gazebo_name = self.ontology[i][1]
-                    obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
-                    obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
-                    obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
+                ## if the object has some affordance (etc. movability, openability), then it may have changed its position 
+                #if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
+                # get the object's new position from Gazebo
+                obj_gazebo_name = self.ontology[i][1]
+                obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
+                obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
+                obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
 
-                    obj_x_size = copy.deepcopy(self.ontology[i][5])
-                    obj_y_size = copy.deepcopy(self.ontology[i][6])
+                obj_x_size = copy.deepcopy(self.ontology[i][5])
+                obj_y_size = copy.deepcopy(self.ontology[i][6])
 
-                    obj_x_current = self.ontology[i][3]
-                    obj_y_current = self.ontology[i][4]
+                obj_x_current = self.ontology[i][3]
+                obj_y_current = self.ontology[i][4]
 
-                    if update_custom == False:
+                if respect_mass_centre == False:
+                    # check whether the (centroid) coordinates of the object are changed (enough)
+                    diff_x = abs(obj_x_new - obj_x_current)
+                    diff_y = abs(obj_y_new - obj_y_current)
+                    if diff_x > obj_x_size or diff_y > obj_y_size:
+                        #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                        self.ontology[i][3] = obj_x_new
+                        self.ontology[i][4] = obj_y_new
+                
+                else:
+                    # update ontology
+                    # almost every object type in Gazebo has a different center of mass
+                    if 'chair' in obj_gazebo_name:
+                        # top-right is the mass centre
+                        obj_x_new -= 0.5*obj_x_size
+                        obj_y_new -= 0.5*obj_y_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > 0.5*obj_x_size or diff_y > 0.5*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+
+                    elif 'bookshelf' in obj_gazebo_name:
+                        # top-right is the mass centre
+                        obj_x_new += 0.5*obj_x_size
                         # check whether the (centroid) coordinates of the object are changed (enough)
                         diff_x = abs(obj_x_new - obj_x_current)
                         diff_y = abs(obj_y_new - obj_y_current)
                         if diff_x > obj_x_size or diff_y > obj_y_size:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                    
-                    else:
-                        # update ontology
-                        # almost every object type in Gazebo has a different center of mass
-                        if 'table' in obj_gazebo_name:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
-                            diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                            if diff_x > self.ontology.shape[6] or diff_y > self.ontology.shape[7]:
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][3] = obj_x_new + 0.5*obj_x_size
-                                self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
-                        elif 'wardrobe' in obj_gazebo_name:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - 0.5*obj_x_size - obj_x_current)
-                            diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                            if diff_x > 0.1 or diff_y > 0.1:
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][3] = obj_x_new - 0.5*obj_x_size
-                                self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
-                        elif 'door' in obj_gazebo_name:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - obj_x_current)
-                            diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > 0.1 or diff_y > 0.1:
-                                # if the doors are opened/closed they are shifted for 90 degrees
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][5] = obj_y_size
-                                self.ontology[i][6] = obj_x_size
 
-                                self.ontology[i][3] = obj_x_new
-                                self.ontology[i][4] = obj_y_new 
-                        else:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - obj_x_current)
-                            diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > 0.1 or diff_y > 0.1:
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][3] = obj_x_new
-                                self.ontology[i][4] = obj_y_new 
+                    else:
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > 0.5*obj_x_size or diff_y > 0.5*obj_y_size:
+                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new 
 
         # real world or simulation relying on object detection
         elif self.simulation == False:

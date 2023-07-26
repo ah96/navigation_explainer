@@ -25,6 +25,11 @@ import cv2
 from sensor_msgs import point_cloud2
 import struct
 import math
+import shlex
+from psutil import Popen
+from sklearn.linear_model import Ridge, lars_path
+from sklearn.utils import check_random_state
+
 
 def what_to_explain(control_param, locality_param):
     """
@@ -87,6 +92,270 @@ def how_long_to_explain(control_param):
     :return: wanted explanation
     """
     pass
+
+
+
+class LimeBase(object):
+    def __init__(self,
+                 kernel_fn,
+                 verbose=False,
+                 random_state=None):
+        self.kernel_fn = kernel_fn
+        self.verbose = verbose
+        self.random_state = check_random_state(random_state)
+
+    def explain_instance_with_data(self,
+                                   neighborhood_data,
+                                   neighborhood_labels,
+                                   distances,
+                                   label,
+                                   num_features,
+                                   feature_selection='auto',
+                                   model_regressor=None):
+        weights = self.kernel_fn(distances)
+        labels_column = neighborhood_labels[:, label]
+        used_features = self.feature_selection(neighborhood_data,
+                                               labels_column,
+                                               weights,
+                                               num_features,
+                                               feature_selection)
+        if model_regressor is None:
+            model_regressor = Ridge(alpha=1, fit_intercept=True,
+                                    random_state=self.random_state)
+        easy_model = model_regressor
+        easy_model.fit(neighborhood_data[:, used_features],
+                       labels_column, sample_weight=weights)
+        prediction_score = easy_model.score(
+            neighborhood_data[:, used_features],
+            labels_column, sample_weight=weights)
+
+        local_pred = easy_model.predict(neighborhood_data[0, used_features].reshape(1, -1))
+
+        #if self.verbose:
+        #    print('Intercept', easy_model.intercept_)
+        #    print('Prediction_local', local_pred,)
+        #    print('Right:', neighborhood_labels[0, label])
+        return (easy_model.intercept_,
+                sorted(zip(used_features, easy_model.coef_),
+                       key=lambda x: np.abs(x[1]), reverse=True),
+                prediction_score, local_pred)
+    
+    @staticmethod
+    def generate_lars_path(weighted_data, weighted_labels):
+        """Generates the lars path for weighted data.
+
+        Args:
+            weighted_data: data that has been weighted by kernel
+            weighted_label: labels, weighted by kernel
+
+        Returns:
+            (alphas, coefs), both are arrays corresponding to the
+            regularization parameter and coefficients, respectively
+        """
+        x_vector = weighted_data
+        alphas, _, coefs = lars_path(x_vector,
+                                     weighted_labels,
+                                     method='lasso',
+                                     verbose=False)
+        return alphas, coefs
+
+    def forward_selection(self, data, labels, weights, num_features):
+        """Iteratively adds features to the model"""
+        clf = Ridge(alpha=0, fit_intercept=True, random_state=self.random_state)
+        used_features = []
+        for _ in range(min(num_features, data.shape[1])):
+            max_ = -100000000
+            best = 0
+            for feature in range(data.shape[1]):
+                if feature in used_features:
+                    continue
+                clf.fit(data[:, used_features + [feature]], labels,
+                        sample_weight=weights)
+                score = clf.score(data[:, used_features + [feature]],
+                                  labels,
+                                  sample_weight=weights)
+                if score > max_:
+                    best = feature
+                    max_ = score
+            used_features.append(best)
+        return np.array(used_features)
+
+    def feature_selection(self, data, labels, weights, num_features, method):
+        """Selects features for the model. see explain_instance_with_data to
+           understand the parameters."""
+        if method == 'none':
+            return np.array(range(data.shape[1]))
+        elif method == 'forward_selection':
+            return self.forward_selection(data, labels, weights, num_features)
+        elif method == 'highest_weights':
+            clf = Ridge(alpha=0.01, fit_intercept=True,
+                        random_state=self.random_state)
+            clf.fit(data, labels, sample_weight=weights)
+
+            coef = clf.coef_
+            if sp.sparse.issparse(data):
+                coef = sp.sparse.csr_matrix(clf.coef_)
+                weighted_data = coef.multiply(data[0])
+                # Note: most efficient to slice the data before reversing
+                sdata = len(weighted_data.data)
+                argsort_data = np.abs(weighted_data.data).argsort()
+                # Edge case where data is more sparse than requested number of feature importances
+                # In that case, we just pad with zero-valued features
+                if sdata < num_features:
+                    nnz_indexes = argsort_data[::-1]
+                    indices = weighted_data.indices[nnz_indexes]
+                    num_to_pad = num_features - sdata
+                    indices = np.concatenate((indices, np.zeros(num_to_pad, dtype=indices.dtype)))
+                    indices_set = set(indices)
+                    pad_counter = 0
+                    for i in range(data.shape[1]):
+                        if i not in indices_set:
+                            indices[pad_counter + sdata] = i
+                            pad_counter += 1
+                            if pad_counter >= num_to_pad:
+                                break
+                else:
+                    nnz_indexes = argsort_data[sdata - num_features:sdata][::-1]
+                    indices = weighted_data.indices[nnz_indexes]
+                return indices
+            else:
+                weighted_data = coef * data[0]
+                feature_weights = sorted(
+                    zip(range(data.shape[1]), weighted_data),
+                    key=lambda x: np.abs(x[1]),
+                    reverse=True)
+                return np.array([x[0] for x in feature_weights[:num_features]])
+        elif method == 'lasso_path':
+            weighted_data = ((data - np.average(data, axis=0, weights=weights))
+                             * np.sqrt(weights[:, np.newaxis]))
+            weighted_labels = ((labels - np.average(labels, weights=weights))
+                               * np.sqrt(weights))
+            nonzero = range(weighted_data.shape[1])
+            _, coefs = self.generate_lars_path(weighted_data,
+                                               weighted_labels)
+            for i in range(len(coefs.T) - 1, 0, -1):
+                nonzero = coefs.T[i].nonzero()[0]
+                if len(nonzero) <= num_features:
+                    break
+            used_features = nonzero
+            return used_features
+        elif method == 'auto':
+            if num_features <= 6:
+                n_method = 'forward_selection'
+            else:
+                n_method = 'highest_weights'
+            return self.feature_selection(data, labels, weights,
+                                          num_features, n_method)
+
+class ImageExplanation(object):
+    def __init__(self, image, semantic_map, object_affordance_pairs, ontology):
+        self.image = image
+        self.semantic_map = semantic_map
+        self.object_affordance_pairs = object_affordance_pairs
+        self.ontology = ontology
+        self.intercept = {}
+        self.local_exp = {}
+        self.local_pred = {}
+        self.score = {}
+
+        self.color_free_space = False
+        self.use_maximum_weight = False
+        self.all_weights_zero = False
+
+
+        self.val_low = 0.0
+        self.val_high = 1.0
+        self.free_space_shade = 0.7
+
+    def get_image_and_mask(self, label):
+
+        #print('get image and mask starting')
+        #print('self.object_affordance_pairs: ', self.object_affordance_pairs)
+
+        if label not in self.local_exp:
+            raise KeyError('Label not in explanation')
+        
+        exp = self.local_exp[label]
+        print('exp = ', exp)
+
+        temp = np.zeros(self.image.shape)
+
+        w_sum_abs = 0.0
+        w_s_abs = []
+        for f, w in exp:
+            w_sum_abs += abs(w)
+            w_s_abs.append(abs(w))
+        max_w_abs = max(w_s_abs)
+        if max_w_abs == 0:
+            self.all_weights_zero = True
+            #temp[self.image == 0] = self.free_space_shade
+            #temp[self.image != 0] = 0.0
+            #return temp, exp
+
+        semantic_map_labels = np.unique(self.semantic_map)
+        #print('semantic_map_labels: ', semantic_map_labels)
+
+        w_s = [0]*len(exp)
+        f_s = [0]*len(exp)
+        v_s = []
+        imgs = [np.zeros((self.image.shape[0],self.image.shape[0],3))]*len(exp)
+        rgb_values = []
+
+        all_obstacles_exp = np.zeros((self.image.shape[0],self.image.shape[0],3))
+        # color free space with gray
+        all_obstacles_exp[self.semantic_map == 0, 0] = self.free_space_shade
+        all_obstacles_exp[self.semantic_map == 0, 1] = self.free_space_shade
+        all_obstacles_exp[self.semantic_map == 0, 2] = self.free_space_shade
+
+        for f, w in exp:
+            #print('(f, w): ', (f, w))
+            print(self.object_affordance_pairs[f][1] + '_' + self.object_affordance_pairs[f][2] + ' has coefficient ' + str(w))
+            w_s[f] = w
+
+            temp = np.zeros((self.image.shape[0],self.image.shape[0],3))
+            #temp = copy.deepcopy(self.image[0])
+            
+            v = self.object_affordance_pairs[f][0]
+            #print('temp.shape = ', temp.shape)
+            #print('v = ', v)
+            #v_s.append(v)
+
+            # color free space with gray
+            temp[self.semantic_map == 0, 0] = self.free_space_shade
+            temp[self.semantic_map == 0, 1] = self.free_space_shade
+            temp[self.semantic_map == 0, 2] = self.free_space_shade
+
+            # color the obstacle-affordance pair with green or red
+            if w > 0:
+                if self.use_maximum_weight:
+                    temp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                    rgb_values.append(self.val_high * w / max_w_abs)
+                    all_obstacles_exp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                else:
+                    temp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
+                    rgb_values.append(self.val_high * w / w_sum_abs)
+                    all_obstacles_exp[self.semantic_map == v, 1] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
+            elif w < 0:
+                if self.use_maximum_weight:
+                    temp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                    rgb_values.append(self.val_high * abs(w) / max_w_abs)
+                    all_obstacles_exp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / max_w_abs
+                else:
+                    temp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
+                    rgb_values.append(self.val_high * abs(w) / w_sum_abs)
+                    all_obstacles_exp[self.semantic_map == v, 0] = self.val_low + (self.val_high - self.val_low) * abs(w) / w_sum_abs
+            #elif w == 0:
+            #    temp[self.semantic_map == v, 0] = self.val_low
+            #    rgb_values.append(self.val_low * abs(w) / w_sum_abs)
+
+            imgs[f] = temp
+
+        imgs.append(all_obstacles_exp)
+
+        #print('weights = ', w_s)
+        #print('get image and mask ending')
+
+        return imgs, exp, w_s, rgb_values
 
 # hixron_subscriber class
 class hixron(object):
@@ -167,6 +436,12 @@ class hixron(object):
             except FileExistsError:
                 pass
 
+        self.global_perturbation_dir = self.dirMain + '/perturbations'
+        try:
+            os.mkdir(self.global_perturbation_dir)
+        except FileExistsError:
+            pass
+
         # simulation variables
         if self.simulation:
             # gazebo vars
@@ -196,7 +471,7 @@ class hixron(object):
         self.globalPlan_goalPose_indices_history = []
 
         # deviation & failure variables
-        self.global_plans_deviation = False
+        self.hard_obstacle = 99
 
         # goal pose
         self.goal_pose_current = Pose()
@@ -380,24 +655,18 @@ class hixron(object):
         # save global plan to class vars
         self.global_plan_current = msg    
         self.global_plan_history.append(self.global_plan_current)
-
         self.globalPlan_goalPose_indices_history.append([len(self.global_plan_history), len(self.goal_pose_history)])
         
-        # test if there is deviation between current and previous
-        self.global_plans_deviation = False
-        if len(self.global_plan_history) > 1:
-            global_plan_previous = self.global_plan_history[-2]
-            min_plan_length = min(len(self.global_plan_current.poses), len(global_plan_previous.poses))
-            global_dev = 0
-            for i in range(0, min_plan_length):
-                dev_x = self.global_plan_current.poses[i].pose.position.x - global_plan_previous.poses[i].pose.position.x
-                dev_y = self.global_plan_current.poses[i].pose.position.y - global_plan_previous.poses[i].pose.position.y
-                local_dev = dev_x**2 + dev_y**2
-                global_dev += local_dev
-            global_dev = math.sqrt(global_dev)
-            if global_dev > 10.0:
-                print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
-                self.global_plans_deviation = True
+        if self.use_global_semantic_map:
+            
+            # create semantic data
+            self.create_semantic_data()
+
+            #if self.global_plans_deviation:
+            self.test_explain()
+
+            # increase the global counter (needed for plotting numeration)
+            self.counter_global += 1     
 
         # potential place to make a local semantic map, if local costmap is not used
         if self.use_local_costmap == False and self.use_local_semantic_map:
@@ -411,18 +680,7 @@ class hixron(object):
             self.create_semantic_data()
 
             # increase the global counter (needed for plotting numeration)
-            self.counter_global += 1
-
-        elif self.use_global_semantic_map:
-            
-            # create semantic data
-            self.create_semantic_data()
-
-            #if self.global_plans_deviation:
-            #    self.explain_global_deviation()
-
-            # increase the global counter (needed for plotting numeration)
-            self.counter_global += 1        
+            self.counter_global += 1   
         
     # local plan callback
     def local_plan_callback(self, msg):
@@ -649,7 +907,7 @@ class hixron(object):
             self.plot_global_semantic_map()
 
         # create interpretable features
-        self.create_interpretable_features()
+        #self.create_interpretable_features()
 
         if self.explanation_layer_bool:
             self.publish_explanation_layer()
@@ -660,71 +918,64 @@ class hixron(object):
 
         # simulation relying on Gazebo
         if self.simulation:
-            update_custom = False
+            respect_mass_centre = True
 
             for i in range(0, self.ontology.shape[0]):
-                ## if the object has some affordance (etc. movability, openability), then it may have changed its position 
-                #if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
+                # if the object has some affordance (etc. movability, openability), then it may have changed its position 
+                if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
                 # get the object's new position from Gazebo
-                obj_gazebo_name = self.ontology[i][1]
-                obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
-                obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
-                obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
+                    obj_gazebo_name = self.ontology[i][1]
+                    obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
+                    obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
+                    obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
 
-                obj_x_size = copy.deepcopy(self.ontology[i][5])
-                obj_y_size = copy.deepcopy(self.ontology[i][6])
+                    obj_x_size = copy.deepcopy(self.ontology[i][5])
+                    obj_y_size = copy.deepcopy(self.ontology[i][6])
 
-                obj_x_current = self.ontology[i][3]
-                obj_y_current = self.ontology[i][4]
+                    obj_x_current = self.ontology[i][3]
+                    obj_y_current = self.ontology[i][4]
 
-                if update_custom == False:
-                    # check whether the (centroid) coordinates of the object are changed (enough)
-                    diff_x = abs(obj_x_new - obj_x_current)
-                    diff_y = abs(obj_y_new - obj_y_current)
-                    if diff_x > obj_x_size or diff_y > obj_y_size:
-                        #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                        self.ontology[i][3] = obj_x_new
-                        self.ontology[i][4] = obj_y_new
-                
-                else:
-                    # update ontology
-                    # almost every object type in Gazebo has a different center of mass
-                    if 'table' in obj_gazebo_name:
-                        # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
-                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                        if diff_x > self.ontology.shape[6] or diff_y > self.ontology.shape[7]:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][3] = obj_x_new + 0.5*obj_x_size
-                            self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
-                    elif 'wardrobe' in obj_gazebo_name:
-                        # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(obj_x_new - 0.5*obj_x_size - obj_x_current)
-                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][3] = obj_x_new - 0.5*obj_x_size
-                            self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
-                    elif 'door' in obj_gazebo_name:
+                    if respect_mass_centre == False:
                         # check whether the (centroid) coordinates of the object are changed (enough)
                         diff_x = abs(obj_x_new - obj_x_current)
                         diff_y = abs(obj_y_new - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
-                            # if the doors are opened/closed they are shifted for 90 degrees
+                        if diff_x > obj_x_size or diff_y > obj_y_size:
                             #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][5] = obj_y_size
-                            self.ontology[i][6] = obj_x_size
-
                             self.ontology[i][3] = obj_x_new
-                            self.ontology[i][4] = obj_y_new 
+                            self.ontology[i][4] = obj_y_new
+                    
                     else:
-                        # check whether the (centroid) coordinates of the object are changed (enough)
-                        diff_x = abs(obj_x_new - obj_x_current)
-                        diff_y = abs(obj_y_new - obj_y_current)
-                        if diff_x > 0.1 or diff_y > 0.1:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                            self.ontology[i][3] = obj_x_new
-                            self.ontology[i][4] = obj_y_new 
+                        # update ontology
+                        # almost every object type in Gazebo has a different center of mass
+                        if 'chair' in obj_gazebo_name:
+                            # top-right is the mass centre
+                            obj_x_new -= 0.5*obj_x_size
+                            obj_y_new -= 0.5*obj_y_size
+                            # check whether the (centroid) coordinates of the object are changed (enough)
+                            diff_x = abs(obj_x_new - obj_x_current)
+                            diff_y = abs(obj_y_new - obj_y_current)
+                            if diff_x > 2*obj_x_size or diff_y > 2*obj_y_size:
+                                self.ontology[i][3] = obj_x_new
+                                self.ontology[i][4] = obj_y_new
+
+                        elif 'bookshelf' in obj_gazebo_name:
+                            # top-right is the mass centre
+                            obj_x_new += 0.5*obj_x_size
+                            # check whether the (centroid) coordinates of the object are changed (enough)
+                            diff_x = abs(obj_x_new - obj_x_current)
+                            diff_y = abs(obj_y_new - obj_y_current)
+                            if diff_x > obj_x_size or diff_y > obj_y_size:
+                                self.ontology[i][3] = obj_x_new
+                                self.ontology[i][4] = obj_y_new
+
+                        else:
+                            # check whether the (centroid) coordinates of the object are changed (enough)
+                            diff_x = abs(obj_x_new - obj_x_current)
+                            diff_y = abs(obj_y_new - obj_y_current)
+                            if diff_x > 0.5*obj_x_size or diff_y > 0.5*obj_y_size:
+                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                                self.ontology[i][3] = obj_x_new
+                                self.ontology[i][4] = obj_y_new 
 
         # real world or simulation relying on object detection
         elif self.simulation == False:
@@ -1269,20 +1520,20 @@ class hixron(object):
     # create interpretable features
     def create_interpretable_features(self):
         if self.use_global_semantic_map:
-            # list of labels of objects in global semantic map
-            labels = np.unique(self.global_semantic_map)
-            object_affordance_pairs_global = [] # [label, object, affordance]
+            # list of IDs of objects in global semantic map
+            IDs = np.unique(self.global_semantic_map)
+            
             # get object-affordance pairs in the current global semantic map
-            for i in range(0, self.ontology.shape[0]):
-                if self.ontology[i][0] in labels:
+            self.object_affordance_pairs_global = [] # ID, object, affordance]
+            for i in range(0, len(self.objects_of_interest)):
+                if self.objects_of_interest[i][0] in IDs:
                     if self.ontology[i][7] == 1:
-                        object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'movability'])
+                        self.object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'movability'])
 
                     if self.ontology[i][8] == 1:
-                        object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
+                        self.object_affordance_pairs_global.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
 
-            # save object-affordance pairs for publisher
-            pd.DataFrame(object_affordance_pairs_global).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs_global.csv', index=False)#, header=False)
+            #print('object_affordance_pairs_global: ', self.object_affordance_pairs_global)
 
         if self.use_local_semantic_map:
             # list of labels of objects in local semantic map
@@ -1296,9 +1547,6 @@ class hixron(object):
 
                     if self.ontology[i][7] == 1:
                         object_affordance_pairs_local.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
-
-            # save object-affordance pairs for publisher
-            pd.DataFrame(object_affordance_pairs_global).to_csv(self.dirCurr + '/' + self.dirData + '/object_affordance_pairs_global.csv', index=False)#, header=False)
 
     # publish semantic layer
     def publish_explanation_layer(self):
@@ -1336,6 +1584,30 @@ class hixron(object):
             pc2.header.stamp = rospy.Time.now()
             self.pub_explanation_layer.publish(pc2)
 
+    # test whether explanation is n eeded
+    def test_explain(self):
+        # test if there is deviation between current and previous
+        deviation_between_global_plan = False
+        
+        if len(self.global_plan_history) > 1:
+            global_plan_previous = self.global_plan_history[-2]
+            min_plan_length = min(len(self.global_plan_current.poses), len(global_plan_previous.poses))
+        
+            global_dev = 0
+            for i in range(0, min_plan_length):
+                dev_x = self.global_plan_current.poses[i].pose.position.x - global_plan_previous.poses[i].pose.position.x
+                dev_y = self.global_plan_current.poses[i].pose.position.y - global_plan_previous.poses[i].pose.position.y
+                local_dev = dev_x**2 + dev_y**2
+                global_dev += local_dev
+            global_dev = math.sqrt(global_dev)
+        
+            if global_dev > 10.0:
+                print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                deviation_between_global_plan = True
+
+        if deviation_between_global_plan:
+            self.explain_global_deviation()
+
     # explain deviation between two global plans
     def explain_global_deviation(self):
         # check if the last two global plans have the same goal pose
@@ -1344,13 +1616,13 @@ class hixron(object):
             if self.globalPlan_goalPose_indices_history[-1][1] == self.globalPlan_goalPose_indices_history[-2][1]:
                 same_goal_pose = True
 
-        # find the objects/obstacles of interest
-        x_min = 0
-        y_min = 0
-        x_max = 0
-        y_max = 0
-        
         if same_goal_pose:
+            # find the objects/obstacles of interest
+            x_min = 0
+            y_min = 0
+            x_max = 0
+            y_max = 0
+        
             goal_pose = self.goal_pose_current #self.goal_pose_history[-1]
             robot_pose = self.robot_pose_map
 
@@ -1358,30 +1630,275 @@ class hixron(object):
             x_max = max(robot_pose.position.x, goal_pose.position.x)
             y_min = min(robot_pose.position.y, goal_pose.position.y)
             y_max = max(robot_pose.position.y, goal_pose.position.y)
-            print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+            #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
             
             d_x = x_max - x_min
             d_y = y_max - y_min
             
-            objects_of_interest = []
+            self.objects_of_interest = []
             if d_x >= d_y:
                 for i in range(0, self.ontology.shape[0]):
                     x_obj = self.ontology[i][3]
                     y_obj = self.ontology[i][4]
-                    print('(x_obj, y_obj) = ', (x_obj, y_obj))
+                    #print('(x_obj, y_obj) = ', (x_obj, y_obj))
                     if x_obj > x_min and x_obj < x_max:
-                        objects_of_interest.append(self.ontology[i])
+                        self.objects_of_interest.append(self.ontology[i])
+      
             else:
                 for i in range(0, self.ontology.shape[0]):
                     x_obj = self.ontology[i][3]
                     y_obj = self.ontology[i][4]
-                    print('(x_obj, y_obj) = ', (x_obj, y_obj))
+                    #print('(x_obj, y_obj) = ', (x_obj, y_obj))
                     if y_obj > y_min and y_obj < y_max:
-                        objects_of_interest.append(self.ontology[i])
-            print('There are ' + str(len(objects_of_interest)) + ' objects of interest!!!')
-        
+                        self.objects_of_interest.append(self.ontology[i])
+      
+            print('There are ' + str(len(self.objects_of_interest)) + ' objects of interest!!!')
+
+            # create interpretable features
+            self.create_interpretable_features()
+
+            # get the labels - call the planner
+            self.get_labels()
+
+            # create distances between the instance of interest and perturbations
+            self.create_distances()
+
+            #self.counter_global += 1
+
+            # Explanation variables
+            top_labels=1 #10
+            model_regressor = None
+            num_features=100000
+            feature_selection='auto'
+
+            start = time.time()
+            # find explanation
+            ret_exp = ImageExplanation(self.local_map, self.semantic_map, self.object_affordance_pairs, self.ontology)
+            if top_labels:
+                top = np.argsort(self.labels[0])[-top_labels:]
+                ret_exp.top_labels = list(top)
+                ret_exp.top_labels.reverse()
+            for label in top:
+                (ret_exp.intercept[label],
+                    ret_exp.local_exp[label],
+                    ret_exp.score[label],
+                    ret_exp.local_pred[label]) = self.base.explain_instance_with_data(
+                    self.data, self.labels, self.distances, label, num_features,
+                    model_regressor=model_regressor,
+                    feature_selection=feature_selection)
+            end = time.time()
+            print('\nMODEL FITTING TIME = ', round(end-start,3))
+
+            start = time.time()
+            # get explanation image
+            self.outputs, self.exp, self.weights, self.rgb_values = ret_exp.get_image_and_mask(label=0)
+            end = time.time()
+            print('\nGET EXP PIC TIME = ', round(end-start,3))
+            print('exp: ', self.exp)
+                
         else:
-            print('New goal chosen!!!')
+                print('New goal chosen!!!')
+
+    # get labels for perturbed data
+    def get_labels(self):
+        #start = time.time()
+
+        # create encoded perturbation data
+        self.create_encoded_perturbation_data()
+        
+        num_samples = self.data.shape[0]
+        #n_features = data_width
+        
+        # get labels
+        self.labels = []
+        imgs = []
+
+        for i in range(0, num_samples):
+            #temp = copy.deepcopy(self.global_semantic_map)
+            temp = copy.deepcopy(self.global_semantic_map_inflated)
+            
+            # find the indices of features (obj.-aff. pairs) which are in their alternative state
+            zero_indices = np.where(self.data[i] == 0)[0]
+            print('zero_indices = ', zero_indices)
+            
+            for j in range(0, zero_indices.shape[0]):
+                # if feature has 0 in self.data it is in its alternative affordance state
+                # --> original semantic map must be modified
+                idx = zero_indices[j]
+                #print('idx = ', idx)
+                temp[temp == idx + 1] = 0
+
+            temp[temp > 0] = self.hard_obstacle
+
+            imgs.append(temp)
+
+        dirCurr = self.global_perturbation_dir + '/' + str(self.counter_global)
+        try:
+            os.mkdir(dirCurr)
+        except FileExistsError:
+            pass
+
+        for i in range(0, len(imgs)):
+            fig = plt.figure(frameon=False)
+            w = 1.6 * 3
+            h = 1.6 * 3
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            pert_img = np.flipud(imgs[i]) 
+            ax.imshow(pert_img.astype('float64'), aspect='auto')
+            fig.savefig(dirCurr + '/perturbation_' + str(i) + '.png', transparent=False)
+            fig.clf()
+            
+            pd.DataFrame(pert_img).to_csv(dirCurr + '/perturbation_' + str(i) + '.csv', index=False)#, header=False)    
+
+        # call predictor and store labels
+        if len(imgs) > 0:
+            preds = self.call_planner(np.array(imgs))
+            self.labels.extend(preds)
+        self.labels = np.array(self.labels)
+        print('labels = ', self.labels)
+    
+        #end = time.time()
+        #print('LABELS CREATION RUNTIME = ', round(end-start,3))
+    
+    # create encoded perturbation data
+    def create_encoded_perturbation_data(self):
+        # create data (encoded perturbations)
+        # old approach
+        #n_features = self.object_affordance_pairs.shape[0]
+        #num_samples = 2**n_features
+        #lst = list(map(list, itertools.product([0, 1], repeat=n_features)))
+        #self.data = np.array(lst).reshape((num_samples, n_features))
+
+        data_height = len(self.object_affordance_pairs_global)
+        data_width = self.ontology.shape[0]
+        self.data = np.array([[1]*data_width]*data_height)
+        
+        for i in range(0, data_height):
+            self.data[i][self.object_affordance_pairs_global[i][0] - 1] = 0
+
+    # call the planner and get outputs for perturbed inputs
+    def call_planner(self, sampled_instances):
+        # save perturbations for the local planner
+        start = time.time()
+        sampled_instances_shape_len = len(sampled_instances.shape)
+        sample_size = 1 if sampled_instances_shape_len == 2 else sampled_instances.shape[0]
+        print('sample_size = ', sample_size)
+
+        if sampled_instances_shape_len > 3:
+            temp = np.delete(sampled_instances,2,3)
+            temp = np.delete(temp,1,3)
+            temp = temp.reshape(temp.shape[0]*160,160)
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+        elif sampled_instances_shape_len == 3:
+            temp = sampled_instances.reshape(sampled_instances.shape[0]*160,160)
+            np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
+        elif sampled_instances_shape_len == 2:
+            np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instances, delimiter=",")
+        end = time.time()
+        print('classifier_fn: LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
+
+        # calling ROS C++ node
+        #print('\nC++ node started')
+
+        start = time.time()
+        # start perturbed_node_image ROS C++ node
+        Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
+
+        # Wait until perturb_node_image is finished
+        #rospy.wait_for_service("/perturb_node_image/finished")
+
+        time.sleep(0.35)
+        
+        # kill ROS node
+        #Popen(shlex.split('rosnode kill /perturb_node_image'))
+        
+        end = time.time()
+        print('classifier_fn: REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
+
+        #print('\nC++ node ended')
+
+        start = time.time()
+        # load local path planner's outputs
+        # load command velocities - output from local planner
+        cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
+        #print('cmd_vel_perturb = ', cmd_vel_perturb)
+
+        # load local plans - output from local planner
+        local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
+        #print('local_plans = ', local_plans)
+
+        # load transformed global plan to /odom frame
+        transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
+        #print('transformed_plan = ', transformed_plan)
+
+        end = time.time()
+        print('classifier_fn: RESULTS LOADING RUNTIME = ', round(end-start,3))
+
+        # plot local planner outputs for every perturbation
+        if self.plot_classifier_bool:
+            self.plot_classifier(transformed_plan, local_plans, sampled_instances, sample_size)
+
+        local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
+
+        start = time.time()
+        #transformed_plan = np.array(transformed_plan)
+
+        # fill in deviation dataframe
+        # transform transformed_plan to list
+        transformed_plan_xs = []
+        transformed_plan_ys = []
+        for i in range(0, transformed_plan.shape[0]):
+            transformed_plan_xs.append(transformed_plan[i, 0])
+            transformed_plan_ys.append(transformed_plan[i, 1])
+        
+        for i in range(0, sample_size):
+            #print('i = ', i)
+            
+            # transform the current local_plan to list
+            local_plan = (local_plans.loc[local_plans['ID'] == i])
+            local_plan = np.array(local_plan)
+            #if i == 0:
+            #    local_plan = np.array(self.local_plan)
+            #else:
+            #    local_plan = np.array(local_plan)
+            if local_plan.shape[0] == 0:
+                local_plan_deviation.iloc[i, 0] = 0.0
+                continue
+            local_plan_xs = []
+            local_plan_ys = []
+            for j in range(0, local_plan.shape[0]):
+                local_plan_xs.append(local_plan[j, 0])
+                local_plan_ys.append(local_plan[j, 1])
+            
+            # find deviation as a sum of minimal point-to-point differences
+            diff_x = 0
+            diff_y = 0
+            devs = []
+            for j in range(0, local_plan.shape[0]):
+                local_diffs = []
+                for k in range(0, len(transformed_plan)):
+                    #diff_x = (local_plans_local[j, 0] - transformed_plan[k, 0]) ** 2
+                    #diff_y = (local_plans_local[j, 1] - transformed_plan[k, 1]) ** 2
+                    diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
+                    diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+                    diff = math.sqrt(diff_x + diff_y)
+                    local_diffs.append(diff)                        
+                devs.append(min(local_diffs))   
+            local_plan_deviation.iloc[i, 0] = sum(devs)
+        end = time.time()
+        print('classifier_fn: TARGET CALC RUNTIME = ', round(end-start,3))
+        
+        if self.publish_explanation_coeffs_bool:
+            self.original_deviation = local_plan_deviation.iloc[0, 0]
+            #print('\noriginal_deviation = ', self.original_deviation)
+
+        cmd_vel_perturb['deviate'] = local_plan_deviation
+        
+        # return local_plan_deviation
+        return np.array(cmd_vel_perturb.iloc[:, 3:])
 
 def main():
     # ----------main-----------

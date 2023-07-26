@@ -10,7 +10,6 @@ import shlex
 from psutil import Popen
 import math
 from functools import partial
-from sklearn.utils import check_random_state
 import sklearn.metrics
 import os
 from sensor_msgs.msg import Image
