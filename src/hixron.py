@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
-from geometry_msgs.msg import PolygonStamped, PoseWithCovarianceStamped, PoseStamped, Pose
+from geometry_msgs.msg import PolygonStamped, PoseWithCovariance, PoseWithCovarianceStamped, PoseStamped, Pose
 import rospy
 import numpy as np
 from matplotlib import pyplot as plt
@@ -181,16 +181,19 @@ class hixron(object):
         self.tf_map_odom = []
 
         # robot variables
-        self.robot_position_map = Point(0.0,0.0,0.0)        
-        self.robot_orientation_map = Quaternion(0.0,0.0,0.0,1.0)
-        self.robot_position_odom = Point(0.0,0.0,0.0)        
-        self.robot_orientation_odom = Quaternion(0.0,0.0,0.0,1.0)
+        #self.robot_position_map = Point(0.0,0.0,0.0)        
+        #self.robot_orientation_map = Quaternion(0.0,0.0,0.0,1.0)
+        #self.robot_position_odom = Point(0.0,0.0,0.0)        
+        #self.robot_orientation_odom = Quaternion(0.0,0.0,0.0,1.0)
+        self.robot_pose_map = Pose()
+        self.robot_pose_odom = Pose()
         self.footprint = []  
 
         # plans' variables
         self.local_plan = []
         self.global_plan_current = Path() 
         self.global_plan_history = []
+        self.globalPlan_goalPose_indices_history = []
 
         # deviation & failure variables
         self.global_plans_deviation = False
@@ -336,8 +339,9 @@ class hixron(object):
     def odom_callback(self, msg):
         #print('odom_callback')
         
-        self.robot_position_odom = msg.pose.pose.position
-        self.robot_orientation_odom = msg.pose.pose.orientation
+        #self.robot_position_odom = msg.pose.pose.position
+        #self.robot_orientation_odom = msg.pose.pose.orientation
+        self.robot_pose_odom = msg.pose
         self.robot_twist_linear = msg.twist.twist.linear
         self.robot_twist_angular = msg.twist.twist.angular
 
@@ -345,9 +349,10 @@ class hixron(object):
     def amcl_callback(self, msg):
         #print('amcl_callback')
 
-        self.robot_position_map = msg.pose.pose.position
-        self.robot_orientation_map = msg.pose.pose.orientation
-
+        #self.robot_position_map = msg.pose.pose.position
+        #self.robot_orientation_map = msg.pose.pose.orientation
+        self.robot_pose_map = msg.pose.pose
+        
     # goal pose callback
     def goal_pose_callback(self, msg):
         print('goal_pose_callback')
@@ -372,9 +377,11 @@ class hixron(object):
     def global_plan_callback(self, msg):
         print('\nglobal_plan_callback!')
         
-        # save global plan to 
+        # save global plan to class vars
         self.global_plan_current = msg    
         self.global_plan_history.append(self.global_plan_current)
+
+        self.globalPlan_goalPose_indices_history.append([len(self.global_plan_history), len(self.goal_pose_history)])
         
         # test if there is deviation between current and previous
         self.global_plans_deviation = False
@@ -410,6 +417,9 @@ class hixron(object):
             
             # create semantic data
             self.create_semantic_data()
+
+            #if self.global_plans_deviation:
+            #    self.explain_global_deviation()
 
             # increase the global counter (needed for plotting numeration)
             self.counter_global += 1        
@@ -653,68 +663,68 @@ class hixron(object):
             update_custom = False
 
             for i in range(0, self.ontology.shape[0]):
-                # if the object has some affordance (etc. movability, openability), then it may have changed its position 
-                if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
-                    # get the object's new position from Gazebo
-                    obj_gazebo_name = self.ontology[i][1]
-                    obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
-                    obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
-                    obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
+                ## if the object has some affordance (etc. movability, openability), then it may have changed its position 
+                #if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
+                # get the object's new position from Gazebo
+                obj_gazebo_name = self.ontology[i][1]
+                obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
+                obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
+                obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
 
-                    obj_x_size = copy.deepcopy(self.ontology[i][5])
-                    obj_y_size = copy.deepcopy(self.ontology[i][6])
+                obj_x_size = copy.deepcopy(self.ontology[i][5])
+                obj_y_size = copy.deepcopy(self.ontology[i][6])
 
-                    obj_x_current = self.ontology[i][3]
-                    obj_y_current = self.ontology[i][4]
+                obj_x_current = self.ontology[i][3]
+                obj_y_current = self.ontology[i][4]
 
-                    if update_custom == False:
+                if update_custom == False:
+                    # check whether the (centroid) coordinates of the object are changed (enough)
+                    diff_x = abs(obj_x_new - obj_x_current)
+                    diff_y = abs(obj_y_new - obj_y_current)
+                    if diff_x > obj_x_size or diff_y > obj_y_size:
+                        #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                        self.ontology[i][3] = obj_x_new
+                        self.ontology[i][4] = obj_y_new
+                
+                else:
+                    # update ontology
+                    # almost every object type in Gazebo has a different center of mass
+                    if 'table' in obj_gazebo_name:
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
+                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
+                        if diff_x > self.ontology.shape[6] or diff_y > self.ontology.shape[7]:
+                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                            self.ontology[i][3] = obj_x_new + 0.5*obj_x_size
+                            self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
+                    elif 'wardrobe' in obj_gazebo_name:
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - 0.5*obj_x_size - obj_x_current)
+                        diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
+                        if diff_x > 0.1 or diff_y > 0.1:
+                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                            self.ontology[i][3] = obj_x_new - 0.5*obj_x_size
+                            self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
+                    elif 'door' in obj_gazebo_name:
                         # check whether the (centroid) coordinates of the object are changed (enough)
                         diff_x = abs(obj_x_new - obj_x_current)
                         diff_y = abs(obj_y_new - obj_y_current)
-                        if diff_x > obj_x_size or diff_y > obj_y_size:
+                        if diff_x > 0.1 or diff_y > 0.1:
+                            # if the doors are opened/closed they are shifted for 90 degrees
+                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                            self.ontology[i][5] = obj_y_size
+                            self.ontology[i][6] = obj_x_size
+
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new 
+                    else:
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > 0.1 or diff_y > 0.1:
                             #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
                             self.ontology[i][3] = obj_x_new
-                            self.ontology[i][4] = obj_y_new
-                    
-                    else:
-                        # update ontology
-                        # almost every object type in Gazebo has a different center of mass
-                        if 'table' in obj_gazebo_name:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new + 0.5*obj_x_size - obj_x_current)
-                            diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                            if diff_x > self.ontology.shape[6] or diff_y > self.ontology.shape[7]:
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][3] = obj_x_new + 0.5*obj_x_size
-                                self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
-                        elif 'wardrobe' in obj_gazebo_name:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - 0.5*obj_x_size - obj_x_current)
-                            diff_y = abs(obj_y_new - 0.5*obj_y_size - obj_y_current)
-                            if diff_x > 0.1 or diff_y > 0.1:
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][3] = obj_x_new - 0.5*obj_x_size
-                                self.ontology[i][4] = obj_y_new - 0.5*obj_y_size 
-                        elif 'door' in obj_gazebo_name:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - obj_x_current)
-                            diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > 0.1 or diff_y > 0.1:
-                                # if the doors are opened/closed they are shifted for 90 degrees
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][5] = obj_y_size
-                                self.ontology[i][6] = obj_x_size
-
-                                self.ontology[i][3] = obj_x_new
-                                self.ontology[i][4] = obj_y_new 
-                        else:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - obj_x_current)
-                            diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > 0.1 or diff_y > 0.1:
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][3] = obj_x_new
-                                self.ontology[i][4] = obj_y_new 
+                            self.ontology[i][4] = obj_y_new 
 
         # real world or simulation relying on object detection
         elif self.simulation == False:
@@ -1325,6 +1335,53 @@ class hixron(object):
             pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
             pc2.header.stamp = rospy.Time.now()
             self.pub_explanation_layer.publish(pc2)
+
+    # explain deviation between two global plans
+    def explain_global_deviation(self):
+        # check if the last two global plans have the same goal pose
+        same_goal_pose = False
+        if len(self.globalPlan_goalPose_indices_history) > 1:
+            if self.globalPlan_goalPose_indices_history[-1][1] == self.globalPlan_goalPose_indices_history[-2][1]:
+                same_goal_pose = True
+
+        # find the objects/obstacles of interest
+        x_min = 0
+        y_min = 0
+        x_max = 0
+        y_max = 0
+        
+        if same_goal_pose:
+            goal_pose = self.goal_pose_current #self.goal_pose_history[-1]
+            robot_pose = self.robot_pose_map
+
+            x_min = min(robot_pose.position.x, goal_pose.position.x)
+            x_max = max(robot_pose.position.x, goal_pose.position.x)
+            y_min = min(robot_pose.position.y, goal_pose.position.y)
+            y_max = max(robot_pose.position.y, goal_pose.position.y)
+            print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+            
+            d_x = x_max - x_min
+            d_y = y_max - y_min
+            
+            objects_of_interest = []
+            if d_x >= d_y:
+                for i in range(0, self.ontology.shape[0]):
+                    x_obj = self.ontology[i][3]
+                    y_obj = self.ontology[i][4]
+                    print('(x_obj, y_obj) = ', (x_obj, y_obj))
+                    if x_obj > x_min and x_obj < x_max:
+                        objects_of_interest.append(self.ontology[i])
+            else:
+                for i in range(0, self.ontology.shape[0]):
+                    x_obj = self.ontology[i][3]
+                    y_obj = self.ontology[i][4]
+                    print('(x_obj, y_obj) = ', (x_obj, y_obj))
+                    if y_obj > y_min and y_obj < y_max:
+                        objects_of_interest.append(self.ontology[i])
+            print('There are ' + str(len(objects_of_interest)) + ' objects of interest!!!')
+        
+        else:
+            print('New goal chosen!!!')
 
 def main():
     # ----------main-----------
