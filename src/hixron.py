@@ -31,70 +31,68 @@ from sklearn.linear_model import Ridge, lars_path
 from sklearn.utils import check_random_state
 import sklearn.metrics
 
+class klasa(object):
+    def what_to_explain(control_param, locality_param):
+        """
+        what_to_explain does blah blah blah.
 
-def what_to_explain(control_param, locality_param):
-    """
-    what_to_explain does blah blah blah.
+        :control_param: decodes what to explain:
+            1. immediate robot action - only localvsglobal
+            2. current contextualised robot action/behavior - more localvsglobal or globalvsglobal
+            3. navigation history so far - both + some more info
+            4. complete trajectory after reaching goal - 3 scoped on the whole start-goal navigation
+        :return: wanted explanation
+        """ 
+        if control_param == 1:
+            pass
+        elif control_param == 2:
+            pass
+        elif control_param == 3:
+            pass
+        elif control_param == 4:
+            pass
 
-    :control_param: decodes what to explain:
-        1. immediate robot action - only localvsglobal
-        2. current contextualised robot action/behavior - more localvsglobal or globalvsglobal
-        3. navigation history so far - both + some more info
-        4. complete trajectory after reaching goal - 3 scoped on the whole start-goal navigation
-    :return: wanted explanation
-    """ 
-    if control_param == 1:
+    def when_to_explain(control_param):
+        """
+        when_to_explain does blah blah blah.
+
+        :control_param: decodes what to explain:
+            1. every time step
+            2. when human is detected
+            3. when human is need
+            4. when human asks a question
+        :return: wanted explanation
+        """ 
         pass
-    elif control_param == 2:
+
+    def how_to_explain(control_param):
+        """
+        how_to_explain does blah blah blah.
+
+        :control_param: decodes what to explain:
+            1. visual
+            2. textual
+            3. verbal
+            4. visual + textual
+            5. visual + verbal
+            6. textual + verbal
+            7. visual+textual+verbal
+        :return: wanted explanation
+        """ 
         pass
-    elif control_param == 3:
+
+    def how_long_to_explain(control_param):
+
+        """
+        how_long_to_explain does blah blah blah.
+
+        :control_param: decodes what to explain:
+            1. until current action is finished
+            2. until human need is fulfilled
+            3. until human finishes discussion
+        :return: wanted explanation
+        """
         pass
-    elif control_param == 4:
-        pass
-
-def when_to_explain(control_param):
-    """
-    when_to_explain does blah blah blah.
-
-    :control_param: decodes what to explain:
-        1. every time step
-        2. when human is detected
-        3. when human is need
-        4. when human asks a question
-    :return: wanted explanation
-    """ 
-    pass
-
-def how_to_explain(control_param):
-    """
-    how_to_explain does blah blah blah.
-
-    :control_param: decodes what to explain:
-        1. visual
-        2. textual
-        3. verbal
-        4. visual + textual
-        5. visual + verbal
-        6. textual + verbal
-        7. visual+textual+verbal
-    :return: wanted explanation
-    """ 
-    pass
-
-def how_long_to_explain(control_param):
-
-    """
-    how_long_to_explain does blah blah blah.
-
-    :control_param: decodes what to explain:
-        1. until current action is finished
-        2. until human need is fulfilled
-        3. until human finishes discussion
-    :return: wanted explanation
-    """
-    pass
-
-
 
 class LimeBase(object):
     def __init__(self,
@@ -366,6 +364,9 @@ class hixron(object):
         self.simulation = True
 
         self.use_lime = False
+        self.changed_position_value = -1
+        self.hidden_plan = Path()
+        self.hidden_plan_bool = False
 
         # whether to plot
         self.plot_local_costmap_bool = False
@@ -918,71 +919,121 @@ class hixron(object):
     # update ontology
     def update_ontology(self):
         # check if any object changed its position from simulation or from object detection (and tracking)
-        self.changed_position_value = -1
 
         # simulation relying on Gazebo
         if self.simulation:
-            respect_mass_centre = True
-
+            multiplication_factor = 0.2
             for i in range(0, self.ontology.shape[0]):
                 # if the object has some affordance (etc. movability, openability), then it may have changed its position 
-                if self.ontology[i][7] == 1 or self.ontology[i][8] == 1:
-                # get the object's new position from Gazebo
+                if self.ontology[i][7] == 1:
+                    # get the object's new position from Gazebo
                     obj_gazebo_name = self.ontology[i][1]
                     obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
+                    
                     obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
                     obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
 
                     obj_x_size = copy.deepcopy(self.ontology[i][5])
                     obj_y_size = copy.deepcopy(self.ontology[i][6])
 
+                    mass_centre = self.ontology[i][9]
+
                     obj_x_current = self.ontology[i][3]
                     obj_y_current = self.ontology[i][4]
 
-                    if respect_mass_centre == False:
+                    # update ontology
+                    # almost every object type in Gazebo has a different center of mass
+                    if mass_centre == 'tr':
+                        # top-right is the mass centre
+                        obj_x_new -= 0.5*obj_x_size
+                        obj_y_new -= 0.5*obj_y_size
                         # check whether the (centroid) coordinates of the object are changed (enough)
                         diff_x = abs(obj_x_new - obj_x_current)
                         diff_y = abs(obj_y_new - obj_y_current)
-                        if diff_x > obj_x_size or diff_y > obj_y_size:
-                            #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                    
-                    else:
-                        # update ontology
-                        # almost every object type in Gazebo has a different center of mass
-                        if 'chair' in obj_gazebo_name:
-                            # top-right is the mass centre
-                            obj_x_new -= 0.5*obj_x_size
-                            obj_y_new -= 0.5*obj_y_size
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - obj_x_current)
-                            diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > 0.5*obj_x_size or diff_y > 0.5*obj_y_size:
-                                self.ontology[i][3] = obj_x_new
-                                self.ontology[i][4] = obj_y_new
-                                self.changed_position_value = self.ontology[i][0]
+                            self.changed_position_value = self.ontology[i][0]
 
-                        elif 'bookshelf' in obj_gazebo_name:
-                            # top-right is the mass centre
-                            obj_x_new += 0.5*obj_x_size
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - obj_x_current)
-                            diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > obj_x_size or diff_y > obj_y_size:
-                                self.ontology[i][3] = obj_x_new
-                                self.ontology[i][4] = obj_y_new
-                                self.changed_position_value = self.ontology[i][0]
+                    elif mass_centre == 'r':
+                        # right is the mass centre
+                        obj_x_new -= 0.5*obj_x_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+                            self.changed_position_value = self.ontology[i][0]
 
-                        else:
-                            # check whether the (centroid) coordinates of the object are changed (enough)
-                            diff_x = abs(obj_x_new - obj_x_current)
-                            diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > 0.5*obj_x_size or diff_y > 0.5*obj_y_size:
-                                #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
-                                self.ontology[i][3] = obj_x_new
-                                self.ontology[i][4] = obj_y_new 
-                                self.changed_position_value = self.ontology[i][0]
+                    elif mass_centre == 'br':
+                        # bottom-right is the mass centre
+                        obj_x_new -= 0.5*obj_x_size
+                        obj_y_new += 0.5*obj_y_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+                            self.changed_position_value = self.ontology[i][0]
+
+                    elif mass_centre == 'b':
+                        # bottom is the mass centre
+                        obj_y_new += 0.5*obj_y_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+                            self.changed_position_value = self.ontology[i][0]#
+
+                    elif mass_centre == 'bl':
+                        # bottom-left is the mass centre
+                        obj_x_new += 0.5*obj_x_size
+                        obj_y_new += 0.5*obj_y_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+                            self.changed_position_value = self.ontology[i][0]
+
+                    elif mass_centre == 'l':
+                        # left is the mass centre
+                        obj_x_new += 0.5*obj_x_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+                            self.changed_position_value = self.ontology[i][0]
+
+                    elif mass_centre == 'tl':
+                        # top-left is the mass centre
+                        obj_x_new += 0.5*obj_x_size
+                        obj_y_new -= 0.5*obj_y_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+                            self.changed_position_value = self.ontology[i][0]
+
+                    elif mass_centre == 't':
+                        # top is the mass centre
+                        obj_y_new -= 0.5*obj_y_size
+                        # check whether the (centroid) coordinates of the object are changed (enough)
+                        diff_x = abs(obj_x_new - obj_x_current)
+                        diff_y = abs(obj_y_new - obj_y_current)
+                        if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
+                            self.ontology[i][3] = obj_x_new
+                            self.ontology[i][4] = obj_y_new
+                            self.changed_position_value = self.ontology[i][0]
 
         # real world or simulation relying on object detection
         elif self.simulation == False:
@@ -1594,7 +1645,8 @@ class hixron(object):
     # test whether explanation is n eeded
     def test_explain(self):
         # test if there is deviation between current and previous
-        self.deviation_between_global_plan = False
+        self.deviation_between_global_plans = False
+        deviation_threshold = 15.0
         
         if len(self.global_plan_history) > 1:
             global_plan_previous = self.global_plan_history[-2]
@@ -1607,29 +1659,39 @@ class hixron(object):
                 local_dev = dev_x**2 + dev_y**2
                 global_dev += local_dev
             global_dev = math.sqrt(global_dev)
+            #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
         
-            if global_dev > 10.0:
+            if global_dev > deviation_threshold:
                 print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
-                self.deviation_between_global_plan = True
+                self.deviation_between_global_plans = True
 
         if self.use_lime == False:
             self.explain_global_without_lime()
 
-        elif self.deviation_between_global_plan and self.use_lime:
+        elif self.deviation_between_global_plans and self.use_lime:
             self.explain_global_deviation()
 
     # explain without using lime, rely only on ontology and perception
     def explain_global_without_lime(self):
+        color_schemes = ['only_red', 'red_nuanced', 'green_and_red']
+        color_scheme = color_schemes[2]
+
+        shape_schemes = ['wo_text', 'with_text']
+        shape_scheme = shape_schemes[0]
+
+        path_schemes = ['full_line', 'arrows']
+        path_scheme = path_schemes[0]
+
         # define local explanation window around robot
-        around_robot_size_x = 2.0
-        around_robot_size_y = 2.0
+        around_robot_size_x = 2.5
+        around_robot_size_y = 2.5
 
         # create the RGB explanation matrix of the same size as semantic map
         explanation_size_x = self.global_semantic_map_size[0]
         explanation_size_y = self.global_semantic_map_size[1]
         explanation_R = np.zeros((explanation_size_x, explanation_size_y))
-        explanation_R[:,:] = 120.0
-        explanation_R[self.global_semantic_map > 0] = 180.0
+        explanation_R[:,:] = 120.0 # free space
+        explanation_R[self.global_semantic_map > 0] = 180.0 # obstacle
         explanation_G = copy.deepcopy(explanation_R) #np.zeros((explanation_size_x, explanation_size_y))
         explanation_B = copy.deepcopy(explanation_R) #np.zeros((explanation_size_x, explanation_size_y))
 
@@ -1641,6 +1703,46 @@ class hixron(object):
         y_max = robot_pose.position.y + around_robot_size_y
         #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
 
+        if color_scheme == color_schemes[1]:
+            x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+            y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+            c_x_pixel = int(0.5*(x_min_pixel + x_max_pixel)+1)
+            c_y_pixel = int(0.5*(y_min_pixel + y_max_pixel)+1)
+            d_x = x_max_pixel - x_min_pixel
+            d_y = y_max_pixel - y_min_pixel
+
+            explanation_G[explanation_R == 180] = 0 # turn gray obstacles to red
+            explanation_B[explanation_R == 180] = 0 # turn gray obstacles to red
+            
+            explanation_R[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 240
+            
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 190
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 190
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 190
+            explanation_R[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 190
+            
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 140
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 140
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 140
+            explanation_R[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 140
+            
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 90
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 90
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 90
+            explanation_R[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 90
+            
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 40
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 40
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 40
+            explanation_R[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 40
+
+            explanation_R[explanation_G == 120] = 120 # return the whole free space to original values
+
+            explanation_G[explanation_R == 180] = 180 # return obstacles that are not affacted to gray
+            explanation_B[explanation_R == 180] = 180 # return obstacles that are not affacted to gray
+
         neighborhood_objects_IDs = []
         for i in range(0, self.ontology.shape[0]):
             x_obj = self.ontology[i][3]
@@ -1650,14 +1752,15 @@ class hixron(object):
                 value = self.ontology[i][0]
                 neighborhood_objects_IDs.append(value)
 
-                if self.ontology[i][7] == 0:
-                    explanation_R[self.global_semantic_map == value] = 0
-                    explanation_G[self.global_semantic_map == value] = 255
-                    explanation_B[self.global_semantic_map == value] = 0
-                elif self.ontology[i][7] == 1:
-                    explanation_R[self.global_semantic_map == value] = 255
-                    explanation_G[self.global_semantic_map == value] = 255
-                    explanation_B[self.global_semantic_map == value] = 0
+                if color_scheme == color_schemes[2]:
+                    if self.ontology[i][7] == 0:
+                        explanation_R[self.global_semantic_map == value] = 0
+                        explanation_G[self.global_semantic_map == value] = 255
+                        explanation_B[self.global_semantic_map == value] = 0
+                    elif self.ontology[i][7] == 1:
+                        explanation_R[self.global_semantic_map == value] = 255
+                        explanation_G[self.global_semantic_map == value] = 255
+                        explanation_B[self.global_semantic_map == value] = 0
 
         # check if the last two global plans have the same goal pose
         same_goal_pose = False
@@ -1665,15 +1768,43 @@ class hixron(object):
             if self.globalPlan_goalPose_indices_history[-1][1] == self.globalPlan_goalPose_indices_history[-2][1]:
                 same_goal_pose = True
 
-        if same_goal_pose:
+        if same_goal_pose == False:
+            print('New goal chosen!!!')
+            self.hidden_plan_bool = False
+
+        if self.deviation_between_global_plans and same_goal_pose:
+            self.hidden_plan = copy.deepcopy(self.global_plan_history[-2])
+            self.hidden_plan_bool = True
             if self.changed_position_value > 0 and self.changed_position_value in neighborhood_objects_IDs:
                 value = self.changed_position_value
                 explanation_R[self.global_semantic_map == value] = 255
                 explanation_G[self.global_semantic_map == value] = 0
-                explanation_B[self.global_semantic_map == value] = 0
+                explanation_B[self.global_semantic_map == value] = 0        
 
-        else:
-            print('New goal chosen!!!')            
+        # plot old plan as a hidden one
+        if self.hidden_plan_bool == True:
+            for i in range(0, len(self.hidden_plan.poses)):
+                x_map = self.hidden_plan.poses[i].pose.position.x
+                y_map = self.hidden_plan.poses[i].pose.position.y
+
+                x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                explanation_R[y_pixel, x_pixel] = 150
+                explanation_G[y_pixel, x_pixel] = 150
+                explanation_B[y_pixel, x_pixel] = 150
+
+        # plot new (current) plan
+        for i in range(0, len(self.global_plan_current.poses)):
+            x_map = self.global_plan_current.poses[i].pose.position.x
+            y_map = self.global_plan_current.poses[i].pose.position.y
+
+            x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+            explanation_R[y_pixel, x_pixel] = 0
+            explanation_G[y_pixel, x_pixel] = 0
+            explanation_B[y_pixel, x_pixel] = 255
 
         explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
 
