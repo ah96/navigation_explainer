@@ -29,6 +29,7 @@ import shlex
 from psutil import Popen
 from sklearn.linear_model import Ridge, lars_path
 from sklearn.utils import check_random_state
+import sklearn.metrics
 
 
 def what_to_explain(control_param, locality_param):
@@ -1671,9 +1672,9 @@ class hixron(object):
             num_features=100000
             feature_selection='auto'
 
-            start = time.time()
+            #start = time.time()
             # find explanation
-            ret_exp = ImageExplanation(self.local_map, self.semantic_map, self.object_affordance_pairs, self.ontology)
+            ret_exp = ImageExplanation(self.global_semantic_map, self.global_semantic_map, self.object_affordance_pairs_global, self.ontology)
             if top_labels:
                 top = np.argsort(self.labels[0])[-top_labels:]
                 ret_exp.top_labels = list(top)
@@ -1686,18 +1687,18 @@ class hixron(object):
                     self.data, self.labels, self.distances, label, num_features,
                     model_regressor=model_regressor,
                     feature_selection=feature_selection)
-            end = time.time()
-            print('\nMODEL FITTING TIME = ', round(end-start,3))
+            #end = time.time()
+            #print('\nMODEL FITTING TIME = ', round(end-start,3))
 
-            start = time.time()
+            #start = time.time()
             # get explanation image
             self.outputs, self.exp, self.weights, self.rgb_values = ret_exp.get_image_and_mask(label=0)
-            end = time.time()
-            print('\nGET EXP PIC TIME = ', round(end-start,3))
+            #end = time.time()
+            #print('\nGET EXP PIC TIME = ', round(end-start,3))
             print('exp: ', self.exp)
                 
         else:
-                print('New goal chosen!!!')
+            print('New goal chosen!!!')
 
     # get labels for perturbed data
     def get_labels(self):
@@ -1732,26 +1733,29 @@ class hixron(object):
 
             imgs.append(temp)
 
-        dirCurr = self.global_perturbation_dir + '/' + str(self.counter_global)
-        try:
-            os.mkdir(dirCurr)
-        except FileExistsError:
-            pass
+        
+        plot_perturbations = False
+        if plot_perturbations:
+            dirCurr = self.global_perturbation_dir + '/' + str(self.counter_global)
+            try:
+                os.mkdir(dirCurr)
+            except FileExistsError:
+                pass
 
-        for i in range(0, len(imgs)):
-            fig = plt.figure(frameon=False)
-            w = 1.6 * 3
-            h = 1.6 * 3
-            fig.set_size_inches(w, h)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            pert_img = np.flipud(imgs[i]) 
-            ax.imshow(pert_img.astype('float64'), aspect='auto')
-            fig.savefig(dirCurr + '/perturbation_' + str(i) + '.png', transparent=False)
-            fig.clf()
-            
-            pd.DataFrame(pert_img).to_csv(dirCurr + '/perturbation_' + str(i) + '.csv', index=False)#, header=False)    
+            for i in range(0, len(imgs)):
+                fig = plt.figure(frameon=False)
+                w = 1.6 * 3
+                h = 1.6 * 3
+                fig.set_size_inches(w, h)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+                pert_img = np.flipud(imgs[i]) 
+                ax.imshow(pert_img.astype('float64'), aspect='auto')
+                fig.savefig(dirCurr + '/perturbation_' + str(i) + '.png', transparent=False)
+                fig.clf()
+                
+                pd.DataFrame(pert_img).to_csv(dirCurr + '/perturbation_' + str(i) + '.csv', index=False)#, header=False)    
 
         # call predictor and store labels
         if len(imgs) > 0:
@@ -1782,7 +1786,7 @@ class hixron(object):
     # call the planner and get outputs for perturbed inputs
     def call_planner(self, sampled_instances):
         # save perturbations for the local planner
-        start = time.time()
+        #start = time.time()
         sampled_instances_shape_len = len(sampled_instances.shape)
         sample_size = 1 if sampled_instances_shape_len == 2 else sampled_instances.shape[0]
         print('sample_size = ', sample_size)
@@ -1797,13 +1801,13 @@ class hixron(object):
             np.savetxt(self.dirCurr + '/src/teb_local_planner/src/Data/costmap_data.csv', temp, delimiter=",")
         elif sampled_instances_shape_len == 2:
             np.savetxt(self.dirCurr + 'src/teb_local_planner/src/Data/costmap_data.csv', sampled_instances, delimiter=",")
-        end = time.time()
-        print('classifier_fn: LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
+        #end = time.time()
+        #print('classifier_fn: LOCAL PLANNER DATA PREPARATION RUNTIME = ', round(end-start,3))
 
         # calling ROS C++ node
         #print('\nC++ node started')
 
-        start = time.time()
+        #start = time.time()
         # start perturbed_node_image ROS C++ node
         Popen(shlex.split('rosrun teb_local_planner perturb_node_image'))
 
@@ -1815,90 +1819,102 @@ class hixron(object):
         # kill ROS node
         #Popen(shlex.split('rosnode kill /perturb_node_image'))
         
-        end = time.time()
-        print('classifier_fn: REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
+        #end = time.time()
+        #print('classifier_fn: REAL LOCAL PLANNER RUNTIME = ', round(end-start,3))
 
         #print('\nC++ node ended')
 
+        
+        # load local path planner's outputsstart = time.time()
         start = time.time()
-        # load local path planner's outputs
         # load command velocities - output from local planner
-        cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
+        #cmd_vel_perturb = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/cmd_vel.csv')
         #print('cmd_vel_perturb = ', cmd_vel_perturb)
 
         # load local plans - output from local planner
-        local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
+        #local_plans = pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/local_plans.csv')
         #print('local_plans = ', local_plans)
 
         # load transformed global plan to /odom frame
-        transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
+        #transformed_plan = np.array(pd.read_csv(self.dirCurr + '/src/teb_local_planner/src/Data/transformed_plan.csv'))
         #print('transformed_plan = ', transformed_plan)
 
-        end = time.time()
-        print('classifier_fn: RESULTS LOADING RUNTIME = ', round(end-start,3))
+        #end = time.time()
+        #print('classifier_fn: RESULTS LOADING RUNTIME = ', round(end-start,3))
 
-        # plot local planner outputs for every perturbation
-        if self.plot_classifier_bool:
-            self.plot_classifier(transformed_plan, local_plans, sampled_instances, sample_size)
-
-        local_plan_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
+        global_plans_deviation = pd.DataFrame(-1.0, index=np.arange(sample_size), columns=['deviate'])
 
         start = time.time()
         #transformed_plan = np.array(transformed_plan)
 
         # fill in deviation dataframe
         # transform transformed_plan to list
-        transformed_plan_xs = []
-        transformed_plan_ys = []
-        for i in range(0, transformed_plan.shape[0]):
-            transformed_plan_xs.append(transformed_plan[i, 0])
-            transformed_plan_ys.append(transformed_plan[i, 1])
+        #transformed_plan_xs = []
+        #transformed_plan_ys = []
+        #for i in range(0, transformed_plan.shape[0]):
+        #    transformed_plan_xs.append(transformed_plan[i, 0])
+        #    transformed_plan_ys.append(transformed_plan[i, 1])
         
-        for i in range(0, sample_size):
+        #for i in range(0, sample_size):
             #print('i = ', i)
             
             # transform the current local_plan to list
-            local_plan = (local_plans.loc[local_plans['ID'] == i])
-            local_plan = np.array(local_plan)
+        #    local_plan = (local_plans.loc[local_plans['ID'] == i])
+        #    local_plan = np.array(local_plan)
             #if i == 0:
             #    local_plan = np.array(self.local_plan)
             #else:
             #    local_plan = np.array(local_plan)
-            if local_plan.shape[0] == 0:
-                local_plan_deviation.iloc[i, 0] = 0.0
-                continue
-            local_plan_xs = []
-            local_plan_ys = []
-            for j in range(0, local_plan.shape[0]):
-                local_plan_xs.append(local_plan[j, 0])
-                local_plan_ys.append(local_plan[j, 1])
+        #    if local_plan.shape[0] == 0:
+        #        global_plans_deviation.iloc[i, 0] = 0.0
+        #        continue
+        #    local_plan_xs = []
+        #    local_plan_ys = []
+        #    for j in range(0, local_plan.shape[0]):
+        #        local_plan_xs.append(local_plan[j, 0])
+        #        local_plan_ys.append(local_plan[j, 1])
             
             # find deviation as a sum of minimal point-to-point differences
-            diff_x = 0
-            diff_y = 0
-            devs = []
-            for j in range(0, local_plan.shape[0]):
-                local_diffs = []
-                for k in range(0, len(transformed_plan)):
+        #    diff_x = 0
+        #    diff_y = 0
+        #    devs = []
+        #    for j in range(0, local_plan.shape[0]):
+        #        local_diffs = []
+        #        for k in range(0, len(transformed_plan)):
                     #diff_x = (local_plans_local[j, 0] - transformed_plan[k, 0]) ** 2
                     #diff_y = (local_plans_local[j, 1] - transformed_plan[k, 1]) ** 2
-                    diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
-                    diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
-                    diff = math.sqrt(diff_x + diff_y)
-                    local_diffs.append(diff)                        
-                devs.append(min(local_diffs))   
-            local_plan_deviation.iloc[i, 0] = sum(devs)
-        end = time.time()
-        print('classifier_fn: TARGET CALC RUNTIME = ', round(end-start,3))
+        #            diff_x = (local_plan_xs[j] - transformed_plan_xs[k]) ** 2
+        #            diff_y = (local_plan_ys[j] - transformed_plan_ys[k]) ** 2
+        #            diff = math.sqrt(diff_x + diff_y)
+        #            local_diffs.append(diff)                        
+        #        devs.append(min(local_diffs))   
+        #    global_plans_deviation.iloc[i, 0] = sum(devs)
+        #end = time.time()
+        #print('classifier_fn: TARGET CALC RUNTIME = ', round(end-start,3))
         
-        if self.publish_explanation_coeffs_bool:
-            self.original_deviation = local_plan_deviation.iloc[0, 0]
-            #print('\noriginal_deviation = ', self.original_deviation)
+        #if self.publish_explanation_coeffs_bool:
+        #    self.original_deviation = global_plans_deviation.iloc[0, 0]
+        #    #print('\noriginal_deviation = ', self.original_deviation)
 
-        cmd_vel_perturb['deviate'] = local_plan_deviation
+        #cmd_vel_perturb['deviate'] = global_plans_deviation
         
-        # return local_plan_deviation
-        return np.array(cmd_vel_perturb.iloc[:, 3:])
+        # return global_plans_deviation
+        #return np.array(cmd_vel_perturb.iloc[:, 3:])
+        return 0
+
+    # create distances between the instance of interest and perturbations
+    def create_distances(self):
+        #start = time.time()
+        # find distances
+        # distance_metric = 'jaccard' - alternative distance metric
+        distance_metric='cosine'
+        self.distances = sklearn.metrics.pairwise_distances(
+            self.data,
+            np.array([[1] * self.data.shape[1]]).reshape(1, -1), #self.data[0].reshape(1, -1),
+            metric=distance_metric
+        ).ravel()
+        #end = time.time()
+        #print('DISTANCES CREATION RUNTIME = ', round(end-start,3))
 
 def main():
     # ----------main-----------
