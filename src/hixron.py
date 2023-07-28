@@ -365,6 +365,8 @@ class hixron(object):
         # simulation or real-world experiment
         self.simulation = True
 
+        self.use_lime = False
+
         # whether to plot
         self.plot_local_costmap_bool = False
         self.plot_global_costmap_bool = False
@@ -500,10 +502,10 @@ class hixron(object):
         # global semantic map vars
         self.global_semantic_map_origin_x = float(self.global_semantic_map_info[0,4]) 
         self.global_semantic_map_origin_y = float(self.global_semantic_map_info[0,5]) 
-        self.global_map_resolution = float(self.global_semantic_map_info[0,1])
+        self.global_semantic_map_resolution = float(self.global_semantic_map_info[0,1])
         self.global_semantic_map_size = [int(self.global_semantic_map_info[0,3]), int(self.global_semantic_map_info[0,2])]
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]), dtype=float)
-        #print(self.global_semantic_map_origin_x, self.global_semantic_map_origin_y, self.global_map_resolution, self.global_semantic_map_size)
+        #print(self.global_semantic_map_origin_x, self.global_semantic_map_origin_y, self.global_semantic_map_resolution, self.global_semantic_map_size)
 
         # camera variables
         self.camera_image = np.array([])
@@ -670,7 +672,7 @@ class hixron(object):
             self.counter_global += 1     
 
         # potential place to make a local semantic map, if local costmap is not used
-        if self.use_local_costmap == False and self.use_local_semantic_map:
+        elif self.use_local_costmap == False and self.use_local_semantic_map:
 
             # update local_map params (origin cordinates)
             self.local_semantic_map_origin_x = self.robot_position_map.x - self.local_semantic_map_resolution * self.local_semantic_map_size * 0.5 
@@ -910,12 +912,13 @@ class hixron(object):
         # create interpretable features
         #self.create_interpretable_features()
 
-        if self.explanation_layer_bool:
-            self.publish_explanation_layer()
+        #if self.explanation_layer_bool:
+        #    self.publish_explanation_layer()
         
     # update ontology
     def update_ontology(self):
         # check if any object changed its position from simulation or from object detection (and tracking)
+        self.changed_position_value = -1
 
         # simulation relying on Gazebo
         if self.simulation:
@@ -955,9 +958,10 @@ class hixron(object):
                             # check whether the (centroid) coordinates of the object are changed (enough)
                             diff_x = abs(obj_x_new - obj_x_current)
                             diff_y = abs(obj_y_new - obj_y_current)
-                            if diff_x > 2*obj_x_size or diff_y > 2*obj_y_size:
+                            if diff_x > 0.5*obj_x_size or diff_y > 0.5*obj_y_size:
                                 self.ontology[i][3] = obj_x_new
                                 self.ontology[i][4] = obj_y_new
+                                self.changed_position_value = self.ontology[i][0]
 
                         elif 'bookshelf' in obj_gazebo_name:
                             # top-right is the mass centre
@@ -968,6 +972,7 @@ class hixron(object):
                             if diff_x > obj_x_size or diff_y > obj_y_size:
                                 self.ontology[i][3] = obj_x_new
                                 self.ontology[i][4] = obj_y_new
+                                self.changed_position_value = self.ontology[i][0]
 
                         else:
                             # check whether the (centroid) coordinates of the object are changed (enough)
@@ -977,6 +982,7 @@ class hixron(object):
                                 #print('Object ' + self.ontology[i][1] + ' (' + obj_gazebo_name + ') changed its position')
                                 self.ontology[i][3] = obj_x_new
                                 self.ontology[i][4] = obj_y_new 
+                                self.changed_position_value = self.ontology[i][0]
 
         # real world or simulation relying on object detection
         elif self.simulation == False:
@@ -1271,26 +1277,26 @@ class hixron(object):
             # top left vertex
             #tl_map_x = c_map_x - 0.5*x_size
             #tl_map_y = c_map_y - 0.5*y_size
-            #tl_pixel_x = int((tl_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
-            #tl_pixel_y = int((tl_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
+            #tl_pixel_x = int((tl_map_x - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            #tl_pixel_y = int((tl_map_y - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
 
             # bottom right vertex
             #br_map_x = c_map_x + 0.5*x_size
             #br_map_y = c_map_y + 0.5*y_size
-            #br_pixel_x = int((br_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
-            #br_pixel_y = int((br_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
+            #br_pixel_x = int((br_map_x - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            #br_pixel_y = int((br_map_y - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
             
             # top right vertex
             tr_map_x = c_map_x + 0.5*x_size
             tr_map_y = c_map_y - 0.5*y_size
-            tr_pixel_x = int((tr_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
-            tr_pixel_y = int((tr_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
+            tr_pixel_x = int((tr_map_x - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            tr_pixel_y = int((tr_map_y - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
 
             # bottom left vertex
             bl_map_x = c_map_x - 0.5*x_size
             bl_map_y = c_map_y + 0.5*y_size
-            bl_pixel_x = int((bl_map_x - self.global_semantic_map_origin_x) / self.global_map_resolution)
-            bl_pixel_y = int((bl_map_y - self.global_semantic_map_origin_y) / self.global_map_resolution)
+            bl_pixel_x = int((bl_map_x - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            bl_pixel_y = int((bl_map_y - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
 
             # object's sides coordinates
             object_left = bl_pixel_x
@@ -1306,8 +1312,8 @@ class hixron(object):
             self.global_semantic_map[max(0, object_top):min(self.global_semantic_map_size[0], object_bottom), max(0, object_left):min(self.global_semantic_map_size[1], object_right)] = i+1
 
             # inflate global semantic map
-            inflation_x = int(self.inflation_radius / self.global_map_resolution) 
-            inflation_y = int(self.inflation_radius / self.global_map_resolution)
+            inflation_x = int(self.inflation_radius / self.global_semantic_map_resolution) 
+            inflation_y = int(self.inflation_radius / self.global_semantic_map_resolution)
             self.global_semantic_map_inflated[max(0, object_top-inflation_y):min(self.global_semantic_map_size[0], object_bottom+inflation_y), max(0, object_left-inflation_x):min(self.global_semantic_map_size[1], object_right+inflation_x)] = i+1
 
         #end = time.time()
@@ -1550,7 +1556,7 @@ class hixron(object):
                         object_affordance_pairs_local.append([self.ontology[i][0], self.ontology[i][1], 'openability'])
 
     # publish semantic layer
-    def publish_explanation_layer(self):
+    def publish_explanation_layer(self, output):
         if self.use_global_semantic_map:
             #points_start = time.time()
             
@@ -1560,18 +1566,18 @@ class hixron(object):
 
             # define output
             #output = self.global_semantic_map * 255.0
-            output = self.global_semantic_map_inflated * 255.0
+            #output = self.global_semantic_map_inflated * 255.0
             #output = output[:, :, [2, 1, 0]] * 255.0
-            output = output.astype(np.uint8)
+            #output = output.astype(np.uint8)
 
             # draw layer
             for i in range(0, int(self.global_semantic_map_size[1])):
                 for j in range(0, int(self.global_semantic_map_size[0])):
-                    x = self.global_semantic_map_origin_x + i * self.global_map_resolution
-                    y = self.global_semantic_map_origin_y + j * self.global_map_resolution
-                    r = int(output[j, i])
-                    g = int(output[j, i])
-                    b = int(output[j, i])
+                    x = self.global_semantic_map_origin_x + i * self.global_semantic_map_resolution
+                    y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
+                    r = int(output[j, i, 0])
+                    g = int(output[j, i, 1])
+                    b = int(output[j, i, 2])
                     rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
                     pt = [x, y, z, rgb]
                     points.append(pt)
@@ -1588,7 +1594,7 @@ class hixron(object):
     # test whether explanation is n eeded
     def test_explain(self):
         # test if there is deviation between current and previous
-        deviation_between_global_plan = False
+        self.deviation_between_global_plan = False
         
         if len(self.global_plan_history) > 1:
             global_plan_previous = self.global_plan_history[-2]
@@ -1604,10 +1610,74 @@ class hixron(object):
         
             if global_dev > 10.0:
                 print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
-                deviation_between_global_plan = True
+                self.deviation_between_global_plan = True
 
-        if deviation_between_global_plan:
+        if self.use_lime == False:
+            self.explain_global_without_lime()
+
+        elif self.deviation_between_global_plan and self.use_lime:
             self.explain_global_deviation()
+
+    # explain without using lime, rely only on ontology and perception
+    def explain_global_without_lime(self):
+        # define local explanation window around robot
+        around_robot_size_x = 2.0
+        around_robot_size_y = 2.0
+
+        # create the RGB explanation matrix of the same size as semantic map
+        explanation_size_x = self.global_semantic_map_size[0]
+        explanation_size_y = self.global_semantic_map_size[1]
+        explanation_R = np.zeros((explanation_size_x, explanation_size_y))
+        explanation_R[:,:] = 120.0
+        explanation_R[self.global_semantic_map > 0] = 180.0
+        explanation_G = copy.deepcopy(explanation_R) #np.zeros((explanation_size_x, explanation_size_y))
+        explanation_B = copy.deepcopy(explanation_R) #np.zeros((explanation_size_x, explanation_size_y))
+
+        # find the objects/obstacles in the robot's local neighbourhood
+        robot_pose = self.robot_pose_map
+        x_min = robot_pose.position.x - around_robot_size_x
+        y_min = robot_pose.position.y - around_robot_size_y
+        x_max = robot_pose.position.x + around_robot_size_x
+        y_max = robot_pose.position.y + around_robot_size_y
+        #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+
+        neighborhood_objects_IDs = []
+        for i in range(0, self.ontology.shape[0]):
+            x_obj = self.ontology[i][3]
+            y_obj = self.ontology[i][4]
+            
+            if x_obj > x_min and x_obj < x_max and y_obj > y_min and y_obj < y_max:
+                value = self.ontology[i][0]
+                neighborhood_objects_IDs.append(value)
+
+                if self.ontology[i][7] == 0:
+                    explanation_R[self.global_semantic_map == value] = 0
+                    explanation_G[self.global_semantic_map == value] = 255
+                    explanation_B[self.global_semantic_map == value] = 0
+                elif self.ontology[i][7] == 1:
+                    explanation_R[self.global_semantic_map == value] = 255
+                    explanation_G[self.global_semantic_map == value] = 255
+                    explanation_B[self.global_semantic_map == value] = 0
+
+        # check if the last two global plans have the same goal pose
+        same_goal_pose = False
+        if len(self.globalPlan_goalPose_indices_history) > 1:
+            if self.globalPlan_goalPose_indices_history[-1][1] == self.globalPlan_goalPose_indices_history[-2][1]:
+                same_goal_pose = True
+
+        if same_goal_pose:
+            if self.changed_position_value > 0 and self.changed_position_value in neighborhood_objects_IDs:
+                value = self.changed_position_value
+                explanation_R[self.global_semantic_map == value] = 255
+                explanation_G[self.global_semantic_map == value] = 0
+                explanation_B[self.global_semantic_map == value] = 0
+
+        else:
+            print('New goal chosen!!!')            
+
+        explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+
+        self.publish_explanation_layer(explanation)
 
     # explain deviation between two global plans
     def explain_global_deviation(self):
