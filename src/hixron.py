@@ -367,6 +367,8 @@ class hixron(object):
         self.changed_position_value = -1
         self.hidden_plan = Path()
         self.hidden_plan_bool = False
+        self.red_object_countdown = 0
+        self.red_object_value = -1
 
         # whether to plot
         self.plot_local_costmap_bool = False
@@ -1674,13 +1676,17 @@ class hixron(object):
     # explain without using lime, rely only on ontology and perception
     def explain_global_without_lime(self):
         color_schemes = ['only_red', 'red_nuanced', 'green_and_red']
-        color_scheme = color_schemes[2]
+        color_scheme = color_schemes[1]
 
         shape_schemes = ['wo_text', 'with_text']
         shape_scheme = shape_schemes[0]
 
         path_schemes = ['full_line', 'arrows']
         path_scheme = path_schemes[0]
+
+        color_whole_objects = False
+
+        N_objects = self.ontology.shape[0]
 
         # define local explanation window around robot
         around_robot_size_x = 2.5
@@ -1689,11 +1695,12 @@ class hixron(object):
         # create the RGB explanation matrix of the same size as semantic map
         explanation_size_x = self.global_semantic_map_size[0]
         explanation_size_y = self.global_semantic_map_size[1]
+        #print('(explanation_size_x,explanation_size_y)',(explanation_size_x,explanation_size_y))
         explanation_R = np.zeros((explanation_size_x, explanation_size_y))
-        explanation_R[:,:] = 120.0 # free space
+        explanation_R[:,:] = 120 # free space
         explanation_R[self.global_semantic_map > 0] = 180.0 # obstacle
-        explanation_G = copy.deepcopy(explanation_R) #np.zeros((explanation_size_x, explanation_size_y))
-        explanation_B = copy.deepcopy(explanation_R) #np.zeros((explanation_size_x, explanation_size_y))
+        explanation_G = copy.deepcopy(explanation_R)
+        explanation_B = copy.deepcopy(explanation_R)
 
         # find the objects/obstacles in the robot's local neighbourhood
         robot_pose = self.robot_pose_map
@@ -1702,12 +1709,25 @@ class hixron(object):
         x_max = robot_pose.position.x + around_robot_size_x
         y_max = robot_pose.position.y + around_robot_size_y
         #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+        x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+        x_min_pixel = max(0, x_min_pixel)
+        x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+        x_max_pixel = min(explanation_size_x - 1, x_max_pixel)
+        y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        y_min_pixel = max(0, y_min_pixel)
+        y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        y_max_pixel = min(explanation_size_y - 1, y_max_pixel)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        neighborhood_objects_IDs = np.unique(self.global_semantic_map[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
+        if 0 in neighborhood_objects_IDs:
+            neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
+        neighborhood_objects_IDs = [int(item) for item in neighborhood_objects_IDs]
+        #print('neighborhood_objects_IDs =', neighborhood_objects_IDs)
+        neighborhood_mask = copy.deepcopy(self.global_semantic_map)
+        neighborhood_mask[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel] += N_objects
 
+        # color obstacles
         if color_scheme == color_schemes[1]:
-            x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
-            x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
-            y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
-            y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
             c_x_pixel = int(0.5*(x_min_pixel + x_max_pixel)+1)
             c_y_pixel = int(0.5*(y_min_pixel + y_max_pixel)+1)
             d_x = x_max_pixel - x_min_pixel
@@ -1743,24 +1763,33 @@ class hixron(object):
             explanation_G[explanation_R == 180] = 180 # return obstacles that are not affacted to gray
             explanation_B[explanation_R == 180] = 180 # return obstacles that are not affacted to gray
 
-        neighborhood_objects_IDs = []
-        for i in range(0, self.ontology.shape[0]):
-            x_obj = self.ontology[i][3]
-            y_obj = self.ontology[i][4]
-            
-            if x_obj > x_min and x_obj < x_max and y_obj > y_min and y_obj < y_max:
-                value = self.ontology[i][0]
-                neighborhood_objects_IDs.append(value)
+        if color_scheme == color_schemes[2]:
+            if color_whole_objects == True:
+                for ID in neighborhood_objects_IDs:
+                        if self.ontology[ID-1][7] == 0:
+                            explanation_R[self.global_semantic_map == ID] = 0
+                            explanation_G[self.global_semantic_map == ID] = 255
+                            explanation_B[self.global_semantic_map == ID] = 0
+                        elif self.ontology[ID-1][7] == 1:
+                            explanation_R[self.global_semantic_map == ID] = 255
+                            explanation_G[self.global_semantic_map == ID] = 255
+                            explanation_B[self.global_semantic_map == ID] = 0
+            else:
+                for ID in neighborhood_objects_IDs:
+                    if self.ontology[ID-1][7] == 1:
+                        explanation_R[neighborhood_mask == ID + N_objects] = 255
+                        explanation_G[neighborhood_mask == ID + N_objects] = 255
+                        explanation_B[neighborhood_mask == ID + N_objects] = 0  
+                    if self.ontology[ID-1][7] == 0:
+                        explanation_R[neighborhood_mask == ID + N_objects] = 0
+                        explanation_G[neighborhood_mask == ID + N_objects] = 255
+                        explanation_B[neighborhood_mask == ID + N_objects] = 0  
 
-                if color_scheme == color_schemes[2]:
-                    if self.ontology[i][7] == 0:
-                        explanation_R[self.global_semantic_map == value] = 0
-                        explanation_G[self.global_semantic_map == value] = 255
-                        explanation_B[self.global_semantic_map == value] = 0
-                    elif self.ontology[i][7] == 1:
-                        explanation_R[self.global_semantic_map == value] = 255
-                        explanation_G[self.global_semantic_map == value] = 255
-                        explanation_B[self.global_semantic_map == value] = 0
+        if self.red_object_countdown > 0:
+            explanation_R[self.global_semantic_map == self.red_object_value] = 255
+            explanation_G[self.global_semantic_map == self.red_object_value] = 0
+            explanation_B[self.global_semantic_map == self.red_object_value] = 0
+            self.red_object_countdown -= 1
 
         # check if the last two global plans have the same goal pose
         same_goal_pose = False
@@ -1780,6 +1809,8 @@ class hixron(object):
                 explanation_R[self.global_semantic_map == value] = 255
                 explanation_G[self.global_semantic_map == value] = 0
                 explanation_B[self.global_semantic_map == value] = 0        
+                self.red_object_countdown = 3
+                self.red_object_value = value
 
         # plot old plan as a hidden one
         if self.hidden_plan_bool == True:
