@@ -31,6 +31,9 @@ from sklearn.linear_model import Ridge, lars_path
 from sklearn.utils import check_random_state
 import sklearn.metrics
 import matplotlib
+from scipy import misc
+import PIL
+
 
 class klasa(object):
     def what_to_explain(control_param, locality_param):
@@ -1878,6 +1881,7 @@ class hixron(object):
                 explanation_G[y_pixel, x_pixel] = 150
                 explanation_B[y_pixel, x_pixel] = 150
 
+        '''
         for human_pose in self.humans:
             x_map = human_pose.position.x
             y_map = human_pose.position.y
@@ -1895,8 +1899,47 @@ class hixron(object):
                 explanation_R[y_pixel, x_pixel] = 255
                 explanation_G[y_pixel, x_pixel] = 0
                 explanation_B[y_pixel, x_pixel] = 0
-
+        '''
+                
         explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+
+        fig = plt.figure(frameon=True)
+        w = 0.01 * explanation_size_x
+        h = 0.01 * explanation_size_y
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(explanation)#.astype(np.uint8))
+        #plt.scatter(transformed_plan_xs_idx, transformed_plan_ys_idx, c='blue', marker='x')
+        #plt.scatter(local_plan_xs_idx, local_plan_ys_idx, c='red', marker='x')
+        #ax.scatter([robot_x_idx], [robot_y_idx], c='white', marker='o')
+        #ax.text(robot_x_idx, robot_y_idx, 'robot', c='white')
+        #ax.quiver(robot_x_idx, robot_y_idx, robot_yaw_x, robot_yaw_y, color='white')
+        for human_pose in self.humans:
+            x_map = human_pose.position.x
+            y_map = human_pose.position.y
+
+            distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
+
+            x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+            if distance_human_robot > 1.0:
+                ax.scatter([x_pixel], [y_pixel], c='yellow', marker='o')
+                #explanation_R[y_pixel, x_pixel] = 255
+                #explanation_G[y_pixel, x_pixel] = 255
+                #explanation_B[y_pixel, x_pixel] = 0
+            else:
+                ax.scatter([x_pixel], [y_pixel], c='red', marker='o')
+                #explanation_R[y_pixel, x_pixel] = 255
+                #explanation_G[y_pixel, x_pixel] = 0
+                #explanation_B[y_pixel, x_pixel] = 0
+
+        fig.savefig('explanation' + '.png', transparent=False)
+        explanation = np.array(PIL.Image.open(os.getcwd() + '/explanation.png').convert('RGB'))[:,:,:3].astype(np.uint8) #plt.imread(os.getcwd() + '/explanation.png')[:,:,:3].astype(np.uint8)
+        print(explanation.shape)
+        print(type(explanation))
 
         self.publish_explanation_layer(explanation)
 
