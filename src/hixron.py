@@ -30,6 +30,7 @@ from psutil import Popen
 from sklearn.linear_model import Ridge, lars_path
 from sklearn.utils import check_random_state
 import sklearn.metrics
+import matplotlib
 
 class klasa(object):
     def what_to_explain(control_param, locality_param):
@@ -369,12 +370,14 @@ class hixron(object):
         self.hidden_plan_bool = False
         self.red_object_countdown = 0
         self.red_object_value = -1
+        self.humans = []
 
         # whether to plot
         self.plot_local_costmap_bool = False
         self.plot_global_costmap_bool = False
         self.plot_local_semantic_map_bool = False
         self.plot_global_semantic_map_bool = False
+        self.plot_perturbations = False
 
         # global counter for plotting
         self.counter_global = 0
@@ -442,11 +445,12 @@ class hixron(object):
             except FileExistsError:
                 pass
 
-        self.global_perturbation_dir = self.dirMain + '/perturbations'
-        try:
-            os.mkdir(self.global_perturbation_dir)
-        except FileExistsError:
-            pass
+        if self.plot_perturbations == True:        
+            self.global_perturbation_dir = self.dirMain + '/perturbations'
+            try:
+                os.mkdir(self.global_perturbation_dir)
+            except FileExistsError:
+                pass
 
         # simulation variables
         if self.simulation:
@@ -509,6 +513,7 @@ class hixron(object):
         self.global_semantic_map_size = [int(self.global_semantic_map_info[0,3]), int(self.global_semantic_map_info[0,2])]
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]), dtype=float)
         #print(self.global_semantic_map_origin_x, self.global_semantic_map_origin_y, self.global_semantic_map_resolution, self.global_semantic_map_size)
+        self.global_semantic_map_complete = []
 
         # camera variables
         self.camera_image = np.array([])
@@ -542,7 +547,7 @@ class hixron(object):
         #self.sub_footprint = rospy.Subscriber("/move_base/local_costmap/footprint", PolygonStamped, self.footprint_callback)
 
         # odometry subscriber
-        self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
+        #self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
 
         # global-amcl pose subscriber
         self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
@@ -584,7 +589,7 @@ class hixron(object):
         # gazebo vars
         if self.simulation:
             # gazebo model states subscriber
-            self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.model_state_callback)
+            self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.gazebo_callback)
 
             # load gazebo tags
             self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'gazebo_tags.csv')) 
@@ -628,7 +633,7 @@ class hixron(object):
 
     # amcl (global) pose callback
     def amcl_callback(self, msg):
-        #print('amcl_callback')
+        print('amcl_callback')
 
         #self.robot_position_map = msg.pose.pose.position
         #self.robot_orientation_map = msg.pose.pose.orientation
@@ -649,11 +654,16 @@ class hixron(object):
             self.footprint.append([msg.polygon.points[i].x,msg.polygon.points[i].y,msg.polygon.points[i].z,5])
         
     # Gazebo callback
-    def model_state_callback(self, states_msg):
-        #print('model_state_callback')  
+    def gazebo_callback(self, states_msg):
+        #print('gazebo_callback')  
         self.gazebo_names = states_msg.name
         self.gazebo_poses = states_msg.pose
 
+        self.humans = []
+        for i in range(0, len(states_msg.name)):
+            if 'citizen' in states_msg.name[i] or 'human' in states_msg.name[i]:
+                self.humans.append(states_msg.pose[i])
+      
     # global plan callback
     def global_plan_callback(self, msg):
         print('\nglobal_plan_callback!')
@@ -669,7 +679,7 @@ class hixron(object):
             self.create_semantic_data()
 
             #if self.global_plans_deviation:
-            self.test_explain()
+            #self.test_explain()
 
             # increase the global counter (needed for plotting numeration)
             self.counter_global += 1     
@@ -1111,7 +1121,7 @@ class hixron(object):
                             print('\nNew position: x = ' + str(x_o_new) + ', y = ' + str(y_o_new))                                
 
         # save the updated ontology for the publisher
-        pd.DataFrame(self.ontology).to_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv', index=False)#, header=False)
+        #pd.DataFrame(self.ontology).to_csv(self.dirCurr + '/' + self.dirData + '/ontology.csv', index=False)#, header=False)
     
     # create local semantic map
     def create_local_semantic_map(self):
@@ -1374,14 +1384,16 @@ class hixron(object):
 
         #self.global_semantic_map[232:270,63:71] = 40
 
+        self.global_semantic_map_complete = copy.deepcopy(self.global_semantic_map)
+
         # find centroids of the objects in the semantic map
-        lc_regions = regionprops(self.global_semantic_map.astype(int))
+        #lc_regions = regionprops(self.global_semantic_map.astype(int))
         #print('\nlen(lc_regions) = ', len(lc_regions))
-        self.centroids_global_semantic_map = []
-        for lc_region in lc_regions:
-            v = lc_region.label
-            cy, cx = lc_region.centroid
-            self.centroids_global_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
+        #self.centroids_global_semantic_map = []
+        #for lc_region in lc_regions:
+        #    v = lc_region.label
+        #    cy, cx = lc_region.centroid
+        #    self.centroids_global_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
 
     # plot local semantic_map
     def plot_local_semantic_map(self):
@@ -1644,8 +1656,9 @@ class hixron(object):
             pc2.header.stamp = rospy.Time.now()
             self.pub_explanation_layer.publish(pc2)
 
-    # test whether explanation is n eeded
+    # test whether explanation is needed
     def test_explain(self):
+        #print('test_explain!')
         # test if there is deviation between current and previous
         self.deviation_between_global_plans = False
         deviation_threshold = 15.0
@@ -1675,7 +1688,12 @@ class hixron(object):
 
     # explain without using lime, rely only on ontology and perception
     def explain_global_without_lime(self):
-        color_schemes = ['only_red', 'red_nuanced', 'green_and_red']
+        if self.global_semantic_map_complete == []:
+            return
+        
+        self.global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+
+        color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
         color_scheme = color_schemes[1]
 
         shape_schemes = ['wo_text', 'with_text']
@@ -1686,19 +1704,17 @@ class hixron(object):
 
         color_whole_objects = False
 
-        N_objects = self.ontology.shape[0]
-
         # define local explanation window around robot
         around_robot_size_x = 2.5
         around_robot_size_y = 2.5
 
         # create the RGB explanation matrix of the same size as semantic map
-        explanation_size_x = self.global_semantic_map_size[0]
-        explanation_size_y = self.global_semantic_map_size[1]
-        #print('(explanation_size_x,explanation_size_y)',(explanation_size_x,explanation_size_y))
-        explanation_R = np.zeros((explanation_size_x, explanation_size_y))
+        explanation_size_y = self.global_semantic_map_size[0]
+        explanation_size_x = self.global_semantic_map_size[1]
+        #print('(explanation_size_x,explanation_size_y)',(explanation_size_y,explanation_size_x))
+        explanation_R = np.zeros((explanation_size_y, explanation_size_x))
         explanation_R[:,:] = 120 # free space
-        explanation_R[self.global_semantic_map > 0] = 180.0 # obstacle
+        explanation_R[self.global_semantic_map_complete_copy > 0] = 180.0 # obstacle
         explanation_G = copy.deepcopy(explanation_R)
         explanation_B = copy.deepcopy(explanation_R)
 
@@ -1709,22 +1725,25 @@ class hixron(object):
         x_max = robot_pose.position.x + around_robot_size_x
         y_max = robot_pose.position.y + around_robot_size_y
         #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
-        x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
-        x_min_pixel = max(0, x_min_pixel)
+
+        x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)        
         x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
-        x_max_pixel = min(explanation_size_x - 1, x_max_pixel)
         y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
-        y_min_pixel = max(0, y_min_pixel)
         y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        
+        x_min_pixel = max(0, x_min_pixel)
+        x_max_pixel = min(explanation_size_x - 1, x_max_pixel)
+        y_min_pixel = max(0, y_min_pixel)
         y_max_pixel = min(explanation_size_y - 1, y_max_pixel)
         #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
-        neighborhood_objects_IDs = np.unique(self.global_semantic_map[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
+        
+        neighborhood_objects_IDs = np.unique(self.global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
         if 0 in neighborhood_objects_IDs:
             neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
         neighborhood_objects_IDs = [int(item) for item in neighborhood_objects_IDs]
         #print('neighborhood_objects_IDs =', neighborhood_objects_IDs)
-        neighborhood_mask = copy.deepcopy(self.global_semantic_map)
-        neighborhood_mask[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel] += N_objects
+
 
         # color obstacles
         if color_scheme == color_schemes[1]:
@@ -1732,49 +1751,67 @@ class hixron(object):
             c_y_pixel = int(0.5*(y_min_pixel + y_max_pixel)+1)
             d_x = x_max_pixel - x_min_pixel
             d_y = y_max_pixel - y_min_pixel
+            #print('(d_x, d_y) = ', (d_x, d_y))
 
-            explanation_G[explanation_R == 180] = 0 # turn gray obstacles to red
-            explanation_B[explanation_R == 180] = 0 # turn gray obstacles to red
-            
-            explanation_R[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 240
-            
-            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 190
-            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 190
-            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 190
-            explanation_R[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 190
-            
-            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 140
-            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 140
-            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 140
-            explanation_R[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 140
-            
-            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 90
-            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 90
-            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 90
-            explanation_R[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 90
-            
-            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 40
-            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 40
-            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 40
-            explanation_R[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 40
+            R_temp = copy.deepcopy(explanation_R)
 
-            explanation_R[explanation_G == 120] = 120 # return the whole free space to original values
+            bgr_temp = (np.dstack((explanation_B,explanation_G,explanation_R))).astype(np.uint8)
+            #hsv_temp = matplotlib.colors.rgb_to_hsv(bgr_temp)
+            hsv_temp = cv2.cvtColor(bgr_temp, cv2.COLOR_BGR2HSV)
+            #print(type(hsv_temp))
+            #print(hsv_temp.shape)
 
-            explanation_G[explanation_R == 180] = 180 # return obstacles that are not affacted to gray
-            explanation_B[explanation_R == 180] = 180 # return obstacles that are not affacted to gray
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 0] = 0
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 2] = 255
+            
+
+            hsv_temp[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x), 1] = 180
+            
+            #hsv_temp[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x), 1] = 150
+            #hsv_temp[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x), 1] = 150
+            #hsv_temp[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x), 1] = 150
+            #hsv_temp[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x), 1] = 150
+            
+            hsv_temp[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x), 1] = 135
+            hsv_temp[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x), 1] = 135
+            hsv_temp[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x), 1] = 135
+            hsv_temp[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x), 1] = 135
+            
+            hsv_temp[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x), 1] = 95
+            hsv_temp[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x), 1] = 95
+            hsv_temp[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x), 1] = 95
+            hsv_temp[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x), 1] = 95
+            
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x), 1] = 50
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x), 1] = 50
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 1] = 50
+            hsv_temp[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 1] = 50
+            
+
+            bgr_temp = cv2.cvtColor(hsv_temp, cv2.COLOR_HSV2BGR)
+            explanation_R = bgr_temp[:,:,2]
+            explanation_G = bgr_temp[:,:,1]
+            explanation_B = bgr_temp[:,:,0]
+
+            explanation_R[R_temp == 120] = 120 # return free space to original values
+            explanation_G[R_temp == 120] = 120 # return free space to original values
+            explanation_B[R_temp == 120] = 120 # return free space to original values
 
         if color_scheme == color_schemes[2]:
             if color_whole_objects == True:
                 for ID in neighborhood_objects_IDs:
                         if self.ontology[ID-1][7] == 0:
-                            explanation_R[self.global_semantic_map == ID] = 0
-                            explanation_G[self.global_semantic_map == ID] = 255
-                            explanation_B[self.global_semantic_map == ID] = 0
+                            explanation_R[self.global_semantic_map_complete_copy == ID] = 0
+                            explanation_G[self.global_semantic_map_complete_copy == ID] = 255
+                            explanation_B[self.global_semantic_map_complete_copy == ID] = 0
                         elif self.ontology[ID-1][7] == 1:
-                            explanation_R[self.global_semantic_map == ID] = 255
-                            explanation_G[self.global_semantic_map == ID] = 255
-                            explanation_B[self.global_semantic_map == ID] = 0
+                            explanation_R[self.global_semantic_map_complete_copy == ID] = 255
+                            explanation_G[self.global_semantic_map_complete_copy == ID] = 255
+                            explanation_B[self.global_semantic_map_complete_copy == ID] = 0
             else:
+                N_objects = self.ontology.shape[0]
+                neighborhood_mask = copy.deepcopy(self.global_semantic_map_complete_copy)
+                neighborhood_mask[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel] += N_objects
                 for ID in neighborhood_objects_IDs:
                     if self.ontology[ID-1][7] == 1:
                         explanation_R[neighborhood_mask == ID + N_objects] = 255
@@ -1785,11 +1822,17 @@ class hixron(object):
                         explanation_G[neighborhood_mask == ID + N_objects] = 255
                         explanation_B[neighborhood_mask == ID + N_objects] = 0  
 
-        if self.red_object_countdown > 0:
-            explanation_R[self.global_semantic_map == self.red_object_value] = 255
-            explanation_G[self.global_semantic_map == self.red_object_value] = 0
-            explanation_B[self.global_semantic_map == self.red_object_value] = 0
-            self.red_object_countdown -= 1
+        # plot new (current) plan
+        for i in range(0, len(self.global_plan_current.poses)):
+            x_map = self.global_plan_current.poses[i].pose.position.x
+            y_map = self.global_plan_current.poses[i].pose.position.y
+
+            x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+            y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+            explanation_R[y_pixel, x_pixel] = 0
+            explanation_G[y_pixel, x_pixel] = 0
+            explanation_B[y_pixel, x_pixel] = 255
 
         # check if the last two global plans have the same goal pose
         same_goal_pose = False
@@ -1802,15 +1845,25 @@ class hixron(object):
             self.hidden_plan_bool = False
 
         if self.deviation_between_global_plans and same_goal_pose:
-            self.hidden_plan = copy.deepcopy(self.global_plan_history[-2])
-            self.hidden_plan_bool = True
             if self.changed_position_value > 0 and self.changed_position_value in neighborhood_objects_IDs:
                 value = self.changed_position_value
-                explanation_R[self.global_semantic_map == value] = 255
-                explanation_G[self.global_semantic_map == value] = 0
-                explanation_B[self.global_semantic_map == value] = 0        
+                explanation_R[self.global_semantic_map_complete_copy == value] = 255
+                explanation_G[self.global_semantic_map_complete_copy == value] = 0
+                explanation_B[self.global_semantic_map_complete_copy == value] = 0        
                 self.red_object_countdown = 3
                 self.red_object_value = value
+
+                self.hidden_plan = copy.deepcopy(self.global_plan_history[-2])
+                self.hidden_plan_bool = True
+
+        if self.red_object_countdown > 0:
+            explanation_R[self.global_semantic_map_complete_copy == self.red_object_value] = 255
+            explanation_G[self.global_semantic_map_complete_copy == self.red_object_value] = 0
+            explanation_B[self.global_semantic_map_complete_copy == self.red_object_value] = 0
+            self.red_object_countdown -= 1
+        elif self.red_object_countdown == 0:
+            self.red_object_countdown -= 1
+            self.changed_position_value = -1
 
         # plot old plan as a hidden one
         if self.hidden_plan_bool == True:
@@ -1825,17 +1878,23 @@ class hixron(object):
                 explanation_G[y_pixel, x_pixel] = 150
                 explanation_B[y_pixel, x_pixel] = 150
 
-        # plot new (current) plan
-        for i in range(0, len(self.global_plan_current.poses)):
-            x_map = self.global_plan_current.poses[i].pose.position.x
-            y_map = self.global_plan_current.poses[i].pose.position.y
+        for human_pose in self.humans:
+            x_map = human_pose.position.x
+            y_map = human_pose.position.y
+
+            distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
 
             x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
             y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
 
-            explanation_R[y_pixel, x_pixel] = 0
-            explanation_G[y_pixel, x_pixel] = 0
-            explanation_B[y_pixel, x_pixel] = 255
+            if distance_human_robot > 1.0:
+                explanation_R[y_pixel, x_pixel] = 255
+                explanation_G[y_pixel, x_pixel] = 255
+                explanation_B[y_pixel, x_pixel] = 0
+            else:
+                explanation_R[y_pixel, x_pixel] = 255
+                explanation_G[y_pixel, x_pixel] = 0
+                explanation_B[y_pixel, x_pixel] = 0
 
         explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
 
@@ -2157,9 +2216,13 @@ def main():
     # call main to initialize subscribers
     hixron_subscriber_obj.main_()
 
+    #rate = rospy.Rate(0.15)
+
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
     while not rospy.is_shutdown():
         #print('spinning')
-        rospy.spin()
+        #rate.sleep()
+        hixron_subscriber_obj.test_explain()
+        #rospy.spin()
 
 main()
