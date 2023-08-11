@@ -517,12 +517,17 @@ class hixron(object):
         #self.ontology[cols] = self.ontology[cols].astype(float)
         self.ontology = np.array(self.ontology)
         #print(self.ontology)
+        for i in range(self.ontology.shape[0]):
+            self.ontology[i, 3] += 9.0
+            self.ontology[i, 4] -= 9.0
 
         # load global semantic map info
         self.global_semantic_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
         # global semantic map vars
-        self.global_semantic_map_origin_x = float(self.global_semantic_map_info[0,4]) 
-        self.global_semantic_map_origin_y = float(self.global_semantic_map_info[0,5]) 
+        self.global_semantic_map_origin_x = float(self.global_semantic_map_info[0,4])
+        self.global_semantic_map_origin_x += 9.0  
+        self.global_semantic_map_origin_y = float(self.global_semantic_map_info[0,5])
+        self.global_semantic_map_origin_y -= 9.0 
         self.global_semantic_map_resolution = float(self.global_semantic_map_info[0,1])
         self.global_semantic_map_size = [int(self.global_semantic_map_info[0,3]), int(self.global_semantic_map_info[0,2])]
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]), dtype=float)
@@ -606,8 +611,9 @@ class hixron(object):
 
         # gazebo vars
         if self.simulation:
+            pass
             # gazebo model states subscriber
-            self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.gazebo_callback)
+            #self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.gazebo_callback)
 
             # load gazebo tags
             self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'gazebo_tags.csv')) 
@@ -656,12 +662,16 @@ class hixron(object):
         #self.robot_position_map = msg.pose.pose.position
         #self.robot_orientation_map = msg.pose.pose.orientation
         self.robot_pose_map = msg.pose.pose
+        #self.robot_pose_map.position.x -= 9.0
+        #self.robot_pose_map.position.y += 9.0 
         
     # goal pose callback
     def goal_pose_callback(self, msg):
         print('goal_pose_callback')
 
         self.goal_pose_current = msg.pose
+        self.goal_pose_current.position.x -= 9.0
+        self.goal_pose_current.position.y += 9.0
         self.goal_pose_history.append(msg.pose)
 
     # robot footprint callback
@@ -949,6 +959,9 @@ class hixron(object):
     # update ontology
     def update_ontology(self):
         # check if any object changed its position from simulation or from object detection (and tracking)
+
+        if self.gazebo_names == [] or self.gazebo_poses == []:
+            return
 
         # simulation relying on Gazebo
         if self.simulation:
