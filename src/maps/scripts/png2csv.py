@@ -1,12 +1,12 @@
 from PIL import Image
 import numpy as np
 # 1. Read image
-img = Image.open('map.png')
+img = Image.open('map_1.png')
  
 # 2. Convert image to NumPy array
 arr = np.asarray(img)
 print(arr.shape)
-# (771, 771, 3)
+arr = arr[600:1400,600:1400]
 # 3. Convert 3D array to 2D list of lists
 lst = []
 for row in arr:
@@ -15,6 +15,6 @@ for row in arr:
         tmp.append(str(col))
     lst.append(tmp)
 # 4. Save list of lists to CSV
-with open('map.csv', 'w') as f:
+with open('map_1.csv', 'w') as f:
     for row in lst:
         f.write(','.join(row) + '\n')

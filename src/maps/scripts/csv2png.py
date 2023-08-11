@@ -6,20 +6,31 @@ def convert_csv_to_png(csv_file, png_file):
     # Read pixel values from CSV
     with open(csv_file, 'r') as file:
         reader = csv.reader(file, delimiter=',')
-        data = list(reader)[1:]
+        data_loaded = list(reader)[0:]
 
-    for i in range(0, len(data)):
-        data[i].extend([205] * (1984-1024))    
+    print('data_loaded:')
+    print((len(data_loaded), len(data_loaded[0])))
 
-    height = len(data)
-    width = len(data[0])
+    data_all = []
+    for i in range(0, 600):
+        data_all.append([205] * (1984))        
 
-    print(len(data))
-    print(len(data[0]))
+    for i in range(0, len(data_loaded)):
+        row = [205] * (600) + data_loaded[i] + [205] * (1984-1400)
+        data_all.append(row)    
+
+    for i in range(0, 1984 - len(data_all)):
+        data_all.append([205] * (1984))
+
+    height = len(data_all)
+    width = len(data_all[0])
+
+    print('data_all:')
+    print((len(data_all),len(data_all[0])))
 
     # Create a new image from pixel values
     image = Image.new('L', (width, height))
-    pixels = [int(pixel) for row in data for pixel in row]
+    pixels = [int(pixel) for row in data_all for pixel in row]
     #print(pixels[-100:-1])
     image.putdata(pixels)
 
@@ -28,7 +39,7 @@ def convert_csv_to_png(csv_file, png_file):
 
 
 # Usage example
-csv_file = 'mapnew.csv'
+csv_file = 'map_1.csv'
 png_file = 'mapnew.png'
 
 convert_csv_to_png(csv_file, png_file)
