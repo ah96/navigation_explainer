@@ -380,11 +380,12 @@ class hixron(object):
         self.use_lime = False
         self.changed_position_value = -1
         self.hidden_plan = Path()
-        self.hidden_plan_bool = False
+        self.old_plan_bool = False
         self.red_object_countdown = 0
         self.red_object_value = -1
         self.humans = []
         self.human_blinking = False
+        self.object_arrow_blinking = False
 
         # whether to plot
         self.plot_local_costmap_bool = False
@@ -521,6 +522,9 @@ class hixron(object):
             self.ontology[i, 3] += 9.0
             self.ontology[i, 4] -= 9.0
 
+            self.ontology[i, 12] += 9.0
+            self.ontology[i, 13] -= 9.0
+
         # load global semantic map info
         self.global_semantic_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
         # global semantic map vars
@@ -539,6 +543,8 @@ class hixron(object):
         self.depth_image = np.array([])
         # camera projection matrix 
         self.P = np.array([])
+
+        self.semantic_labels = MarkerArray()
 
     # declare subscribers
     def main_(self):
@@ -983,8 +989,8 @@ class hixron(object):
 
                     mass_centre = self.ontology[i][9]
 
-                    obj_x_current = self.ontology[i][3]
-                    obj_y_current = self.ontology[i][4]
+                    obj_x_current = copy.deepcopy(self.ontology[i][3])
+                    obj_y_current = copy.deepcopy(self.ontology[i][4])
 
                     # update ontology
                     # almost every object type in Gazebo has a different center of mass
@@ -999,6 +1005,10 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]
+                            self.ontology[i][12] += obj_x_new - obj_x_current
+                            self.ontology[i][13] += obj_y_new - obj_y_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
 
                     elif mass_centre == 'r':
                         # right is the mass centre
@@ -1010,6 +1020,9 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]
+                            self.ontology[i][12] += obj_x_new - obj_x_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
 
                     elif mass_centre == 'br':
                         # bottom-right is the mass centre
@@ -1022,6 +1035,10 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]
+                            self.ontology[i][12] += obj_x_new - obj_x_current
+                            self.ontology[i][13] += obj_y_new - obj_y_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
 
                     elif mass_centre == 'b':
                         # bottom is the mass centre
@@ -1033,6 +1050,9 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]#
+                            self.ontology[i][13] += obj_y_new - obj_y_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
 
                     elif mass_centre == 'bl':
                         # bottom-left is the mass centre
@@ -1045,6 +1065,10 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]
+                            self.ontology[i][12] += obj_x_new - obj_x_current
+                            self.ontology[i][13] += obj_y_new - obj_y_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
 
                     elif mass_centre == 'l':
                         # left is the mass centre
@@ -1056,7 +1080,10 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]
-
+                            self.ontology[i][12] += obj_x_new - obj_x_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
+                    
                     elif mass_centre == 'tl':
                         # top-left is the mass centre
                         obj_x_new += 0.5*obj_x_size
@@ -1068,6 +1095,10 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]
+                            self.ontology[i][12] += obj_x_new - obj_x_current
+                            self.ontology[i][13] += obj_y_new - obj_y_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
 
                     elif mass_centre == 't':
                         # top is the mass centre
@@ -1079,6 +1110,9 @@ class hixron(object):
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
                             self.changed_position_value = self.ontology[i][0]
+                            self.ontology[i][13] += obj_y_new - obj_y_current
+                            if self.ontology[i][11] == 'y':
+                                self.ontology[i][11] = 'n'
 
         # real world or simulation relying on object detection
         elif self.simulation == False:
@@ -1691,7 +1725,7 @@ class hixron(object):
             pc2.header.stamp = rospy.Time.now()
             self.pub_explanation_layer.publish(pc2)
             
-            #self.pub_semantic_labels.publish(self.semantic_labels)
+            self.pub_semantic_labels.publish(self.semantic_labels)
             self.pub_path_markers.publish(self.path_markers)
             self.pub_old_path_markers.publish(self.old_path_markers)
 
@@ -1710,7 +1744,7 @@ class hixron(object):
         if len(self.global_plan_history) > 1:
             self.global_plan_previous_hold = copy.deepcopy(self.global_plan_history[-2])
         
-            min_plan_length = min(len(self.global_plan_current.poses), len(self.global_plan_previous_hold.poses))
+            min_plan_length = min(len(self.global_plan_current_hold.poses), len(self.global_plan_previous_hold.poses))
             
             # calculate deivation
             global_dev = 0
@@ -1887,11 +1921,11 @@ class hixron(object):
 
         if same_goal_pose == False:
             print('New goal chosen!!!')
-            self.hidden_plan_bool = False
+            self.old_plan_bool = False
 
         # if deviation happened
         if self.deviation_between_global_plans and same_goal_pose:
-            if self.changed_position_value > 0 and self.changed_position_value in neighborhood_objects_IDs:
+            if self.changed_position_value > 0:
                 # find the red object
                 self.red_object_value = copy.deepcopy(self.changed_position_value)
                 self.red_object_countdown = 7
@@ -1899,7 +1933,7 @@ class hixron(object):
 
                 # save the previous plan
                 self.hidden_plan = copy.deepcopy(self.global_plan_previous_hold)
-                self.hidden_plan_bool = True
+                self.old_plan_bool = True
 
         # COLOR RED OBJECT
         if self.red_object_countdown > 0:
@@ -1913,7 +1947,7 @@ class hixron(object):
 
         # VISUALIZE OLD PATH
         self.old_path_markers = MarkerArray()
-        if self.hidden_plan_bool == True:
+        if self.old_plan_bool == True:
             #print('len(self.hidden_plan.poses) = ', len(self.hidden_plan.poses))
             for i in range(0, len(self.hidden_plan.poses)):
                 x_map = self.hidden_plan.poses[i].pose.position.x
@@ -1947,7 +1981,7 @@ class hixron(object):
         # VISUALIZE NEW PATH
         self.path_markers = MarkerArray()
         if path_scheme == path_schemes[0]:         
-            for i in range(0, len(self.global_plan_current_hold.poses)):
+            for i in range(5, len(self.global_plan_current_hold.poses)):
                 # visualize path
                 marker = Marker()
                 marker.header.frame_id = 'map'
@@ -1973,7 +2007,7 @@ class hixron(object):
                 marker.ns = "my_namespace"
                 self.path_markers.markers.append(marker)
         elif path_scheme == path_schemes[1]:         
-            for i in range(0, len(self.global_plan_current_hold.poses), 75):
+            for i in range(20, len(self.global_plan_current_hold.poses) - 1 , 75):
                 # visualize path
                 marker = Marker()
                 marker.header.frame_id = 'map'
@@ -1999,14 +2033,48 @@ class hixron(object):
                 marker.ns = "my_namespace"
                 self.path_markers.markers.append(marker)
 
+        # VISUALIZE OBSTACLE NAMES USING PC2
+        #[qx, qy, qz, qw]= euler_to_quaternion(90, 90, 90)
+        self.semantic_labels.markers = []
+        if shape_scheme == shape_schemes[1]:
+            for i in range(0, self.ontology.shape[0] - 4):
+                if self.ontology[i][0] in neighborhood_objects_IDs:
+                    x_map = self.ontology[i][12]
+                    y_map = self.ontology[i][13]
+                    
+                    # visualize orientations and semantic labels of known objects
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.TEXT_VIEW_FACING
+                    marker.action = marker.ADD
+                    marker.pose = Pose()
+                    marker.pose.position.x = x_map
+                    marker.pose.position.y = y_map
+                    marker.pose.position.z = 0.5
+                    marker.pose.orientation.x = 0.0#qx
+                    marker.pose.orientation.y = 0.0#qy
+                    marker.pose.orientation.z = 0.0#qz
+                    marker.pose.orientation.w = 0.0#qw
+                    marker.color.r = 1.0
+                    marker.color.g = 1.0
+                    marker.color.b = 1.0
+                    marker.color.a = 1.0
+                    marker.scale.x = 0.35
+                    marker.scale.y = 0.35
+                    marker.scale.z = 0.35
+                    #marker.frame_locked = False
+                    marker.text = self.ontology[i][2]
+                    marker.ns = "my_namespace"
+                    self.semantic_labels.markers.append(marker)
+
         # FORM THE EXPLANATION IMAGE                  
         explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
 
-        font = {'family' : 'fantasy', #{'cursive', 'fantasy', 'monospace', 'sans', 'sans serif', 'sans-serif', 'serif'}
-        'weight' : 'normal', #[ 'normal' | 'bold' | 'heavy' | 'light' | 'ultrabold' | 'ultralight']
-        'size'   : 5}
-
-        matplotlib.rc('font', **font)
+        #font = {'family' : 'fantasy', #{'cursive', 'fantasy', 'monospace', 'sans', 'sans serif', 'sans-serif', 'serif'}
+        #'weight' : 'normal', #[ 'normal' | 'bold' | 'heavy' | 'light' | 'ultrabold' | 'ultralight']
+        #'size'   : 5}
+        #matplotlib.rc('font', **font)
 
         fig = plt.figure(frameon=True)
         w = 0.01 * self.explanation_size_x
@@ -2036,65 +2104,78 @@ class hixron(object):
         elif self.human_blinking == False:
             self.human_blinking = True
 
-        # VISUALIZE OBSTACLE NAMES USING PC2
-        [qx, qy, qz, qw]= euler_to_quaternion(90, 90, 90)
-        self.semantic_labels = MarkerArray()
-        if False == True:
-            for i in range(0, self.ontology.shape[0]):
+        # VISUALIZE OBSTACLE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
+        #if shape_scheme == shape_schemes[1]:
+        if self.object_arrow_blinking == True:
+            self.object_arrow_blinking = False
+            for i in range(0, self.ontology.shape[0] - 4):
                 x_map = self.ontology[i][3]
                 y_map = self.ontology[i][4]
+
+                x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                dx = float(self.ontology[i][5]) / 0.05
+                dy = float(self.ontology[i][6]) / 0.05
+
+                #if 'bookshelf' in self.ontology[i][2]:
+                #    ax.text(self.explanation_size_x - x_pixel, y_pixel+0.5*dy, self.ontology[i][2], c='white', rotation='vertical', alpha=1.0)
+                #else:
+                #    ax.text(self.explanation_size_x - x_pixel, y_pixel+0.5*dy, self.ontology[i][2], c='white', rotation='horizontal')
                 
-                # visualize orientations and semantic labels of known objects
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = i
-                marker.type = marker.TEXT_VIEW_FACING
-                marker.action = marker.ADD
-                marker.pose = Pose()
-                marker.pose.position.x = x_map
-                marker.pose.position.y = y_map
-                marker.pose.position.z = 0.5
-                marker.pose.orientation.x = qx
-                marker.pose.orientation.y = qy
-                marker.pose.orientation.z = qz
-                marker.pose.orientation.w = qw
-                marker.color.r = 1.0
-                marker.color.g = 1.0
-                marker.color.b = 1.0
-                marker.color.a = 1.0
-                marker.scale.x = 0.35
-                marker.scale.y = 0.35
-                marker.scale.z = 0.35
-                #marker.frame_locked = False
-                marker.text = self.ontology[i][2]
-                marker.ns = "my_namespace"
-                self.semantic_labels.markers.append(marker)
+                # if it is a movable object and in the robot's neighborhood
+                if self.ontology[i][0] in neighborhood_objects_IDs and self.ontology[i][7] == 1:
+                    xs_plot = []
+                    ys_plot = []
+                    arrows = []
 
-        # VISUALIZE OBSTACLE NAMES AND ARROW AROUND MOVABLE OBJECTS USING MATPLOTLIB
-        #if shape_scheme == shape_schemes[1]:
-        for i in range(0, self.ontology.shape[0] - 4):
-            x_map = self.ontology[i][3]
-            y_map = self.ontology[i][4]
+                    scale = 1.25
+                    dx *= scale
+                    dy *= scale
 
-            x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
-            y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+                    # if object under table
+                    if self.ontology[i][11] == 'y':
+                        if self.ontology[i][10] == 'r':
+                            xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                            ys_plot.append(y_pixel)
+                            arrows.append('>')
+                        elif self.ontology[i][10] == 'l':
+                            xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                            ys_plot.append(y_pixel)
+                            arrows.append('<')
+                        elif self.ontology[i][10] == 't':
+                            xs_plot.append(self.explanation_size_x - x_pixel)
+                            ys_plot.append(y_pixel - dy)
+                            arrows.append('^')
+                        elif self.ontology[i][10] == 'b':
+                            xs_plot.append(self.explanation_size_x - x_pixel)
+                            ys_plot.append(y_pixel + dy)
+                            arrows.append('v')
+                    # if object is close to the table
+                    if self.ontology[i][11] == 'n':
+                        if self.ontology[i][10] == 't' or self.ontology[i][10] == 'b':
+                            xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                            ys_plot.append(y_pixel)
+                            arrows.append('>')
+                            xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                            ys_plot.append(y_pixel)
+                            arrows.append('<')
+                        elif self.ontology[i][10] == 'r' or self.ontology[i][10] == 'l':
+                            xs_plot.append(self.explanation_size_x - x_pixel)
+                            ys_plot.append(y_pixel - dy)
+                            arrows.append('^')
+                            xs_plot.append(self.explanation_size_x - x_pixel)
+                            ys_plot.append(y_pixel + dy)
+                            arrows.append('v')
 
-            dx = float(self.ontology[i][5]) / 0.05
-            dy = float(self.ontology[i][6]) / 0.05
-
-            if 'bookshelf' in self.ontology[i][2]:
-                ax.text(self.explanation_size_x - x_pixel, y_pixel+0.5*dy, self.ontology[i][2], c='white', rotation='vertical', alpha=1.0)
-            else:
-                ax.text(self.explanation_size_x - x_pixel, y_pixel+0.5*dy, self.ontology[i][2], c='white', rotation='horizontal')
-            
-            #'''
-            if self.ontology[i][0] in neighborhood_objects_IDs and self.ontology[i][7] == 1:
-                #ax.annotate("", xy=(0.5, 0.5), xytext=(0, 0), arrowprops=dict(arrowstyle="->"))
-                if self.ontology[i][0] == self.red_object_value:
-                    plt.scatter(self.explanation_size_x - x_pixel + dx, y_pixel, c='red', marker='>',linewidths=1)
-                else:
-                    plt.scatter(self.explanation_size_x - x_pixel + dx, y_pixel, c='yellow', marker='>',linewidths=0.5)
-            #'''
+                    if self.ontology[i][0] == self.red_object_value:
+                        for j in range(0, len(arrows)):
+                            plt.scatter(xs_plot[j], ys_plot[j], marker=arrows[j], c='red', linewidths=1)
+                    else:
+                        for j in range(0, len(arrows)):
+                            plt.scatter(xs_plot[j], ys_plot[j], marker=arrows[j], c='yellow', linewidths=1)
+        elif self.object_arrow_blinking == False:
+            self.object_arrow_blinking = True
 
         # CONVERT IMAGE TO NUMPY ARRAY 
         fig.savefig('explanation' + '.png', transparent=False)
