@@ -377,15 +377,23 @@ class hixron(object):
         # simulation or real-world experiment
         self.simulation = True
 
+        # hri vars
         self.use_lime = False
-        self.changed_position_value = -1
-        self.hidden_plan = Path()
+        self.last_object_moved_ID = -1
+        self.old_plan = Path()
         self.old_plan_bool = False
-        self.red_object_countdown = 0
+        self.red_object_countdown = -1
         self.red_object_value = -1
         self.humans = []
         self.human_blinking = False
         self.object_arrow_blinking = False
+
+        # icsr vars
+        self.extrovert = 1.0
+        self.human_detected = False
+        self.navigating = True
+        self.stopping = False
+        self.deviating = False
 
         # whether to plot
         self.plot_local_costmap_bool = False
@@ -534,7 +542,7 @@ class hixron(object):
         self.global_semantic_map_origin_y -= 9.0 
         self.global_semantic_map_resolution = float(self.global_semantic_map_info[0,1])
         self.global_semantic_map_size = [int(self.global_semantic_map_info[0,3]), int(self.global_semantic_map_info[0,2])]
-        self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]), dtype=float)
+        self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         #print(self.global_semantic_map_origin_x, self.global_semantic_map_origin_y, self.global_semantic_map_resolution, self.global_semantic_map_size)
         self.global_semantic_map_complete = []
 
@@ -544,7 +552,7 @@ class hixron(object):
         # camera projection matrix 
         self.P = np.array([])
 
-        self.semantic_labels = MarkerArray()
+        self.semantic_labels_marker_array = MarkerArray()
 
     # declare subscribers
     def main_(self):
@@ -575,8 +583,12 @@ class hixron(object):
         #self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
 
         self.pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
-        self.pub_path_markers = rospy.Publisher('/path_markers', MarkerArray, queue_size=10)
-        self.pub_old_path_markers = rospy.Publisher('/old_path_markers', MarkerArray, queue_size=10)
+        self.pub_current_path = rospy.Publisher('/path_markers', MarkerArray, queue_size=10)
+        self.pub_old_path = rospy.Publisher('/old_path_markers', MarkerArray, queue_size=10)
+
+        self.semantic_labels_marker_array = MarkerArray()
+        self.current_path_marker_array = MarkerArray()
+        self.old_path_marker_array = MarkerArray()
 
         # global-amcl pose subscriber
         self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
@@ -591,7 +603,7 @@ class hixron(object):
 
         # explanation layer
         if self.explanation_layer_bool:
-            self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2)
+            self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2, queue_size=10)
         
             # point_cloud variables
             self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
@@ -693,19 +705,14 @@ class hixron(object):
         self.gazebo_names = states_msg.name
         self.gazebo_poses = states_msg.pose
 
-        self.humans = []
-        for i in range(0, len(self.gazebo_names)):
-            self.gazebo_poses[i].position.x += 9.0
-            self.gazebo_poses[i].position.y -= 9.0 
-            if 'citizen' in self.gazebo_names[i] or 'human' in self.gazebo_names[i]:
-                self.humans.append(self.gazebo_poses[i])
-      
+        #self.create_semantic_data()
+
     # global plan callback
     def global_plan_callback(self, msg):
         #print('\nglobal_plan_callback!')
         
         # save global plan to class vars
-        self.global_plan_current = msg    
+        self.global_plan_current = copy.deepcopy(msg)    
         self.global_plan_history.append(self.global_plan_current)
         self.globalPlan_goalPose_indices_history.append([len(self.global_plan_history), len(self.goal_pose_history)])
         
@@ -968,7 +975,17 @@ class hixron(object):
     def update_ontology(self):
         # check if any object changed its position from simulation or from object detection (and tracking)
 
-        if self.gazebo_names == [] or self.gazebo_poses == []:
+        gazebo_names = copy.deepcopy(self.gazebo_names)
+        gazebo_poses = copy.deepcopy(self.gazebo_poses)
+
+        self.humans = []
+        for i in range(0, len(gazebo_names)):
+            gazebo_poses[i].position.x += 9.0
+            gazebo_poses[i].position.y -= 9.0 
+            if 'citizen' in gazebo_names[i] or 'human' in gazebo_names[i]:
+                self.humans.append(gazebo_poses[i])
+
+        if gazebo_names == [] or gazebo_poses == []:
             return
 
         # simulation relying on Gazebo
@@ -979,10 +996,10 @@ class hixron(object):
                 if self.ontology[i][7] == 1:
                     # get the object's new position from Gazebo
                     obj_gazebo_name = self.ontology[i][1]
-                    obj_gazebo_name_idx = self.gazebo_names.index(obj_gazebo_name)
+                    obj_gazebo_name_idx = gazebo_names.index(obj_gazebo_name)
                     
-                    obj_x_new = self.gazebo_poses[obj_gazebo_name_idx].position.x
-                    obj_y_new = self.gazebo_poses[obj_gazebo_name_idx].position.y
+                    obj_x_new = gazebo_poses[obj_gazebo_name_idx].position.x
+                    obj_y_new = gazebo_poses[obj_gazebo_name_idx].position.y
 
                     obj_x_size = self.ontology[i][5]
                     obj_y_size = self.ontology[i][6]
@@ -1004,7 +1021,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]
+                            self.last_object_moved_ID = self.ontology[i][0]
                             self.ontology[i][12] += obj_x_new - obj_x_current
                             self.ontology[i][13] += obj_y_new - obj_y_current
                             if self.ontology[i][11] == 'y':
@@ -1019,7 +1036,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]
+                            self.last_object_moved_ID = self.ontology[i][0]
                             self.ontology[i][12] += obj_x_new - obj_x_current
                             if self.ontology[i][11] == 'y':
                                 self.ontology[i][11] = 'n'
@@ -1034,7 +1051,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]
+                            self.last_object_moved_ID = self.ontology[i][0]
                             self.ontology[i][12] += obj_x_new - obj_x_current
                             self.ontology[i][13] += obj_y_new - obj_y_current
                             if self.ontology[i][11] == 'y':
@@ -1049,7 +1066,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]#
+                            self.last_object_moved_ID = self.ontology[i][0]#
                             self.ontology[i][13] += obj_y_new - obj_y_current
                             if self.ontology[i][11] == 'y':
                                 self.ontology[i][11] = 'n'
@@ -1064,7 +1081,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]
+                            self.last_object_moved_ID = self.ontology[i][0]
                             self.ontology[i][12] += obj_x_new - obj_x_current
                             self.ontology[i][13] += obj_y_new - obj_y_current
                             if self.ontology[i][11] == 'y':
@@ -1079,7 +1096,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]
+                            self.last_object_moved_ID = self.ontology[i][0]
                             self.ontology[i][12] += obj_x_new - obj_x_current
                             if self.ontology[i][11] == 'y':
                                 self.ontology[i][11] = 'n'
@@ -1094,7 +1111,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]
+                            self.last_object_moved_ID = self.ontology[i][0]
                             self.ontology[i][12] += obj_x_new - obj_x_current
                             self.ontology[i][13] += obj_y_new - obj_y_current
                             if self.ontology[i][11] == 'y':
@@ -1109,7 +1126,7 @@ class hixron(object):
                         if diff_x > multiplication_factor*obj_x_size or diff_y > multiplication_factor*obj_y_size:
                             self.ontology[i][3] = obj_x_new
                             self.ontology[i][4] = obj_y_new
-                            self.changed_position_value = self.ontology[i][0]
+                            self.last_object_moved_ID = self.ontology[i][0]
                             self.ontology[i][13] += obj_y_new - obj_y_current
                             if self.ontology[i][11] == 'y':
                                 self.ontology[i][11] = 'n'
@@ -1388,14 +1405,16 @@ class hixron(object):
     # create global semantic map
     def create_global_semantic_map(self):
         #start = time.time()
+
+        # do not update the map, if
+        if self.last_object_moved_ID == -1 and len(np.unique(self.global_semantic_map)) != 1:
+            return
         
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         self.global_semantic_map_inflated = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         #print('(self.global_semantic_map_size[0],self.global_semantic_map_size[1]) = ', (self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         
         for i in range(0, self.ontology.shape[0]):
-            #if self.ontology[i][2] != 'chair':
-            #    continue
             # IMPORTANT OBJECT'S POINTS
             # centroid and size
             c_map_x = float(self.ontology[i][3])
@@ -1433,23 +1452,20 @@ class hixron(object):
             object_top = tr_pixel_y
             object_right = tr_pixel_x
             object_bottom = bl_pixel_y
-            #if self.ontology[i][1] == 'kitchen_chair_clone_4_clone_5':
             #print('\n(i, name) = ', (i, self.ontology[i][1]))
             #print('(object_left,object_right,object_top,object_bottom) = ', (object_left,object_right,object_top,object_bottom))
             #print('(c_map_x,c_map_y,x_size,y_size) = ', (c_map_x,c_map_y,x_size,y_size))
 
             # global semantic map
-            self.global_semantic_map[max(0, object_top):min(self.global_semantic_map_size[0], object_bottom), max(0, object_left):min(self.global_semantic_map_size[1], object_right)] = i+1
+            self.global_semantic_map[max(0, object_top):min(self.global_semantic_map_size[0], object_bottom), max(0, object_left):min(self.global_semantic_map_size[1], object_right)] = self.ontology[i][0]
 
             # inflate global semantic map
-            inflation_x = int(self.inflation_radius / self.global_semantic_map_resolution) 
-            inflation_y = int(self.inflation_radius / self.global_semantic_map_resolution)
-            self.global_semantic_map_inflated[max(0, object_top-inflation_y):min(self.global_semantic_map_size[0], object_bottom+inflation_y), max(0, object_left-inflation_x):min(self.global_semantic_map_size[1], object_right+inflation_x)] = i+1
+            #inflation_x = int(self.inflation_radius / self.global_semantic_map_resolution) 
+            #inflation_y = int(self.inflation_radius / self.global_semantic_map_resolution)
+            #self.global_semantic_map_inflated[max(0, object_top-inflation_y):min(self.global_semantic_map_size[0], object_bottom+inflation_y), max(0, object_left-inflation_x):min(self.global_semantic_map_size[1], object_right+inflation_x)] = i+1
 
         #end = time.time()
         #print('global semantic map creation runtime = ' + str(round(end-start,3)) + ' seconds!')
-
-        #self.global_semantic_map[232:270,63:71] = 40
 
         self.global_semantic_map_complete = copy.deepcopy(self.global_semantic_map)
 
@@ -1725,13 +1741,24 @@ class hixron(object):
             pc2.header.stamp = rospy.Time.now()
             self.pub_explanation_layer.publish(pc2)
             
-            self.pub_semantic_labels.publish(self.semantic_labels)
-            self.pub_path_markers.publish(self.path_markers)
-            self.pub_old_path_markers.publish(self.old_path_markers)
+            self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
+            self.pub_current_path.publish(self.current_path_marker_array)
+            self.pub_old_path.publish(self.old_path_marker_array)
+
+    # decide on explanation variables
+    def set_explanation_vars(self):
+        explanaton_timing = ['always', 'when_change_in_behavior', '']
+        explanaton_duration = ['always', 'when_change_in_behavior', '']
+        explanaton_representation = ['visual', 'textual', 'verbal', 'visual-textual', 'visual-verbal', 'textual-verbal', 'visual-textual-verbal']
+        if self.extrovert == 1.0:
+            pass
 
     # test whether explanation is needed
     def test_explain(self):
         #print('test_explain!')
+
+        #self.create_semantic_data()
+
         if len(self.global_plan_history) == 0:
             return
 
@@ -1739,7 +1766,8 @@ class hixron(object):
         self.deviation_between_global_plans = False
         deviation_threshold = 15.0
         
-        self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history)
+        self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:0])
+        #self.global_plan_history_hold = copy.deepcopy(self.global_plan_history)
         self.global_plan_current_hold = copy.deepcopy(self.global_plan_history[-1])
         if len(self.global_plan_history) > 1:
             self.global_plan_previous_hold = copy.deepcopy(self.global_plan_history[-2])
@@ -1754,26 +1782,28 @@ class hixron(object):
                 local_dev = dev_x**2 + dev_y**2
                 global_dev += local_dev
             global_dev = math.sqrt(global_dev)
-            #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+            print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
         
             if global_dev > deviation_threshold:
                 #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
                 self.deviation_between_global_plans = True
+                self.deviating = True
 
         if self.use_lime == False:
+            #self.set_explanation_vars()
             self.explain_global_without_lime()
 
         elif self.deviation_between_global_plans and self.use_lime:
             self.explain_global_deviation()
 
     # explain without using lime, rely only on ontology and perception
-    def explain_global_without_lime(self):
-        if self.global_semantic_map_complete == []:
-            return
-        
+    def explain_global_without_lime(self):        
         self.global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
 
-        color_shape_path_combination = [2,1,1]
+        if len(np.unique(self.global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
+            return
+
+        color_shape_path_combination = [0,0,0]
         
         color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
         color_scheme = color_schemes[color_shape_path_combination[0]]
@@ -1923,17 +1953,42 @@ class hixron(object):
             print('New goal chosen!!!')
             self.old_plan_bool = False
 
-        # if deviation happened
+        # if deviation happened and some object was moved
         if self.deviation_between_global_plans and same_goal_pose:
-            if self.changed_position_value > 0:
-                # find the red object
-                self.red_object_value = copy.deepcopy(self.changed_position_value)
-                self.red_object_countdown = 7
-                self.changed_position_value = -1
+            print('TESTIRA se moguca devijacija')
+            if self.last_object_moved_ID > 0 and self.last_object_moved_ID in neighborhood_objects_IDs and self.red_object_countdown == -1:
+                '''
+                red_object_found = False
+                print('\n\n\n\n')
+                # check if the moved object is close to the old path
+                for i in range(0, len(self.global_plan_previous_hold.poses)):
 
-                # save the previous plan
-                self.hidden_plan = copy.deepcopy(self.global_plan_previous_hold)
-                self.old_plan_bool = True
+                    plan_x = self.global_plan_previous_hold.poses[i].pose.position.x
+                    plan_y = self.global_plan_previous_hold.poses[i].pose.position.y
+
+                    moved_obj_x = self.ontology[self.last_object_moved_ID-1][3]
+                    moved_obj_y = self.ontology[self.last_object_moved_ID-1][4]
+
+                    diff_x = abs(plan_x - moved_obj_x)
+                    diff_y = abs(plan_y - moved_obj_y)
+                    print("(OBJ,LENGTH, i, diff_x, diff_y): ", (self.ontology[self.last_object_moved_ID-1][1],len(self.global_plan_previous_hold.poses), i, diff_x, diff_y))
+
+                    if diff_x < 1.0 and diff_y < 1.0:
+                        red_object_found = True
+                        break
+                '''
+
+                red_object_found = True
+
+                if red_object_found:
+                    # find the red object
+                    self.red_object_value = copy.deepcopy(self.last_object_moved_ID)
+                    self.red_object_countdown = 7
+                    self.last_object_moved_ID = -1
+
+                    # save the previous plan
+                    self.old_plan = copy.deepcopy(self.global_plan_previous_hold)
+                    self.old_plan_bool = True
 
         # COLOR RED OBJECT
         if self.red_object_countdown > 0:
@@ -1946,12 +2001,12 @@ class hixron(object):
             self.red_object_value = -1
 
         # VISUALIZE OLD PATH
-        self.old_path_markers = MarkerArray()
+        self.old_path_marker_array.markers = []
         if self.old_plan_bool == True:
-            #print('len(self.hidden_plan.poses) = ', len(self.hidden_plan.poses))
-            for i in range(0, len(self.hidden_plan.poses)):
-                x_map = self.hidden_plan.poses[i].pose.position.x
-                y_map = self.hidden_plan.poses[i].pose.position.y
+            #print('len(self.old_plan.poses) = ', len(self.old_plan.poses))
+            for i in range(0, len(self.old_plan.poses)):
+                x_map = self.old_plan.poses[i].pose.position.x
+                y_map = self.old_plan.poses[i].pose.position.y
 
                 # visualize path
                 marker = Marker()
@@ -1960,13 +2015,13 @@ class hixron(object):
                 marker.type = marker.SPHERE
                 marker.action = marker.ADD
                 marker.pose = Pose()
-                marker.pose.position.x = self.hidden_plan.poses[i].pose.position.x
-                marker.pose.position.y = self.hidden_plan.poses[i].pose.position.y
+                marker.pose.position.x = self.old_plan.poses[i].pose.position.x
+                marker.pose.position.y = self.old_plan.poses[i].pose.position.y
                 marker.pose.position.z = 0.8
-                marker.pose.orientation.x = self.hidden_plan.poses[i].pose.orientation.x
-                marker.pose.orientation.y = self.hidden_plan.poses[i].pose.orientation.y
-                marker.pose.orientation.z = self.hidden_plan.poses[i].pose.orientation.z
-                marker.pose.orientation.w = self.hidden_plan.poses[i].pose.orientation.w
+                marker.pose.orientation.x = self.old_plan.poses[i].pose.orientation.x
+                marker.pose.orientation.y = self.old_plan.poses[i].pose.orientation.y
+                marker.pose.orientation.z = self.old_plan.poses[i].pose.orientation.z
+                marker.pose.orientation.w = self.old_plan.poses[i].pose.orientation.w
                 marker.color.r = 0.85
                 marker.color.g = 0.85
                 marker.color.b = 0.85
@@ -1976,18 +2031,47 @@ class hixron(object):
                 marker.scale.z = 0.1
                 #marker.frame_locked = False
                 marker.ns = "my_namespace"
-                self.old_path_markers.markers.append(marker)
+                self.old_path_marker_array.markers.append(marker)
 
-        # VISUALIZE NEW PATH
-        self.path_markers = MarkerArray()
+        # VISUALIZE CURRENT PATH
+        previous_marker_array_length = len(self.current_path_marker_array.markers)
+        current_marker_array_length = len(self.global_plan_current_hold.poses)-25
+        delete_needed = False
+        if current_marker_array_length < previous_marker_array_length:
+            delete_needed = True
+        len_max = max(previous_marker_array_length, current_marker_array_length)
+        self.current_path_marker_array.markers = []
         if path_scheme == path_schemes[0]:         
-            for i in range(5, len(self.global_plan_current_hold.poses)):
+            for i in range(25, len_max+25):
                 # visualize path
                 marker = Marker()
                 marker.header.frame_id = 'map'
                 marker.id = i
                 marker.type = marker.SPHERE
-                marker.action = marker.ADD
+                marker.action = marker.ADD #DELETEALL #ADD
+                if delete_needed and i >= current_marker_array_length+25:
+                    marker.action = marker.DELETE
+                    #marker.lifetime = 1.0
+                    marker.pose = Pose()
+                    marker.pose.position.x = 0.0
+                    marker.pose.position.y = 0.0
+                    marker.pose.position.z = 0.95
+                    marker.pose.orientation.x = 0.0
+                    marker.pose.orientation.y = 0.0
+                    marker.pose.orientation.z = 0.0
+                    marker.pose.orientation.w = 1.0
+                    marker.color.r = 0.043
+                    marker.color.g = 0.941
+                    marker.color.b = 1.0
+                    marker.color.a = 0.5        
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.current_path_marker_array.markers.append(marker)
+                    continue
+                #marker.lifetime = 1.0
                 marker.pose = Pose()
                 marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
                 marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
@@ -2005,7 +2089,7 @@ class hixron(object):
                 marker.scale.z = 0.1
                 #marker.frame_locked = False
                 marker.ns = "my_namespace"
-                self.path_markers.markers.append(marker)
+                self.current_path_marker_array.markers.append(marker)
         elif path_scheme == path_schemes[1]:         
             for i in range(20, len(self.global_plan_current_hold.poses) - 1 , 75):
                 # visualize path
@@ -2031,11 +2115,11 @@ class hixron(object):
                 marker.scale.z = 0.25
                 #marker.frame_locked = False
                 marker.ns = "my_namespace"
-                self.path_markers.markers.append(marker)
+                self.current_path_marker_array.markers.append(marker)
 
         # VISUALIZE OBSTACLE NAMES USING PC2
         #[qx, qy, qz, qw]= euler_to_quaternion(90, 90, 90)
-        self.semantic_labels.markers = []
+        self.semantic_labels_marker_array.markers = []
         if shape_scheme == shape_schemes[1]:
             for i in range(0, self.ontology.shape[0] - 4):
                 if self.ontology[i][0] in neighborhood_objects_IDs:
@@ -2066,7 +2150,7 @@ class hixron(object):
                     #marker.frame_locked = False
                     marker.text = self.ontology[i][2]
                     marker.ns = "my_namespace"
-                    self.semantic_labels.markers.append(marker)
+                    self.semantic_labels_marker_array.markers.append(marker)
 
         # FORM THE EXPLANATION IMAGE                  
         explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
@@ -2094,7 +2178,11 @@ class hixron(object):
 
                 distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
 
-                x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                # for nicer plotting
+                x_map += 0.2
+                y_map += 0.2
+
+                x_pixel = int((x_map + - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
                 y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
 
                 if distance_human_robot > 1.0:
@@ -2104,6 +2192,7 @@ class hixron(object):
         elif self.human_blinking == False:
             self.human_blinking = True
 
+        '''
         # VISUALIZE OBSTACLE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
         #if shape_scheme == shape_schemes[1]:
         if self.object_arrow_blinking == True:
@@ -2176,9 +2265,11 @@ class hixron(object):
                             plt.scatter(xs_plot[j], ys_plot[j], marker=arrows[j], c='yellow', linewidths=1)
         elif self.object_arrow_blinking == False:
             self.object_arrow_blinking = True
-
+        '''
+            
         # CONVERT IMAGE TO NUMPY ARRAY 
         fig.savefig('explanation' + '.png', transparent=False)
+        plt.close()
         explanation = PIL.Image.open(os.getcwd() + '/explanation.png').convert('RGB')        
         explanation = np.array(explanation)[:,:,:3].astype(np.uint8)
 
