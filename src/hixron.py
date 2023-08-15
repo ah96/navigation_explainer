@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation as R
 import copy
 import tf2_ros
 import os
-from gazebo_msgs.msg import ModelStates
+from gazebo_msgs.msg import ModelStates, ModelState
 import math
 from skimage.measure import regionprops
 from geometry_msgs.msg import Point, Quaternion
@@ -35,7 +35,9 @@ from scipy import misc
 import PIL
 from visualization_msgs.msg import Marker, MarkerArray
 from PIL import ImageFont, ImageDraw
-
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
+import actionlib
+import tf
 
 class klasa(object):
     def what_to_explain(control_param, locality_param):
@@ -374,7 +376,6 @@ def euler_to_quaternion(yaw, pitch, roll):
 class hixron(object):
     # constructor
     def __init__(self):
-        # simulation or real-world experiment
         self.simulation = True
 
         # hri vars
@@ -556,6 +557,10 @@ class hixron(object):
 
     # declare subscribers
     def main_(self):
+        self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState)#, queue_size=1)
+        self.chair1_moved = False
+        self.chair2_moved = False
+        
         # create the base plot structure
         if self.plot_local_costmap_bool == True or self.plot_global_costmap_bool == True or self.plot_local_semantic_map_bool == True or self.plot_global_semantic_map_bool == True:
             self.fig = plt.figure(frameon=False)
@@ -663,7 +668,34 @@ class hixron(object):
             # increase the global counter
             self.counter_global += 1
 
-    # odometry callback
+    # send goal pose
+    def send_goal_pose(self):
+        client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
+  
+        # Waits until the action server has started up and started
+        # listening for goals.
+        client.wait_for_server()
+   
+        # Creates a goal to send to the action server.
+        goal = MoveBaseGoal()
+        goal.target_pose.header.seq = 0
+        goal.target_pose.header.stamp.secs = 0
+        goal.target_pose.header.stamp.nsecs = 0
+        goal.target_pose.header.frame_id = "map"
+
+        goal.target_pose.pose.position.x = 0.91
+        goal.target_pose.pose.position.y = -10.53
+        goal.target_pose.pose.position.z = 0.0
+
+        goal.target_pose.pose.orientation.x = 0.0
+        goal.target_pose.pose.orientation.y = 0.0
+        goal.target_pose.pose.orientation.z = -0.71
+        goal.target_pose.pose.orientation.w = 0.70
+   
+        # Sends the goal to the action server.
+        client.send_goal(goal)
+        
+    # odom callback
     def odom_callback(self, msg):
         #print('odom_callback')
         
@@ -675,13 +707,65 @@ class hixron(object):
 
     # amcl (global) pose callback
     def amcl_callback(self, msg):
-        #print('amcl_callback')
+        print('amcl_callback')
 
         #self.robot_position_map = msg.pose.pose.position
         #self.robot_orientation_map = msg.pose.pose.orientation
         self.robot_pose_map = msg.pose.pose
         #self.robot_pose_map.position.x -= 9.0
-        #self.robot_pose_map.position.y += 9.0 
+        #self.robot_pose_map.position.y += 9.0
+
+        if self.chair1_moved == False:
+            print('USAO1')
+            state = ModelState()
+            state.model_name = 'chair_15'
+            state.reference_frame = 'world'  # ''ground_plane'
+            # pose
+            state.pose.position.x = -7.73
+            state.pose.position.y = 5.97
+            state.pose.position.z = 0
+            #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
+            quaternion = euler_to_quaternion(3.122560, 0, 0)
+            state.pose.orientation.x = quaternion[0]
+            state.pose.orientation.y = quaternion[1]
+            state.pose.orientation.z = quaternion[2]
+            state.pose.orientation.w = quaternion[3]
+            # twist
+            state.twist.linear.x = 0
+            state.twist.linear.y = 0
+            state.twist.linear.z = 0
+            state.twist.angular.x = 0
+            state.twist.angular.y = 0
+            state.twist.angular.z = 0
+
+            self.pub_move.publish(state)
+            self.chair1_moved = True
+
+        if self.chair2_moved == False:
+            print('USAO2')
+            state = ModelState()
+            state.model_name = 'chair_16'
+            state.reference_frame = 'world'  # ''ground_plane'
+            # pose
+            state.pose.position.x = -6.36
+            state.pose.position.y = 4.51
+            state.pose.position.z = 0
+            #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
+            quaternion = euler_to_quaternion(3.122560, 0, 0)
+            state.pose.orientation.x = quaternion[0]
+            state.pose.orientation.y = quaternion[1]
+            state.pose.orientation.z = quaternion[2]
+            state.pose.orientation.w = quaternion[3]
+            # twist
+            state.twist.linear.x = 0
+            state.twist.linear.y = 0
+            state.twist.linear.z = 0
+            state.twist.angular.x = 0
+            state.twist.angular.y = 0
+            state.twist.angular.z = 0
+
+            self.pub_move.publish(state)
+            self.chair2_moved = True
         
     # goal pose callback
     def goal_pose_callback(self, msg):
@@ -1757,47 +1841,19 @@ class hixron(object):
     def test_explain(self):
         #print('test_explain!')
 
-        #self.create_semantic_data()
+        if self.first_call:
+            self.create_semantic_data()
 
-        if len(self.global_plan_history) == 0:
-            return
+        #if self.use_lime == False:
+        #self.set_explanation_vars()
+        self.explain_global_without_lime()
 
-        # test if there is deviation between current and previous
-        self.deviation_between_global_plans = False
-        deviation_threshold = 15.0
-        
-        self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:])
-        #self.global_plan_history_hold = copy.deepcopy(self.global_plan_history)
-        self.global_plan_current_hold = copy.deepcopy(self.global_plan_history[-1])
-        if len(self.global_plan_history) > 1:
-            self.global_plan_previous_hold = copy.deepcopy(self.global_plan_history[-2])
-        
-            min_plan_length = min(len(self.global_plan_current_hold.poses), len(self.global_plan_previous_hold.poses))
-            
-            # calculate deivation
-            global_dev = 0
-            for i in range(0, min_plan_length):
-                dev_x = self.global_plan_current_hold.poses[i].pose.position.x - self.global_plan_previous_hold.poses[i].pose.position.x
-                dev_y = self.global_plan_current_hold.poses[i].pose.position.y - self.global_plan_previous_hold.poses[i].pose.position.y
-                local_dev = dev_x**2 + dev_y**2
-                global_dev += local_dev
-            global_dev = math.sqrt(global_dev)
-            #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
-        
-            if global_dev > deviation_threshold:
-                #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
-                self.deviation_between_global_plans = True
-                self.deviating = True
-
-        if self.use_lime == False:
-            #self.set_explanation_vars()
-            self.explain_global_without_lime()
-
-        elif self.deviation_between_global_plans and self.use_lime:
-            self.explain_global_deviation()
+        #elif self.deviation_between_global_plans and self.use_lime:
+        #    self.explain_global_deviation()
 
     # explain without using lime, rely only on ontology and perception
-    def explain_global_without_lime(self):        
+    def explain_global_without_lime(self):
+        # STATIC PART        
         global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
 
         if len(np.unique(global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
@@ -1854,7 +1910,6 @@ class hixron(object):
             neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
         neighborhood_objects_IDs = [int(item) for item in neighborhood_objects_IDs]
         #print('neighborhood_objects_IDs =', neighborhood_objects_IDs)
-
 
         # OBSTACLE COLORING
         if color_scheme == color_schemes[1]:
@@ -2014,244 +2069,9 @@ class hixron(object):
                     explanation_B[global_semantic_map_complete_copy == wall_ID] = 180
 
 
-        # check if the last two global plans have the same goal pose
-        same_goal_pose = False
-        if len(self.globalPlan_goalPose_indices_history_hold) > 1:
-            if self.globalPlan_goalPose_indices_history_hold[-1][1] == self.globalPlan_goalPose_indices_history_hold[-2][1]:
-                same_goal_pose = True
-
-        if same_goal_pose == False:
-            print('New goal chosen!!!')
-            self.old_plan_bool = False
-
-        # if deviation happened and some object was moved
-        if self.deviation_between_global_plans and same_goal_pose:
-            #print('TESTIRA se moguca devijacija')
-            if self.last_object_moved_ID > 0 and self.last_object_moved_ID in neighborhood_objects_IDs and self.red_object_countdown == -1:
-                '''
-                red_object_found = False
-                print('\n\n\n\n')
-                # check if the moved object is close to the old path
-                for i in range(0, len(self.global_plan_previous_hold.poses)):
-
-                    plan_x = self.global_plan_previous_hold.poses[i].pose.position.x
-                    plan_y = self.global_plan_previous_hold.poses[i].pose.position.y
-
-                    moved_obj_x = self.ontology[self.last_object_moved_ID-1][3]
-                    moved_obj_y = self.ontology[self.last_object_moved_ID-1][4]
-
-                    diff_x = abs(plan_x - moved_obj_x)
-                    diff_y = abs(plan_y - moved_obj_y)
-                    print("(OBJ,LENGTH, i, diff_x, diff_y): ", (self.ontology[self.last_object_moved_ID-1][1],len(self.global_plan_previous_hold.poses), i, diff_x, diff_y))
-
-                    if diff_x < 1.0 and diff_y < 1.0:
-                        red_object_found = True
-                        break
-                '''
-
-                red_object_found = True
-
-                if red_object_found:
-                    # find the red object
-                    self.red_object_value = copy.deepcopy(self.last_object_moved_ID)
-                    self.red_object_countdown = 7
-                    self.last_object_moved_ID = -1
-
-                    # save the previous plan
-                    self.old_plan = copy.deepcopy(self.global_plan_previous_hold)
-                    self.old_plan_bool = True
-
-        # COLOR RED OBJECT
-        if self.red_object_countdown > 0:
-            explanation_R[global_semantic_map_complete_copy == self.red_object_value] = 201
-            explanation_G[global_semantic_map_complete_copy == self.red_object_value] = 9
-            explanation_B[global_semantic_map_complete_copy == self.red_object_value] = 9
-            self.red_object_countdown -= 1
-        elif self.red_object_countdown == 0:
-            self.red_object_countdown -= 1
-            self.red_object_value = -1
-
-        # VISUALIZE OLD PATH
-        if self.old_plan_bool == True:
-            self.old_path_marker_array.markers = []
-
-            #print('len(self.old_plan.poses) = ', len(self.old_plan.poses))
-            for i in range(0, len(self.old_plan.poses)):
-                x_map = self.old_plan.poses[i].pose.position.x
-                y_map = self.old_plan.poses[i].pose.position.y
-
-                # visualize path
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = i
-                marker.type = marker.SPHERE
-                marker.action = marker.ADD
-                marker.pose = Pose()
-                marker.pose.position.x = self.old_plan.poses[i].pose.position.x
-                marker.pose.position.y = self.old_plan.poses[i].pose.position.y
-                marker.pose.position.z = 0.8
-                marker.pose.orientation.x = self.old_plan.poses[i].pose.orientation.x
-                marker.pose.orientation.y = self.old_plan.poses[i].pose.orientation.y
-                marker.pose.orientation.z = self.old_plan.poses[i].pose.orientation.z
-                marker.pose.orientation.w = self.old_plan.poses[i].pose.orientation.w
-                marker.color.r = 0.85
-                marker.color.g = 0.85
-                marker.color.b = 0.85
-                marker.color.a = 0.8
-                marker.scale.x = 0.1
-                marker.scale.y = 0.1
-                marker.scale.z = 0.1
-                #marker.frame_locked = False
-                marker.ns = "my_namespace"
-                self.old_path_marker_array.markers.append(marker)
-
-            for i in range(len(self.old_plan.poses), 600):
-                x_map = 0
-                y_map = 0
-
-                # visualize path
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = i
-                marker.type = marker.SPHERE
-                marker.action = marker.DELETE
-                marker.pose = Pose()
-                marker.pose.position.x = 0
-                marker.pose.position.y = 0
-                marker.pose.position.z = 0.8
-                marker.pose.orientation.x = 0
-                marker.pose.orientation.y = 0
-                marker.pose.orientation.z = 0
-                marker.pose.orientation.w = 0
-                marker.color.r = 0.85
-                marker.color.g = 0.85
-                marker.color.b = 0.85
-                marker.color.a = 0.8
-                marker.scale.x = 0.1
-                marker.scale.y = 0.1
-                marker.scale.z = 0.1
-                #marker.frame_locked = False
-                marker.ns = "my_namespace"
-                self.old_path_marker_array.markers.append(marker)
-
-        # VISUALIZE CURRENT PATH
-        if path_scheme == path_schemes[0]:         
-            previous_marker_array_length = len(self.current_path_marker_array.markers)
-            current_marker_array_length = len(self.global_plan_current_hold.poses)-25
-            delete_needed = False
-            if current_marker_array_length < previous_marker_array_length:
-                delete_needed = True
-            len_max = max(previous_marker_array_length, current_marker_array_length)
-            self.current_path_marker_array.markers = []        
-            
-            for i in range(25, len_max+25):
-                # visualize path
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = i
-                marker.type = marker.SPHERE
-                marker.action = marker.ADD #DELETEALL #ADD
-                if delete_needed and i >= current_marker_array_length+25:
-                    marker.action = marker.DELETE
-                    #marker.lifetime = 1.0
-                    marker.pose = Pose()
-                    marker.pose.position.x = 0.0
-                    marker.pose.position.y = 0.0
-                    marker.pose.position.z = 0.95
-                    marker.pose.orientation.x = 0.0
-                    marker.pose.orientation.y = 0.0
-                    marker.pose.orientation.z = 0.0
-                    marker.pose.orientation.w = 1.0
-                    marker.color.r = 0.043
-                    marker.color.g = 0.941
-                    marker.color.b = 1.0
-                    marker.color.a = 0.5        
-                    marker.scale.x = 0.1
-                    marker.scale.y = 0.1
-                    marker.scale.z = 0.1
-                    #marker.frame_locked = False
-                    marker.ns = "my_namespace"
-                    self.current_path_marker_array.markers.append(marker)
-                    continue
-                #marker.lifetime = 1.0
-                marker.pose = Pose()
-                marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
-                marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
-                marker.pose.position.z = 0.95
-                marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
-                marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
-                marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
-                marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
-                marker.color.r = 0.043
-                marker.color.g = 0.941
-                marker.color.b = 1.0
-                marker.color.a = 0.5        
-                marker.scale.x = 0.1
-                marker.scale.y = 0.1
-                marker.scale.z = 0.1
-                #marker.frame_locked = False
-                marker.ns = "my_namespace"
-                self.current_path_marker_array.markers.append(marker)
-        elif path_scheme == path_schemes[1]:
-            # ARROWS
-            previous_marker_array_length = len(self.current_path_marker_array.markers)
-            current_marker_array_length = int(float(len(self.global_plan_current_hold.poses)-21) / 75) + 1
-            delete_needed = False
-            if current_marker_array_length < previous_marker_array_length:
-                delete_needed = True
-            len_max = max(previous_marker_array_length, current_marker_array_length)
-            self.current_path_marker_array.markers = []        
-                     
-            marker_ID = 0
-            for i in range(35, len(self.global_plan_current_hold.poses) - 1 , 75):
-                # visualize path
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = marker_ID
-                marker_ID += 1
-                marker.type = marker.ARROW
-                marker.action = marker.ADD
-                if delete_needed and marker_ID >= current_marker_array_length:
-                    marker.action = marker.DELETE
-                    #marker.lifetime = 1.0
-                    marker.pose = Pose()
-                    marker.pose.position.x = 0.0
-                    marker.pose.position.y = 0.0
-                    marker.pose.position.z = 0.95
-                    marker.pose.orientation.x = 0.0
-                    marker.pose.orientation.y = 0.0
-                    marker.pose.orientation.z = 0.0
-                    marker.pose.orientation.w = 1.0
-                    marker.color.r = 0.0
-                    marker.color.g = 1.0
-                    marker.color.b = 1.0
-                    marker.color.a = 0.8
-                    marker.scale.x = 1.0
-                    marker.scale.y = 0.15
-                    marker.scale.z = 0.25
-                    #marker.frame_locked = False
-                    marker.ns = "my_namespace"
-                    self.current_path_marker_array.markers.append(marker)
-                    continue
-                marker.pose = Pose()
-                marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
-                marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
-                marker.pose.position.z = 0.95
-                marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
-                marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
-                marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
-                marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
-                marker.color.r = 0.0
-                marker.color.g = 1.0
-                marker.color.b = 1.0
-                marker.color.a = 0.8
-                marker.scale.x = 1.0
-                marker.scale.y = 0.15
-                marker.scale.z = 0.25
-                #marker.frame_locked = False
-                marker.ns = "my_namespace"
-                self.current_path_marker_array.markers.append(marker)
-
+                self.dynamic_explanation = False
+        
+                
         # VISUALIZE OBSTACLE NAMES USING PC2
         if shape_scheme == shape_schemes[1]:
             self.semantic_labels_marker_array.markers = []
@@ -2307,14 +2127,44 @@ class hixron(object):
         ax.imshow(np.fliplr(explanation)) #np.flip(explanation))#.astype(np.uint8))
         
         # PLOT HUMAN AS BLINKING EXCLAMATION MARK
-        if self.human_blinking == True:
-            self.human_blinking = False
-            for human_pose in self.humans:
-                x_map = human_pose.position.x
-                y_map = human_pose.position.y
+        ID = self.ontology.shape[0]
+        for human_pose in self.humans:
+            x_map = human_pose.position.x
+            y_map = human_pose.position.y
+            
+            distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
+            
+            # visualize orientations and semantic labels of humans
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.id = ID
+            ID += 1
+            marker.type = marker.TEXT_VIEW_FACING
+            if distance_human_robot <= 2.0:
+                marker.action = marker.ADD
+            else:
+                marker.action = marker.DELETE
+            marker.pose = Pose()
+            marker.pose.position.x = x_map
+            marker.pose.position.y = y_map - 0.5
+            marker.pose.position.z = 0.5
+            marker.pose.orientation.x = 0.0#qx
+            marker.pose.orientation.y = 0.0#qy
+            marker.pose.orientation.z = 0.0#qz
+            marker.pose.orientation.w = 0.0#qw
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.35
+            #marker.frame_locked = False
+            marker.text = "human"
+            marker.ns = "my_namespace"
+            self.semantic_labels_marker_array.markers.append(marker)
 
-                distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
-
+            if self.human_blinking == True:
                 # for nicer plotting
                 x_map += 0.2
                 y_map += 0.2
@@ -2322,13 +2172,15 @@ class hixron(object):
                 x_pixel = int((x_map + - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
                 y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
 
-                if distance_human_robot > 1.0:
+                if distance_human_robot > 2.0:
                     ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c='yellow')
                 else:
                     C = np.array([255,102,102])
                     ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c=C/255.0)
-                    ax.text(self.explanation_size_x - x_pixel, y_pixel - 20, 'human', c=C/255.0)
-        elif self.human_blinking == False:
+        
+        if self.human_blinking == True:
+            self.human_blinking = False
+        else:
             self.human_blinking = True
 
         # VISUALIZE OBSTACLE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
@@ -2444,6 +2296,274 @@ class hixron(object):
                     for j in range(0, len(arrows)):
                         plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
             
+        
+        # DYNAMIC PART
+        if len(self.global_plan_history) > 1:
+            # test if there is deviation between current and previous
+            self.deviation_between_global_plans = False
+            deviation_threshold = 15.0
+            
+            self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:])
+            #self.global_plan_history_hold = copy.deepcopy(self.global_plan_history)
+            self.global_plan_current_hold = copy.deepcopy(self.global_plan_history[-1])
+            if len(self.global_plan_history) > 1:
+                self.global_plan_previous_hold = copy.deepcopy(self.global_plan_history[-2])
+            
+                min_plan_length = min(len(self.global_plan_current_hold.poses), len(self.global_plan_previous_hold.poses))
+                
+                # calculate deivation
+                global_dev = 0
+                for i in range(0, min_plan_length):
+                    dev_x = self.global_plan_current_hold.poses[i].pose.position.x - self.global_plan_previous_hold.poses[i].pose.position.x
+                    dev_y = self.global_plan_current_hold.poses[i].pose.position.y - self.global_plan_previous_hold.poses[i].pose.position.y
+                    local_dev = dev_x**2 + dev_y**2
+                    global_dev += local_dev
+                global_dev = math.sqrt(global_dev)
+                #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+            
+                if global_dev > deviation_threshold:
+                    #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                    self.deviation_between_global_plans = True
+                    self.deviating = True
+
+            # check if the last two global plans have the same goal pose
+            same_goal_pose = False
+            if len(self.globalPlan_goalPose_indices_history_hold) > 1:
+                if self.globalPlan_goalPose_indices_history_hold[-1][1] == self.globalPlan_goalPose_indices_history_hold[-2][1]:
+                    same_goal_pose = True
+
+            if same_goal_pose == False:
+                print('New goal chosen!!!')
+                self.old_plan_bool = False
+
+            # if deviation happened and some object was moved
+            if self.deviation_between_global_plans and same_goal_pose:
+                #print('TESTIRA se moguca devijacija')
+                if self.last_object_moved_ID > 0 and self.last_object_moved_ID in neighborhood_objects_IDs and self.red_object_countdown == -1:
+                    '''
+                    red_object_found = False
+                    print('\n\n\n\n')
+                    # check if the moved object is close to the old path
+                    for i in range(0, len(self.global_plan_previous_hold.poses)):
+
+                        plan_x = self.global_plan_previous_hold.poses[i].pose.position.x
+                        plan_y = self.global_plan_previous_hold.poses[i].pose.position.y
+
+                        moved_obj_x = self.ontology[self.last_object_moved_ID-1][3]
+                        moved_obj_y = self.ontology[self.last_object_moved_ID-1][4]
+
+                        diff_x = abs(plan_x - moved_obj_x)
+                        diff_y = abs(plan_y - moved_obj_y)
+                        print("(OBJ,LENGTH, i, diff_x, diff_y): ", (self.ontology[self.last_object_moved_ID-1][1],len(self.global_plan_previous_hold.poses), i, diff_x, diff_y))
+
+                        if diff_x < 1.0 and diff_y < 1.0:
+                            red_object_found = True
+                            break
+                    '''
+
+                    red_object_found = True
+
+                    if red_object_found:
+                        # find the red object
+                        self.red_object_value = copy.deepcopy(self.last_object_moved_ID)
+                        self.red_object_countdown = 7
+                        self.last_object_moved_ID = -1
+
+                        # save the previous plan
+                        self.old_plan = copy.deepcopy(self.global_plan_previous_hold)
+                        self.old_plan_bool = True
+
+            # COLOR RED OBJECT
+            if self.red_object_countdown > 0:
+                explanation_R[global_semantic_map_complete_copy == self.red_object_value] = 201
+                explanation_G[global_semantic_map_complete_copy == self.red_object_value] = 9
+                explanation_B[global_semantic_map_complete_copy == self.red_object_value] = 9
+                self.red_object_countdown -= 1
+            elif self.red_object_countdown == 0:
+                self.red_object_countdown -= 1
+                self.red_object_value = -1
+
+            # VISUALIZE OLD PATH
+            if self.old_plan_bool == True:
+                self.old_path_marker_array.markers = []
+
+                #print('len(self.old_plan.poses) = ', len(self.old_plan.poses))
+                for i in range(0, len(self.old_plan.poses)):
+                    x_map = self.old_plan.poses[i].pose.position.x
+                    y_map = self.old_plan.poses[i].pose.position.y
+
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.SPHERE
+                    marker.action = marker.ADD
+                    marker.pose = Pose()
+                    marker.pose.position.x = self.old_plan.poses[i].pose.position.x
+                    marker.pose.position.y = self.old_plan.poses[i].pose.position.y
+                    marker.pose.position.z = 0.8
+                    marker.pose.orientation.x = self.old_plan.poses[i].pose.orientation.x
+                    marker.pose.orientation.y = self.old_plan.poses[i].pose.orientation.y
+                    marker.pose.orientation.z = self.old_plan.poses[i].pose.orientation.z
+                    marker.pose.orientation.w = self.old_plan.poses[i].pose.orientation.w
+                    marker.color.r = 0.85
+                    marker.color.g = 0.85
+                    marker.color.b = 0.85
+                    marker.color.a = 0.8
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.old_path_marker_array.markers.append(marker)
+
+                for i in range(len(self.old_plan.poses), 600):
+                    x_map = 0
+                    y_map = 0
+
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.SPHERE
+                    marker.action = marker.DELETE
+                    marker.pose = Pose()
+                    marker.pose.position.x = 0
+                    marker.pose.position.y = 0
+                    marker.pose.position.z = 0.8
+                    marker.pose.orientation.x = 0
+                    marker.pose.orientation.y = 0
+                    marker.pose.orientation.z = 0
+                    marker.pose.orientation.w = 0
+                    marker.color.r = 0.85
+                    marker.color.g = 0.85
+                    marker.color.b = 0.85
+                    marker.color.a = 0.8
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.old_path_marker_array.markers.append(marker)
+
+            # VISUALIZE CURRENT PATH
+            if path_scheme == path_schemes[0]:         
+                previous_marker_array_length = len(self.current_path_marker_array.markers)
+                current_marker_array_length = len(self.global_plan_current_hold.poses)-25
+                delete_needed = False
+                if current_marker_array_length < previous_marker_array_length:
+                    delete_needed = True
+                len_max = max(previous_marker_array_length, current_marker_array_length)
+                self.current_path_marker_array.markers = []        
+                
+                for i in range(25, len_max+25):
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.SPHERE
+                    marker.action = marker.ADD #DELETEALL #ADD
+                    if delete_needed and i >= current_marker_array_length+25:
+                        marker.action = marker.DELETE
+                        #marker.lifetime = 1.0
+                        marker.pose = Pose()
+                        marker.pose.position.x = 0.0
+                        marker.pose.position.y = 0.0
+                        marker.pose.position.z = 0.95
+                        marker.pose.orientation.x = 0.0
+                        marker.pose.orientation.y = 0.0
+                        marker.pose.orientation.z = 0.0
+                        marker.pose.orientation.w = 1.0
+                        marker.color.r = 0.043
+                        marker.color.g = 0.941
+                        marker.color.b = 1.0
+                        marker.color.a = 0.5        
+                        marker.scale.x = 0.1
+                        marker.scale.y = 0.1
+                        marker.scale.z = 0.1
+                        #marker.frame_locked = False
+                        marker.ns = "my_namespace"
+                        self.current_path_marker_array.markers.append(marker)
+                        continue
+                    #marker.lifetime = 1.0
+                    marker.pose = Pose()
+                    marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
+                    marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
+                    marker.pose.position.z = 0.95
+                    marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
+                    marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
+                    marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
+                    marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
+                    marker.color.r = 0.043
+                    marker.color.g = 0.941
+                    marker.color.b = 1.0
+                    marker.color.a = 0.5        
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.current_path_marker_array.markers.append(marker)
+            elif path_scheme == path_schemes[1]:
+                # ARROWS
+                previous_marker_array_length = len(self.current_path_marker_array.markers)
+                current_marker_array_length = int(float(len(self.global_plan_current_hold.poses)-21) / 75) + 1
+                delete_needed = False
+                if current_marker_array_length < previous_marker_array_length:
+                    delete_needed = True
+                len_max = max(previous_marker_array_length, current_marker_array_length)
+                self.current_path_marker_array.markers = []        
+                        
+                marker_ID = 0
+                for i in range(35, len(self.global_plan_current_hold.poses) - 1 , 75):
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = marker_ID
+                    marker_ID += 1
+                    marker.type = marker.ARROW
+                    marker.action = marker.ADD
+                    if delete_needed and marker_ID >= current_marker_array_length:
+                        marker.action = marker.DELETE
+                        #marker.lifetime = 1.0
+                        marker.pose = Pose()
+                        marker.pose.position.x = 0.0
+                        marker.pose.position.y = 0.0
+                        marker.pose.position.z = 0.95
+                        marker.pose.orientation.x = 0.0
+                        marker.pose.orientation.y = 0.0
+                        marker.pose.orientation.z = 0.0
+                        marker.pose.orientation.w = 1.0
+                        marker.color.r = 0.0
+                        marker.color.g = 1.0
+                        marker.color.b = 1.0
+                        marker.color.a = 0.8
+                        marker.scale.x = 1.0
+                        marker.scale.y = 0.15
+                        marker.scale.z = 0.25
+                        #marker.frame_locked = False
+                        marker.ns = "my_namespace"
+                        self.current_path_marker_array.markers.append(marker)
+                        continue
+                    marker.pose = Pose()
+                    marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
+                    marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
+                    marker.pose.position.z = 0.95
+                    marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
+                    marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
+                    marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
+                    marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
+                    marker.color.r = 0.0
+                    marker.color.g = 1.0
+                    marker.color.b = 1.0
+                    marker.color.a = 0.8
+                    marker.scale.x = 1.0
+                    marker.scale.y = 0.15
+                    marker.scale.z = 0.25
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.current_path_marker_array.markers.append(marker)
+
         # CONVERT IMAGE TO NUMPY ARRAY 
         fig.savefig('explanation' + '.png', transparent=False)
         plt.close()
@@ -2765,17 +2885,27 @@ def main():
     rospy.init_node('hixron', anonymous=False)
 
     # define hixron object
-    hixron_subscriber_obj = hixron()
+    hixron_obj = hixron()
     # call main to initialize subscribers
-    hixron_subscriber_obj.main_()
-
+    hixron_obj.main_()
+    # call explanation once to establish static map
+    hixron_obj.first_call = True
+    hixron_obj.test_explain()
+    hixron_obj.first_call = False
+    # sleep for 10s until Amar starts the video
+    print('VOR SCHLAFEN')
+    d = rospy.Duration(1, 0)
+    rospy.sleep(d)
+    print('NACH SCHLAFEN')
+    # send the goal pose to start navigation
+    hixron_obj.send_goal_pose()
     #rate = rospy.Rate(0.15)
-
+    print('NACH GOAL POSE')
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
     while not rospy.is_shutdown():
         #print('spinning')
         #rate.sleep()
-        hixron_subscriber_obj.test_explain()
+        hixron_obj.test_explain()
         #rospy.spin()
 
 main()
