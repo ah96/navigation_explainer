@@ -1766,7 +1766,7 @@ class hixron(object):
         self.deviation_between_global_plans = False
         deviation_threshold = 15.0
         
-        self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:0])
+        self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:])
         #self.global_plan_history_hold = copy.deepcopy(self.global_plan_history)
         self.global_plan_current_hold = copy.deepcopy(self.global_plan_history[-1])
         if len(self.global_plan_history) > 1:
@@ -1782,7 +1782,7 @@ class hixron(object):
                 local_dev = dev_x**2 + dev_y**2
                 global_dev += local_dev
             global_dev = math.sqrt(global_dev)
-            print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+            #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
         
             if global_dev > deviation_threshold:
                 #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
@@ -1798,12 +1798,12 @@ class hixron(object):
 
     # explain without using lime, rely only on ontology and perception
     def explain_global_without_lime(self):        
-        self.global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
 
-        if len(np.unique(self.global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
+        if len(np.unique(global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
             return
 
-        color_shape_path_combination = [0,0,0]
+        color_shape_path_combination = [1,1,1]
         
         color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
         color_scheme = color_schemes[color_shape_path_combination[0]]
@@ -1825,7 +1825,7 @@ class hixron(object):
         #print('(self.explanation_size_x,self.explanation_size_y)',(self.explanation_size_y,self.explanation_size_x))
         explanation_R = np.zeros((self.explanation_size_y, self.explanation_size_x))
         explanation_R[:,:] = 120 # free space
-        explanation_R[self.global_semantic_map_complete_copy > 0] = 180.0 # obstacle
+        explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
         explanation_G = copy.deepcopy(explanation_R)
         explanation_B = copy.deepcopy(explanation_R)
 
@@ -1849,7 +1849,7 @@ class hixron(object):
         y_max_pixel = min(self.explanation_size_y - 1, y_max_pixel)
         #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
         
-        neighborhood_objects_IDs = np.unique(self.global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
+        neighborhood_objects_IDs = np.unique(global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
         if 0 in neighborhood_objects_IDs:
             neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
         neighborhood_objects_IDs = [int(item) for item in neighborhood_objects_IDs]
@@ -1906,41 +1906,112 @@ class hixron(object):
             for row in self.ontology[-4:,:]:
                 wall_ID = row[0]
                 if wall_ID in neighborhood_objects_IDs:
-                    explanation_R[self.global_semantic_map_complete_copy == wall_ID] = 180
-                    explanation_G[self.global_semantic_map_complete_copy == wall_ID] = 180
-                    explanation_B[self.global_semantic_map_complete_copy == wall_ID] = 180 
+                    explanation_R[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_G[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_B[global_semantic_map_complete_copy == wall_ID] = 180 
 
         elif color_scheme == color_schemes[2]:
+            R_temp = copy.deepcopy(explanation_R)
+
+            c_x_pixel = int(0.5*(x_min_pixel + x_max_pixel)+1)
+            c_y_pixel = int(0.5*(y_min_pixel + y_max_pixel)+1)
+            d_x = x_max_pixel - x_min_pixel
+            d_y = y_max_pixel - y_min_pixel
+            #print('(d_x, d_y) = ', (d_x, d_y))
+
+            
+            explanation_R[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 227
+            explanation_G[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 242
+            explanation_B[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 19
+
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 206
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 206
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 206
+            explanation_R[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 206
+            explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 215
+            explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 215
+            explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 215
+            explanation_G[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 215
+            explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 15
+            explanation_B[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 15
+            
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 124
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 124
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 124
+            explanation_R[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 124
+            explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 220
+            explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 220
+            explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 220
+            explanation_G[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 220
+            explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 15
+            explanation_B[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 15
+            
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 108
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 108
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 108
+            explanation_R[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 108
+            explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 196
+            explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 196
+            explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 196
+            explanation_G[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 196
+            explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 8
+            explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 8
+            explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 8
+            explanation_B[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 8
+            
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 98
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 98
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 98
+            explanation_R[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 98
+            explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 176
+            explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 176
+            explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 176
+            explanation_G[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 176
+            explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 9
+            explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 9
+            explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 9
+            explanation_B[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 9
+            
+            explanation_R[R_temp == 120] = 120 # return free space to original values
+            explanation_G[R_temp == 120] = 120 # return free space to original values
+            explanation_B[R_temp == 120] = 120 # return free space to original value
+
+            '''
             if color_whole_objects == True:
                 for ID in neighborhood_objects_IDs:
                         if self.ontology[ID-1][7] == 0:
-                            explanation_R[self.global_semantic_map_complete_copy == ID] = 0
-                            explanation_G[self.global_semantic_map_complete_copy == ID] = 255
-                            explanation_B[self.global_semantic_map_complete_copy == ID] = 0
+                            explanation_R[global_semantic_map_complete_copy == ID] = 3
+                            explanation_G[global_semantic_map_complete_copy == ID] = 144
+                            explanation_B[global_semantic_map_complete_copy == ID] = 31
                         elif self.ontology[ID-1][7] == 1:
-                            explanation_R[self.global_semantic_map_complete_copy == ID] = 255
-                            explanation_G[self.global_semantic_map_complete_copy == ID] = 255
-                            explanation_B[self.global_semantic_map_complete_copy == ID] = 0
+                            explanation_R[global_semantic_map_complete_copy == ID] = 230
+                            explanation_G[global_semantic_map_complete_copy == ID] = 217
+                            explanation_B[global_semantic_map_complete_copy == ID] = 26
             else:
                 N_objects = self.ontology.shape[0]
-                neighborhood_mask = copy.deepcopy(self.global_semantic_map_complete_copy)
+                neighborhood_mask = copy.deepcopy(global_semantic_map_complete_copy)
                 neighborhood_mask[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel] += N_objects
                 for ID in neighborhood_objects_IDs:
                     if self.ontology[ID-1][7] == 1:
-                        explanation_R[neighborhood_mask == ID + N_objects] = 255
-                        explanation_G[neighborhood_mask == ID + N_objects] = 255
-                        explanation_B[neighborhood_mask == ID + N_objects] = 0  
+                        explanation_R[neighborhood_mask == ID + N_objects] = 230
+                        explanation_G[neighborhood_mask == ID + N_objects] = 217
+                        explanation_B[neighborhood_mask == ID + N_objects] = 26  
                     if self.ontology[ID-1][7] == 0:
-                        explanation_R[neighborhood_mask == ID + N_objects] = 0
-                        explanation_G[neighborhood_mask == ID + N_objects] = 255
-                        explanation_B[neighborhood_mask == ID + N_objects] = 0
+                        explanation_R[neighborhood_mask == ID + N_objects] = 3
+                        explanation_G[neighborhood_mask == ID + N_objects] = 144
+                        explanation_B[neighborhood_mask == ID + N_objects] = 31
+            '''
 
             for row in self.ontology[-4:,:]:
                 wall_ID = row[0]
                 if wall_ID in neighborhood_objects_IDs:
-                    explanation_R[self.global_semantic_map_complete_copy == wall_ID] = 180
-                    explanation_G[self.global_semantic_map_complete_copy == wall_ID] = 180
-                    explanation_B[self.global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_R[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_G[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_B[global_semantic_map_complete_copy == wall_ID] = 180
 
 
         # check if the last two global plans have the same goal pose
@@ -1955,7 +2026,7 @@ class hixron(object):
 
         # if deviation happened and some object was moved
         if self.deviation_between_global_plans and same_goal_pose:
-            print('TESTIRA se moguca devijacija')
+            #print('TESTIRA se moguca devijacija')
             if self.last_object_moved_ID > 0 and self.last_object_moved_ID in neighborhood_objects_IDs and self.red_object_countdown == -1:
                 '''
                 red_object_found = False
@@ -1992,17 +2063,18 @@ class hixron(object):
 
         # COLOR RED OBJECT
         if self.red_object_countdown > 0:
-            explanation_R[self.global_semantic_map_complete_copy == self.red_object_value] = 255
-            explanation_G[self.global_semantic_map_complete_copy == self.red_object_value] = 0
-            explanation_B[self.global_semantic_map_complete_copy == self.red_object_value] = 0
+            explanation_R[global_semantic_map_complete_copy == self.red_object_value] = 201
+            explanation_G[global_semantic_map_complete_copy == self.red_object_value] = 9
+            explanation_B[global_semantic_map_complete_copy == self.red_object_value] = 9
             self.red_object_countdown -= 1
         elif self.red_object_countdown == 0:
             self.red_object_countdown -= 1
             self.red_object_value = -1
 
         # VISUALIZE OLD PATH
-        self.old_path_marker_array.markers = []
         if self.old_plan_bool == True:
+            self.old_path_marker_array.markers = []
+
             #print('len(self.old_plan.poses) = ', len(self.old_plan.poses))
             for i in range(0, len(self.old_plan.poses)):
                 x_map = self.old_plan.poses[i].pose.position.x
@@ -2033,15 +2105,45 @@ class hixron(object):
                 marker.ns = "my_namespace"
                 self.old_path_marker_array.markers.append(marker)
 
+            for i in range(len(self.old_plan.poses), 600):
+                x_map = 0
+                y_map = 0
+
+                # visualize path
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.id = i
+                marker.type = marker.SPHERE
+                marker.action = marker.DELETE
+                marker.pose = Pose()
+                marker.pose.position.x = 0
+                marker.pose.position.y = 0
+                marker.pose.position.z = 0.8
+                marker.pose.orientation.x = 0
+                marker.pose.orientation.y = 0
+                marker.pose.orientation.z = 0
+                marker.pose.orientation.w = 0
+                marker.color.r = 0.85
+                marker.color.g = 0.85
+                marker.color.b = 0.85
+                marker.color.a = 0.8
+                marker.scale.x = 0.1
+                marker.scale.y = 0.1
+                marker.scale.z = 0.1
+                #marker.frame_locked = False
+                marker.ns = "my_namespace"
+                self.old_path_marker_array.markers.append(marker)
+
         # VISUALIZE CURRENT PATH
-        previous_marker_array_length = len(self.current_path_marker_array.markers)
-        current_marker_array_length = len(self.global_plan_current_hold.poses)-25
-        delete_needed = False
-        if current_marker_array_length < previous_marker_array_length:
-            delete_needed = True
-        len_max = max(previous_marker_array_length, current_marker_array_length)
-        self.current_path_marker_array.markers = []
         if path_scheme == path_schemes[0]:         
+            previous_marker_array_length = len(self.current_path_marker_array.markers)
+            current_marker_array_length = len(self.global_plan_current_hold.poses)-25
+            delete_needed = False
+            if current_marker_array_length < previous_marker_array_length:
+                delete_needed = True
+            len_max = max(previous_marker_array_length, current_marker_array_length)
+            self.current_path_marker_array.markers = []        
+            
             for i in range(25, len_max+25):
                 # visualize path
                 marker = Marker()
@@ -2090,14 +2192,47 @@ class hixron(object):
                 #marker.frame_locked = False
                 marker.ns = "my_namespace"
                 self.current_path_marker_array.markers.append(marker)
-        elif path_scheme == path_schemes[1]:         
-            for i in range(20, len(self.global_plan_current_hold.poses) - 1 , 75):
+        elif path_scheme == path_schemes[1]:
+            # ARROWS
+            previous_marker_array_length = len(self.current_path_marker_array.markers)
+            current_marker_array_length = int(float(len(self.global_plan_current_hold.poses)-21) / 75) + 1
+            delete_needed = False
+            if current_marker_array_length < previous_marker_array_length:
+                delete_needed = True
+            len_max = max(previous_marker_array_length, current_marker_array_length)
+            self.current_path_marker_array.markers = []        
+                     
+            marker_ID = 0
+            for i in range(35, len(self.global_plan_current_hold.poses) - 1 , 75):
                 # visualize path
                 marker = Marker()
                 marker.header.frame_id = 'map'
-                marker.id = i
+                marker.id = marker_ID
+                marker_ID += 1
                 marker.type = marker.ARROW
                 marker.action = marker.ADD
+                if delete_needed and marker_ID >= current_marker_array_length:
+                    marker.action = marker.DELETE
+                    #marker.lifetime = 1.0
+                    marker.pose = Pose()
+                    marker.pose.position.x = 0.0
+                    marker.pose.position.y = 0.0
+                    marker.pose.position.z = 0.95
+                    marker.pose.orientation.x = 0.0
+                    marker.pose.orientation.y = 0.0
+                    marker.pose.orientation.z = 0.0
+                    marker.pose.orientation.w = 1.0
+                    marker.color.r = 0.0
+                    marker.color.g = 1.0
+                    marker.color.b = 1.0
+                    marker.color.a = 0.8
+                    marker.scale.x = 1.0
+                    marker.scale.y = 0.15
+                    marker.scale.z = 0.25
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.current_path_marker_array.markers.append(marker)
+                    continue
                 marker.pose = Pose()
                 marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
                 marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
@@ -2118,39 +2253,41 @@ class hixron(object):
                 self.current_path_marker_array.markers.append(marker)
 
         # VISUALIZE OBSTACLE NAMES USING PC2
-        #[qx, qy, qz, qw]= euler_to_quaternion(90, 90, 90)
-        self.semantic_labels_marker_array.markers = []
         if shape_scheme == shape_schemes[1]:
-            for i in range(0, self.ontology.shape[0] - 4):
+            self.semantic_labels_marker_array.markers = []
+            for i in range(0, self.ontology.shape[0] - 4):                
+                x_map = self.ontology[i][12]
+                y_map = self.ontology[i][13]
+                
+                # visualize orientations and semantic labels of known objects
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.id = i
+                marker.type = marker.TEXT_VIEW_FACING
                 if self.ontology[i][0] in neighborhood_objects_IDs:
-                    x_map = self.ontology[i][12]
-                    y_map = self.ontology[i][13]
-                    
-                    # visualize orientations and semantic labels of known objects
-                    marker = Marker()
-                    marker.header.frame_id = 'map'
-                    marker.id = i
-                    marker.type = marker.TEXT_VIEW_FACING
                     marker.action = marker.ADD
-                    marker.pose = Pose()
-                    marker.pose.position.x = x_map
-                    marker.pose.position.y = y_map
-                    marker.pose.position.z = 0.5
-                    marker.pose.orientation.x = 0.0#qx
-                    marker.pose.orientation.y = 0.0#qy
-                    marker.pose.orientation.z = 0.0#qz
-                    marker.pose.orientation.w = 0.0#qw
-                    marker.color.r = 1.0
-                    marker.color.g = 1.0
-                    marker.color.b = 1.0
-                    marker.color.a = 1.0
-                    marker.scale.x = 0.35
-                    marker.scale.y = 0.35
-                    marker.scale.z = 0.35
-                    #marker.frame_locked = False
-                    marker.text = self.ontology[i][2]
-                    marker.ns = "my_namespace"
-                    self.semantic_labels_marker_array.markers.append(marker)
+                else:
+                    marker.action = marker.DELETE
+                marker.pose = Pose()
+                marker.pose.position.x = x_map
+                marker.pose.position.y = y_map
+                marker.pose.position.z = 0.5
+                marker.pose.orientation.x = 0.0#qx
+                marker.pose.orientation.y = 0.0#qy
+                marker.pose.orientation.z = 0.0#qz
+                marker.pose.orientation.w = 0.0#qw
+                marker.color.r = 1.0
+                marker.color.g = 1.0
+                marker.color.b = 1.0
+                marker.color.a = 1.0
+                marker.scale.x = 0.35
+                marker.scale.y = 0.35
+                marker.scale.z = 0.35
+                #marker.frame_locked = False
+                marker.text = self.ontology[i][2]
+                marker.ns = "my_namespace"
+                self.semantic_labels_marker_array.markers.append(marker)
+                    
 
         # FORM THE EXPLANATION IMAGE                  
         explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
@@ -2188,84 +2325,124 @@ class hixron(object):
                 if distance_human_robot > 1.0:
                     ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c='yellow')
                 else:
-                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c='red')
+                    C = np.array([255,102,102])
+                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c=C/255.0)
+                    ax.text(self.explanation_size_x - x_pixel, y_pixel - 20, 'human', c=C/255.0)
         elif self.human_blinking == False:
             self.human_blinking = True
 
-        '''
         # VISUALIZE OBSTACLE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
-        #if shape_scheme == shape_schemes[1]:
-        if self.object_arrow_blinking == True:
-            self.object_arrow_blinking = False
-            for i in range(0, self.ontology.shape[0] - 4):
+        for i in range(0, self.ontology.shape[0] - 4):            
+            # if it is a movable object and in the robot's neighborhood
+            if self.ontology[i][0] in neighborhood_objects_IDs and self.ontology[i][7] == 1:
                 x_map = self.ontology[i][3]
                 y_map = self.ontology[i][4]
 
                 x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
                 y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
 
-                dx = float(self.ontology[i][5]) / 0.05
-                dy = float(self.ontology[i][6]) / 0.05
+                dx_ = float(self.ontology[i][5]) / 0.05
+                dy_ = float(self.ontology[i][6]) / 0.05
 
-                #if 'bookshelf' in self.ontology[i][2]:
-                #    ax.text(self.explanation_size_x - x_pixel, y_pixel+0.5*dy, self.ontology[i][2], c='white', rotation='vertical', alpha=1.0)
-                #else:
-                #    ax.text(self.explanation_size_x - x_pixel, y_pixel+0.5*dy, self.ontology[i][2], c='white', rotation='horizontal')
-                
-                # if it is a movable object and in the robot's neighborhood
-                if self.ontology[i][0] in neighborhood_objects_IDs and self.ontology[i][7] == 1:
-                    xs_plot = []
-                    ys_plot = []
-                    arrows = []
+                xs_plot = []
+                ys_plot = []
+                arrows = []
 
-                    scale = 1.25
-                    dx *= scale
-                    dy *= scale
+                scale = 1.25
+                dx = dx_ * scale
+                dy = dy_ * scale
 
-                    # if object under table
-                    if self.ontology[i][11] == 'y':
-                        if self.ontology[i][10] == 'r':
-                            xs_plot.append(self.explanation_size_x - x_pixel + dx)
-                            ys_plot.append(y_pixel)
-                            arrows.append('>')
-                        elif self.ontology[i][10] == 'l':
-                            xs_plot.append(self.explanation_size_x - x_pixel - dx)
-                            ys_plot.append(y_pixel)
-                            arrows.append('<')
-                        elif self.ontology[i][10] == 't':
-                            xs_plot.append(self.explanation_size_x - x_pixel)
-                            ys_plot.append(y_pixel - dy)
-                            arrows.append('^')
-                        elif self.ontology[i][10] == 'b':
-                            xs_plot.append(self.explanation_size_x - x_pixel)
-                            ys_plot.append(y_pixel + dy)
-                            arrows.append('v')
-                    # if object is close to the table
-                    if self.ontology[i][11] == 'n':
-                        if self.ontology[i][10] == 't' or self.ontology[i][10] == 'b':
-                            xs_plot.append(self.explanation_size_x - x_pixel + dx)
-                            ys_plot.append(y_pixel)
-                            arrows.append('>')
-                            xs_plot.append(self.explanation_size_x - x_pixel - dx)
-                            ys_plot.append(y_pixel)
-                            arrows.append('<')
-                        elif self.ontology[i][10] == 'r' or self.ontology[i][10] == 'l':
-                            xs_plot.append(self.explanation_size_x - x_pixel)
-                            ys_plot.append(y_pixel - dy)
-                            arrows.append('^')
-                            xs_plot.append(self.explanation_size_x - x_pixel)
-                            ys_plot.append(y_pixel + dy)
-                            arrows.append('v')
+                # if object under table
+                if self.ontology[i][11] == 'y':
+                    if self.ontology[i][10] == 'r':
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('>')
+                    elif self.ontology[i][10] == 'l':
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('<')
+                    elif self.ontology[i][10] == 't':
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel - dy)
+                        arrows.append('^')
+                    elif self.ontology[i][10] == 'b':
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel + dy)
+                        arrows.append('v')
+                # if object is close to the table - was pulled out from under the table
+                elif self.ontology[i][11] == 'n':
+                    if self.ontology[i][10] == 't' or self.ontology[i][10] == 'b':
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('>')
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('<')
 
-                    if self.ontology[i][0] == self.red_object_value:
-                        for j in range(0, len(arrows)):
-                            plt.scatter(xs_plot[j], ys_plot[j], marker=arrows[j], c='red', linewidths=1)
-                    else:
-                        for j in range(0, len(arrows)):
-                            plt.scatter(xs_plot[j], ys_plot[j], marker=arrows[j], c='yellow', linewidths=1)
-        elif self.object_arrow_blinking == False:
-            self.object_arrow_blinking = True
-        '''
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel - dy)
+                        arrows.append('^')
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel + dy)
+                        arrows.append('v')
+
+                    elif self.ontology[i][10] == 'r' or self.ontology[i][10] == 'l':
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel - dy)
+                        arrows.append('^')
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel + dy)
+                        arrows.append('v')
+
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('>')
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('<')
+
+                elif self.ontology[i][11] == 'na':
+                    objects_to_the_left = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel-1.5*dx_):int(x_pixel-0.5*dx_)]) 
+                    objects_to_the_right = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel+0.5*dx_):int(x_pixel+1.5*dx_)])
+                    objects_to_the_top = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.5*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
+                    objects_to_the_bottom = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.9*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
+
+                    if len(objects_to_the_left) == 1 and objects_to_the_left[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('<')
+
+                    if len(objects_to_the_right) == 1 and objects_to_the_right[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('>')
+
+                    if len(objects_to_the_top) == 1 and objects_to_the_top[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel - dy)
+                        arrows.append('^')
+
+                    if len(objects_to_the_bottom) == 1 and objects_to_the_bottom[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel + dy)
+                        arrows.append('v')
+
+                if self.ontology[i][0] == self.red_object_value:
+                    for j in range(0, len(arrows)):
+                        C = np.array([201, 9, 9])
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                elif color_scheme == color_schemes[1] or color_scheme == color_schemes[2]:
+                    for j in range(0, len(arrows)):
+                        R = explanation[y_pixel][x_pixel][0]
+                        G = explanation[y_pixel][x_pixel][1]
+                        B = explanation[y_pixel][x_pixel][2]
+                        C = np.array([R, G, B])
+                        plt.plot(xs_plot[j] + 0.3, ys_plot[j] - 0.2, marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                elif color_scheme == color_schemes[0]:
+                    C = np.array([180, 180, 180])   
+                    for j in range(0, len(arrows)):
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
             
         # CONVERT IMAGE TO NUMPY ARRAY 
         fig.savefig('explanation' + '.png', transparent=False)
