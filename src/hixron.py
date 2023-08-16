@@ -520,7 +520,7 @@ class hixron(object):
         self.local_semantic_map = np.zeros((self.local_semantic_map_size, self.local_semantic_map_size))
 
         # ontology part
-        self.scenario_name = 'library' #'scenario1', 'library'
+        self.scenario_name = 'library_2' #'scenario1', 'library', 'library_2'
         # load ontology
         self.ontology = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv')
         #cols = ['c_map_x', 'c_map_y', 'd_map_x', 'd_map_y']
@@ -2198,7 +2198,7 @@ class hixron(object):
                     local_dev = dev_x**2 + dev_y**2
                     global_dev += local_dev
                 global_dev = math.sqrt(global_dev)
-                print('\nDEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                #print('\nDEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
                 #print('OBJECT_MOVED_ID = ', self.last_object_moved_ID)
             
                 if global_dev > deviation_threshold:
@@ -2417,8 +2417,8 @@ class hixron(object):
             print('self.red_object_value = ', self.red_object_value)
             print('self.last_object_moved_ID = ', self.last_object_moved_ID)
 
-            RGB_val = [201,9,9]
-            #RGB_val = [241,0,0]
+            #RGB_val = [201,9,9]
+            RGB_val = [255,0,0]
             explanation_R[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[0]
             explanation_G[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[1]
             explanation_B[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[2]
@@ -2526,7 +2526,8 @@ class hixron(object):
 
                 if self.ontology[i][0] == self.red_object_value:
                     for j in range(0, len(arrows)):
-                        C = np.array([201, 9, 9])
+                        #C = np.array([201, 9, 9])
+                        C = np.array([255, 0, 0])
                         plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
                 elif color_scheme == color_schemes[1] or color_scheme == color_schemes[2]:
                     for j in range(0, len(arrows)):
@@ -2921,17 +2922,22 @@ def main():
 
     # define hixron object
     hixron_obj = hixron()
+    
     # call main to initialize subscribers
     hixron_obj.main_()
+    
     # call explanation once to establish static map
     hixron_obj.first_call = True
     hixron_obj.test_explain()
     hixron_obj.first_call = False
+    
     # sleep for 10s until Amar starts the video
-    d = rospy.Duration(1, 0)
+    d = rospy.Duration(1.5, 0)
     rospy.sleep(d)
+    
     # send the goal pose to start navigation
     hixron_obj.send_goal_pose()
+    
     #rate = rospy.Rate(0.15)
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
     while not rospy.is_shutdown():
