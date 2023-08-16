@@ -520,7 +520,7 @@ class hixron(object):
         self.local_semantic_map = np.zeros((self.local_semantic_map_size, self.local_semantic_map_size))
 
         # ontology part
-        self.scenario_name = 'library_2' #'scenario1', 'library', 'library_2'
+        self.scenario_name = 'library_3' #'scenario1', 'library', 'library_2', 'library_3'
         # load ontology
         self.ontology = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv')
         #cols = ['c_map_x', 'c_map_y', 'd_map_x', 'd_map_y']
@@ -558,51 +558,51 @@ class hixron(object):
     # declare subscribers
     def main_(self):
         self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=1)
-        self.chair_15_moved = False
-        self.chair_16_moved = False
+        self.chair_8_moved = False
+        self.chair_9_moved = False
 
-        self.chair_15_state = ModelState()
-        self.chair_15_state.model_name = 'chair_15'
-        self.chair_15_state.reference_frame = 'world'  # ''ground_plane'
+        self.chair_8_state = ModelState()
+        self.chair_8_state.model_name = 'chair_8'
+        self.chair_8_state.reference_frame = 'world'  # ''ground_plane'
         # pose
-        self.chair_15_state.pose.position.x = -7.73
-        self.chair_15_state.pose.position.y = 5.84
-        self.chair_15_state.pose.position.z = 0
+        self.chair_8_state.pose.position.x = -7.73
+        self.chair_8_state.pose.position.y = 5.84
+        self.chair_8_state.pose.position.z = 0
         #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
         quaternion = euler_to_quaternion(3.122560, 0, 0)
-        self.chair_15_state.pose.orientation.x = quaternion[0]
-        self.chair_15_state.pose.orientation.y = quaternion[1]
-        self.chair_15_state.pose.orientation.z = quaternion[2]
-        self.chair_15_state.pose.orientation.w = quaternion[3]
+        self.chair_8_state.pose.orientation.x = quaternion[0]
+        self.chair_8_state.pose.orientation.y = quaternion[1]
+        self.chair_8_state.pose.orientation.z = quaternion[2]
+        self.chair_8_state.pose.orientation.w = quaternion[3]
         # twist
-        self.chair_15_state.twist.linear.x = 0
-        self.chair_15_state.twist.linear.y = 0
-        self.chair_15_state.twist.linear.z = 0
-        self.chair_15_state.twist.angular.x = 0
-        self.chair_15_state.twist.angular.y = 0
-        self.chair_15_state.twist.angular.z = 0
+        self.chair_8_state.twist.linear.x = 0
+        self.chair_8_state.twist.linear.y = 0
+        self.chair_8_state.twist.linear.z = 0
+        self.chair_8_state.twist.angular.x = 0
+        self.chair_8_state.twist.angular.y = 0
+        self.chair_8_state.twist.angular.z = 0
 
 
-        self.chair_16_state = ModelState()
-        self.chair_16_state.model_name = 'chair_16'
-        self.chair_16_state.reference_frame = 'world'  # ''ground_plane'
+        self.chair_9_state = ModelState()
+        self.chair_9_state.model_name = 'chair_9'
+        self.chair_9_state.reference_frame = 'world'  # ''ground_plane'
         # pose
-        self.chair_16_state.pose.position.x = -6.16
-        self.chair_16_state.pose.position.y = 3.76
-        self.chair_16_state.pose.position.z = 0
+        self.chair_9_state.pose.position.x = -6.16
+        self.chair_9_state.pose.position.y = 3.76
+        self.chair_9_state.pose.position.z = 0
         #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
         quaternion = euler_to_quaternion(3.122560, 0, 0)
-        self.chair_16_state.pose.orientation.x = quaternion[0]
-        self.chair_16_state.pose.orientation.y = quaternion[1]
-        self.chair_16_state.pose.orientation.z = quaternion[2]
-        self.chair_16_state.pose.orientation.w = quaternion[3]
+        self.chair_9_state.pose.orientation.x = quaternion[0]
+        self.chair_9_state.pose.orientation.y = quaternion[1]
+        self.chair_9_state.pose.orientation.z = quaternion[2]
+        self.chair_9_state.pose.orientation.w = quaternion[3]
         # twist
-        self.chair_16_state.twist.linear.x = 0
-        self.chair_16_state.twist.linear.y = 0
-        self.chair_16_state.twist.linear.z = 0
-        self.chair_16_state.twist.angular.x = 0
-        self.chair_16_state.twist.angular.y = 0
-        self.chair_16_state.twist.angular.z = 0
+        self.chair_9_state.twist.linear.x = 0
+        self.chair_9_state.twist.linear.y = 0
+        self.chair_9_state.twist.linear.z = 0
+        self.chair_9_state.twist.angular.x = 0
+        self.chair_9_state.twist.angular.y = 0
+        self.chair_9_state.twist.angular.z = 0
 
         
         # create the base plot structure
@@ -727,8 +727,8 @@ class hixron(object):
         goal.target_pose.header.stamp.nsecs = 0
         goal.target_pose.header.frame_id = "map"
 
-        goal.target_pose.pose.position.x = 0.91
-        goal.target_pose.pose.position.y = -10.53
+        goal.target_pose.pose.position.x = -7.55 + 9.0
+        goal.target_pose.pose.position.y = 2.3 - 9.0
         goal.target_pose.pose.position.z = 0.0
 
         goal.target_pose.pose.orientation.x = 0.0
@@ -759,7 +759,7 @@ class hixron(object):
         #self.robot_pose_map.position.x -= 9.0
         #self.robot_pose_map.position.y += 9.0
 
-        if self.chair_15_moved == False:
+        if self.chair_8_moved == False:
             x = -7.73 + 9.0
             y = 5.84 + 1.6 - 9.0
 
@@ -769,17 +769,17 @@ class hixron(object):
             dist = math.sqrt(dx**2 + dy**2)
 
             if dist < 0.5:
-                self.pub_move.publish(self.chair_15_state)
-                self.pub_move.publish(self.chair_15_state)
-                self.pub_move.publish(self.chair_15_state)
-                self.pub_move.publish(self.chair_15_state)
-                self.pub_move.publish(self.chair_15_state)
+                self.pub_move.publish(self.chair_8_state)
+                self.pub_move.publish(self.chair_8_state)
+                self.pub_move.publish(self.chair_8_state)
+                self.pub_move.publish(self.chair_8_state)
+                self.pub_move.publish(self.chair_8_state)
 
-                self.chair_15_moved = True
+                self.chair_8_moved = True
         else:
-            self.pub_move.publish(self.chair_15_state)
+            self.pub_move.publish(self.chair_8_state)
 
-        if self.chair_16_moved == False:
+        if self.chair_9_moved == False:
             x = -6.16 + 9.0
             y = 3.76 + 1.8 - 9.0
 
@@ -789,16 +789,16 @@ class hixron(object):
             dist = math.sqrt(dx**2 + dy**2)
 
             if dist < 0.5:
-                self.pub_move.publish(self.chair_16_state)
-                self.pub_move.publish(self.chair_16_state)
-                self.pub_move.publish(self.chair_16_state)
-                self.pub_move.publish(self.chair_16_state)
-                self.pub_move.publish(self.chair_16_state)
+                self.pub_move.publish(self.chair_9_state)
+                self.pub_move.publish(self.chair_9_state)
+                self.pub_move.publish(self.chair_9_state)
+                self.pub_move.publish(self.chair_9_state)
+                self.pub_move.publish(self.chair_9_state)
                 
-                self.chair_16_moved = True
+                self.chair_9_moved = True
 
         else:
-            self.pub_move.publish(self.chair_16_state)
+            self.pub_move.publish(self.chair_9_state)
         
     # goal pose callback
     def goal_pose_callback(self, msg):
@@ -1108,7 +1108,7 @@ class hixron(object):
         # simulation relying on Gazebo
         if self.simulation:
             multiplication_factor = 0.75
-            for i in range(14, 16): #(0, self.ontology.shape[0]):
+            for i in range(7, 9): #(0, self.ontology.shape[0]):
                 # if the object has some affordance (etc. movability, openability), then it may have changed its position 
                 if self.ontology[i][7] == 1:
                     # get the object's new position from Gazebo
@@ -2900,11 +2900,13 @@ def main():
     hixron_obj.test_explain()
     hixron_obj.test_explain()
     hixron_obj.test_explain()
-    print('BEFORE SLEEP')
+    #print('BEFORE SLEEP')
+    
     # sleep for 10s until Amar starts the video
     d = rospy.Duration(3, 0)
     rospy.sleep(d)
-    print('AFTER SLEEP')
+    #print('AFTER SLEEP')
+    
     # send the goal pose to start navigation
     hixron_obj.send_goal_pose()
     
