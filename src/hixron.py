@@ -557,7 +557,7 @@ class hixron(object):
 
     # declare subscribers
     def main_(self):
-        self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState)#, queue_size=1)
+        self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=1)
         self.chair1_moved = False
         self.chair2_moved = False
         
@@ -707,7 +707,7 @@ class hixron(object):
 
     # amcl (global) pose callback
     def amcl_callback(self, msg):
-        print('amcl_callback')
+        #print('amcl_callback')
 
         #self.robot_position_map = msg.pose.pose.position
         #self.robot_orientation_map = msg.pose.pose.orientation
@@ -716,7 +716,41 @@ class hixron(object):
         #self.robot_pose_map.position.y += 9.0
 
         if self.chair1_moved == False:
-            print('USAO1')
+            x = -7.73 + 9.0
+            y = 5.97 + 1.2 - 9.0
+
+            dx = self.robot_pose_map.position.x - x
+            dy = self.robot_pose_map.position.y - y
+
+            dist = math.sqrt(dx**2 + dy**2)
+
+            if dist < 0.5:
+                state = ModelState()
+                state.model_name = 'chair_15'
+                state.reference_frame = 'world'  # ''ground_plane'
+                # pose
+                state.pose.position.x = -7.73
+                state.pose.position.y = 5.97
+                state.pose.position.z = 0
+                #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
+                quaternion = euler_to_quaternion(3.122560, 0, 0)
+                state.pose.orientation.x = quaternion[0]
+                state.pose.orientation.y = quaternion[1]
+                state.pose.orientation.z = quaternion[2]
+                state.pose.orientation.w = quaternion[3]
+                # twist
+                state.twist.linear.x = 0
+                state.twist.linear.y = 0
+                state.twist.linear.z = 0
+                state.twist.angular.x = 0
+                state.twist.angular.y = 0
+                state.twist.angular.z = 0
+
+                self.pub_move.publish(state)
+
+                self.chair1_moved = True
+
+        else:
             state = ModelState()
             state.model_name = 'chair_15'
             state.reference_frame = 'world'  # ''ground_plane'
@@ -739,16 +773,50 @@ class hixron(object):
             state.twist.angular.z = 0
 
             self.pub_move.publish(state)
-            self.chair1_moved = True
+
 
         if self.chair2_moved == False:
-            print('USAO2')
+            x = -6.16 + 9.0
+            y = 3.51 + 1.6 - 9.0
+
+            dx = self.robot_pose_map.position.x - x
+            dy = self.robot_pose_map.position.y - y
+
+            dist = math.sqrt(dx**2 + dy**2)
+
+            if dist < 0.5:
+                state = ModelState()
+                state.model_name = 'chair_16'
+                state.reference_frame = 'world'  # ''ground_plane'
+                # pose
+                state.pose.position.x = -6.16
+                state.pose.position.y = 3.51
+                state.pose.position.z = 0
+                #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
+                quaternion = euler_to_quaternion(3.122560, 0, 0)
+                state.pose.orientation.x = quaternion[0]
+                state.pose.orientation.y = quaternion[1]
+                state.pose.orientation.z = quaternion[2]
+                state.pose.orientation.w = quaternion[3]
+                # twist
+                state.twist.linear.x = 0
+                state.twist.linear.y = 0
+                state.twist.linear.z = 0
+                state.twist.angular.x = 0
+                state.twist.angular.y = 0
+                state.twist.angular.z = 0
+
+                self.pub_move.publish(state)
+
+                self.chair2_moved = True
+
+        else:
             state = ModelState()
             state.model_name = 'chair_16'
             state.reference_frame = 'world'  # ''ground_plane'
             # pose
-            state.pose.position.x = -6.36
-            state.pose.position.y = 4.51
+            state.pose.position.x = -6.16
+            state.pose.position.y = 3.51
             state.pose.position.z = 0
             #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
             quaternion = euler_to_quaternion(3.122560, 0, 0)
@@ -765,7 +833,6 @@ class hixron(object):
             state.twist.angular.z = 0
 
             self.pub_move.publish(state)
-            self.chair2_moved = True
         
     # goal pose callback
     def goal_pose_callback(self, msg):
@@ -2107,201 +2174,13 @@ class hixron(object):
                 marker.text = self.ontology[i][2]
                 marker.ns = "my_namespace"
                 self.semantic_labels_marker_array.markers.append(marker)
-                    
-
-        # FORM THE EXPLANATION IMAGE                  
-        explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
-
-        #font = {'family' : 'fantasy', #{'cursive', 'fantasy', 'monospace', 'sans', 'sans serif', 'sans-serif', 'serif'}
-        #'weight' : 'normal', #[ 'normal' | 'bold' | 'heavy' | 'light' | 'ultrabold' | 'ultralight']
-        #'size'   : 5}
-        #matplotlib.rc('font', **font)
-
-        fig = plt.figure(frameon=True)
-        w = 0.01 * self.explanation_size_x
-        h = 0.01 * self.explanation_size_y
-        fig.set_size_inches(w, h)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(np.fliplr(explanation)) #np.flip(explanation))#.astype(np.uint8))
-        
-        # PLOT HUMAN AS BLINKING EXCLAMATION MARK
-        ID = self.ontology.shape[0]
-        for human_pose in self.humans:
-            x_map = human_pose.position.x
-            y_map = human_pose.position.y
-            
-            distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
-            
-            # visualize orientations and semantic labels of humans
-            marker = Marker()
-            marker.header.frame_id = 'map'
-            marker.id = ID
-            ID += 1
-            marker.type = marker.TEXT_VIEW_FACING
-            if distance_human_robot <= 2.0:
-                marker.action = marker.ADD
-            else:
-                marker.action = marker.DELETE
-            marker.pose = Pose()
-            marker.pose.position.x = x_map
-            marker.pose.position.y = y_map - 0.5
-            marker.pose.position.z = 0.5
-            marker.pose.orientation.x = 0.0#qx
-            marker.pose.orientation.y = 0.0#qy
-            marker.pose.orientation.z = 0.0#qz
-            marker.pose.orientation.w = 0.0#qw
-            marker.color.r = 1.0
-            marker.color.g = 1.0
-            marker.color.b = 1.0
-            marker.color.a = 1.0
-            marker.scale.x = 0.35
-            marker.scale.y = 0.35
-            marker.scale.z = 0.35
-            #marker.frame_locked = False
-            marker.text = "human"
-            marker.ns = "my_namespace"
-            self.semantic_labels_marker_array.markers.append(marker)
-
-            if self.human_blinking == True:
-                # for nicer plotting
-                x_map += 0.2
-                y_map += 0.2
-
-                x_pixel = int((x_map + - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
-                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
-
-                if distance_human_robot > 2.0:
-                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c='yellow')
-                else:
-                    C = np.array([255,102,102])
-                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c=C/255.0)
-        
-        if self.human_blinking == True:
-            self.human_blinking = False
-        else:
-            self.human_blinking = True
-
-        # VISUALIZE OBSTACLE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
-        for i in range(0, self.ontology.shape[0] - 4):            
-            # if it is a movable object and in the robot's neighborhood
-            if self.ontology[i][0] in neighborhood_objects_IDs and self.ontology[i][7] == 1:
-                x_map = self.ontology[i][3]
-                y_map = self.ontology[i][4]
-
-                x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
-                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
-
-                dx_ = float(self.ontology[i][5]) / 0.05
-                dy_ = float(self.ontology[i][6]) / 0.05
-
-                xs_plot = []
-                ys_plot = []
-                arrows = []
-
-                scale = 1.25
-                dx = dx_ * scale
-                dy = dy_ * scale
-
-                # if object under table
-                if self.ontology[i][11] == 'y':
-                    if self.ontology[i][10] == 'r':
-                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('>')
-                    elif self.ontology[i][10] == 'l':
-                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('<')
-                    elif self.ontology[i][10] == 't':
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel - dy)
-                        arrows.append('^')
-                    elif self.ontology[i][10] == 'b':
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel + dy)
-                        arrows.append('v')
-                # if object is close to the table - was pulled out from under the table
-                elif self.ontology[i][11] == 'n':
-                    if self.ontology[i][10] == 't' or self.ontology[i][10] == 'b':
-                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('>')
-                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('<')
-
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel - dy)
-                        arrows.append('^')
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel + dy)
-                        arrows.append('v')
-
-                    elif self.ontology[i][10] == 'r' or self.ontology[i][10] == 'l':
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel - dy)
-                        arrows.append('^')
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel + dy)
-                        arrows.append('v')
-
-                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('>')
-                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('<')
-
-                elif self.ontology[i][11] == 'na':
-                    objects_to_the_left = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel-1.5*dx_):int(x_pixel-0.5*dx_)]) 
-                    objects_to_the_right = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel+0.5*dx_):int(x_pixel+1.5*dx_)])
-                    objects_to_the_top = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.5*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
-                    objects_to_the_bottom = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.9*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
-
-                    if len(objects_to_the_left) == 1 and objects_to_the_left[0] == 0:
-                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('<')
-
-                    if len(objects_to_the_right) == 1 and objects_to_the_right[0] == 0:
-                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('>')
-
-                    if len(objects_to_the_top) == 1 and objects_to_the_top[0] == 0:
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel - dy)
-                        arrows.append('^')
-
-                    if len(objects_to_the_bottom) == 1 and objects_to_the_bottom[0] == 0:
-                        xs_plot.append(self.explanation_size_x - x_pixel)
-                        ys_plot.append(y_pixel + dy)
-                        arrows.append('v')
-
-                if self.ontology[i][0] == self.red_object_value:
-                    for j in range(0, len(arrows)):
-                        C = np.array([201, 9, 9])
-                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
-                elif color_scheme == color_schemes[1] or color_scheme == color_schemes[2]:
-                    for j in range(0, len(arrows)):
-                        R = explanation[y_pixel][x_pixel][0]
-                        G = explanation[y_pixel][x_pixel][1]
-                        B = explanation[y_pixel][x_pixel][2]
-                        C = np.array([R, G, B])
-                        plt.plot(xs_plot[j] + 0.3, ys_plot[j] - 0.2, marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
-                elif color_scheme == color_schemes[0]:
-                    C = np.array([180, 180, 180])   
-                    for j in range(0, len(arrows)):
-                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
-            
-        
+                            
+             
         # DYNAMIC PART
         if len(self.global_plan_history) > 1:
             # test if there is deviation between current and previous
             self.deviation_between_global_plans = False
-            deviation_threshold = 15.0
+            deviation_threshold = 10.0
             
             self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:])
             #self.global_plan_history_hold = copy.deepcopy(self.global_plan_history)
@@ -2319,7 +2198,8 @@ class hixron(object):
                     local_dev = dev_x**2 + dev_y**2
                     global_dev += local_dev
                 global_dev = math.sqrt(global_dev)
-                #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                print('\nDEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                #print('OBJECT_MOVED_ID = ', self.last_object_moved_ID)
             
                 if global_dev > deviation_threshold:
                     #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
@@ -2339,49 +2219,15 @@ class hixron(object):
             # if deviation happened and some object was moved
             if self.deviation_between_global_plans and same_goal_pose:
                 #print('TESTIRA se moguca devijacija')
-                if self.last_object_moved_ID > 0 and self.last_object_moved_ID in neighborhood_objects_IDs and self.red_object_countdown == -1:
-                    '''
-                    red_object_found = False
-                    print('\n\n\n\n')
-                    # check if the moved object is close to the old path
-                    for i in range(0, len(self.global_plan_previous_hold.poses)):
+                if self.last_object_moved_ID > 0 and self.red_object_countdown == -1: #self.last_object_moved_ID in neighborhood_objects_IDs
+                    # define the red object
+                    self.red_object_value = copy.deepcopy(self.last_object_moved_ID)
+                    self.red_object_countdown = 7
+                    self.last_object_moved_ID = -1
 
-                        plan_x = self.global_plan_previous_hold.poses[i].pose.position.x
-                        plan_y = self.global_plan_previous_hold.poses[i].pose.position.y
-
-                        moved_obj_x = self.ontology[self.last_object_moved_ID-1][3]
-                        moved_obj_y = self.ontology[self.last_object_moved_ID-1][4]
-
-                        diff_x = abs(plan_x - moved_obj_x)
-                        diff_y = abs(plan_y - moved_obj_y)
-                        print("(OBJ,LENGTH, i, diff_x, diff_y): ", (self.ontology[self.last_object_moved_ID-1][1],len(self.global_plan_previous_hold.poses), i, diff_x, diff_y))
-
-                        if diff_x < 1.0 and diff_y < 1.0:
-                            red_object_found = True
-                            break
-                    '''
-
-                    red_object_found = True
-
-                    if red_object_found:
-                        # find the red object
-                        self.red_object_value = copy.deepcopy(self.last_object_moved_ID)
-                        self.red_object_countdown = 7
-                        self.last_object_moved_ID = -1
-
-                        # save the previous plan
-                        self.old_plan = copy.deepcopy(self.global_plan_previous_hold)
-                        self.old_plan_bool = True
-
-            # COLOR RED OBJECT
-            if self.red_object_countdown > 0:
-                explanation_R[global_semantic_map_complete_copy == self.red_object_value] = 201
-                explanation_G[global_semantic_map_complete_copy == self.red_object_value] = 9
-                explanation_B[global_semantic_map_complete_copy == self.red_object_value] = 9
-                self.red_object_countdown -= 1
-            elif self.red_object_countdown == 0:
-                self.red_object_countdown -= 1
-                self.red_object_value = -1
+                    # save the previous plan
+                    self.old_plan = copy.deepcopy(self.global_plan_previous_hold)
+                    self.old_plan_bool = True
 
             # VISUALIZE OLD PATH
             if self.old_plan_bool == True:
@@ -2563,6 +2409,195 @@ class hixron(object):
                     #marker.frame_locked = False
                     marker.ns = "my_namespace"
                     self.current_path_marker_array.markers.append(marker)
+
+        # COLOR RED OBJECT
+        if self.red_object_countdown > 0:
+            print('BOJI STOLICU CRVENO!!!')
+            print('self.red_object_countdown = ', self.red_object_countdown)
+            print('self.red_object_value = ', self.red_object_value)
+            print('self.last_object_moved_ID = ', self.last_object_moved_ID)
+
+            RGB_val = [201,9,9]
+            #RGB_val = [241,0,0]
+            explanation_R[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[0]
+            explanation_G[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[1]
+            explanation_B[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[2]
+            
+            self.red_object_countdown -= 1
+        elif self.red_object_countdown == 0:
+            self.red_object_countdown = -1
+            self.red_object_value = -1
+
+
+        # FORM THE EXPLANATION IMAGE                  
+        explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+
+        #font = {'family' : 'fantasy', #{'cursive', 'fantasy', 'monospace', 'sans', 'sans serif', 'sans-serif', 'serif'}
+        #'weight' : 'normal', #[ 'normal' | 'bold' | 'heavy' | 'light' | 'ultrabold' | 'ultralight']
+        #'size'   : 5}
+        #matplotlib.rc('font', **font)
+
+        fig = plt.figure(frameon=True)
+        w = 0.01 * self.explanation_size_x
+        h = 0.01 * self.explanation_size_y
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(np.fliplr(explanation)) #np.flip(explanation))#.astype(np.uint8))
+
+        # VISUALIZE OBSTACLE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
+        for i in range(0, self.ontology.shape[0] - 4):            
+            # if it is a movable object and in the robot's neighborhood
+            if self.ontology[i][0] in neighborhood_objects_IDs and self.ontology[i][7] == 1:
+                x_map = self.ontology[i][3]
+                y_map = self.ontology[i][4]
+
+                x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                dx = int(self.ontology[i][5] / 0.05)
+                dy = int(self.ontology[i][6] / 0.05)
+
+                xs_plot = []
+                ys_plot = []
+                arrows = []
+
+                # if object under table
+                if self.ontology[i][11] == 'y':
+                    if self.ontology[i][10] == 'r':
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx - 1)
+                        ys_plot.append(y_pixel - 1)
+                        arrows.append('>')
+                    elif self.ontology[i][10] == 'l':
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx - 1)
+                        ys_plot.append(y_pixel - 1)
+                        arrows.append('<')
+                    elif self.ontology[i][10] == 't':
+                        xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                        ys_plot.append(y_pixel - dy - 2)
+                        arrows.append('^')
+                    elif self.ontology[i][10] == 'b':
+                        xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                        ys_plot.append(y_pixel + dy - 1)
+                        arrows.append('v')
+                # if object is not under the table
+                elif self.ontology[i][11] == 'n' or self.ontology[i][11] == 'na':
+                    xs_plot.append(self.explanation_size_x - x_pixel + dx - 1)
+                    ys_plot.append(y_pixel - 1)
+                    arrows.append('>')
+                    xs_plot.append(self.explanation_size_x - x_pixel - dx - 1)
+                    ys_plot.append(y_pixel - 1)
+                    arrows.append('<')
+
+                    xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                    ys_plot.append(y_pixel - dy - 2)
+                    arrows.append('^')
+                    xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                    ys_plot.append(y_pixel + dy - 1)
+                    arrows.append('v')
+                '''
+                elif self.ontology[i][11] == 'na':
+                    objects_to_the_left = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel-1.5*dx_):int(x_pixel-0.5*dx_)]) 
+                    objects_to_the_right = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel+0.5*dx_):int(x_pixel+1.5*dx_)])
+                    objects_to_the_top = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.5*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
+                    objects_to_the_bottom = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.9*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
+
+                    if len(objects_to_the_left) == 1 and objects_to_the_left[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('<')
+
+                    if len(objects_to_the_right) == 1 and objects_to_the_right[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('>')
+
+                    if len(objects_to_the_top) == 1 and objects_to_the_top[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel - dy)
+                        arrows.append('^')
+
+                    if len(objects_to_the_bottom) == 1 and objects_to_the_bottom[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel + dy)
+                        arrows.append('v')
+                '''
+
+                if self.ontology[i][0] == self.red_object_value:
+                    for j in range(0, len(arrows)):
+                        C = np.array([201, 9, 9])
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                elif color_scheme == color_schemes[1] or color_scheme == color_schemes[2]:
+                    for j in range(0, len(arrows)):
+                        R = explanation[y_pixel][x_pixel][0]
+                        G = explanation[y_pixel][x_pixel][1]
+                        B = explanation[y_pixel][x_pixel][2]
+                        C = np.array([R, G, B])
+                        #plt.plot(xs_plot[j] + 0.3, ys_plot[j] - 0.2, marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                elif color_scheme == color_schemes[0]:
+                    C = np.array([180, 180, 180])   
+                    for j in range(0, len(arrows)):
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+
+        # PLOT HUMAN AS BLINKING EXCLAMATION MARK
+        ID = self.ontology.shape[0]
+        for human_pose in self.humans:
+            x_map = human_pose.position.x
+            y_map = human_pose.position.y
+            
+            distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
+            
+            # visualize orientations and semantic labels of humans
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.id = ID
+            ID += 1
+            marker.type = marker.TEXT_VIEW_FACING
+            if distance_human_robot > 2.0:
+                marker.action = marker.DELETE
+            else:
+                marker.action = marker.ADD
+            marker.pose = Pose()
+            marker.pose.position.x = x_map + 0.25
+            marker.pose.position.y = y_map - 0.6
+            marker.pose.position.z = 0.5
+            marker.pose.orientation.x = 0.0#qx
+            marker.pose.orientation.y = 0.0#qy
+            marker.pose.orientation.z = 0.0#qz
+            marker.pose.orientation.w = 0.0#qw
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.35
+            #marker.frame_locked = False
+            marker.text = "human"
+            marker.ns = "my_namespace"
+            self.semantic_labels_marker_array.markers.append(marker)
+
+            if self.human_blinking == True:
+                # for nicer plotting
+                x_map += 0.2
+                y_map += 0.2
+
+                x_pixel = int((x_map + - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                if distance_human_robot > 2.0:
+                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c='yellow')
+                else:
+                    C = np.array([255,102,102])
+                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c=C/255.0)
+        
+        if self.human_blinking == True:
+            self.human_blinking = False
+        else:
+            self.human_blinking = True
+        
 
         # CONVERT IMAGE TO NUMPY ARRAY 
         fig.savefig('explanation' + '.png', transparent=False)
@@ -2893,14 +2928,11 @@ def main():
     hixron_obj.test_explain()
     hixron_obj.first_call = False
     # sleep for 10s until Amar starts the video
-    print('VOR SCHLAFEN')
     d = rospy.Duration(1, 0)
     rospy.sleep(d)
-    print('NACH SCHLAFEN')
     # send the goal pose to start navigation
     hixron_obj.send_goal_pose()
     #rate = rospy.Rate(0.15)
-    print('NACH GOAL POSE')
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
     while not rospy.is_shutdown():
         #print('spinning')
