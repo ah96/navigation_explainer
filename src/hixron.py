@@ -558,8 +558,52 @@ class hixron(object):
     # declare subscribers
     def main_(self):
         self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=1)
-        self.chair1_moved = False
-        self.chair2_moved = False
+        self.chair_15_moved = False
+        self.chair_16_moved = False
+
+        self.chair_15_state = ModelState()
+        self.chair_15_state.model_name = 'chair_15'
+        self.chair_15_state.reference_frame = 'world'  # ''ground_plane'
+        # pose
+        self.chair_15_state.pose.position.x = -7.73
+        self.chair_15_state.pose.position.y = 5.84
+        self.chair_15_state.pose.position.z = 0
+        #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
+        quaternion = euler_to_quaternion(3.122560, 0, 0)
+        self.chair_15_state.pose.orientation.x = quaternion[0]
+        self.chair_15_state.pose.orientation.y = quaternion[1]
+        self.chair_15_state.pose.orientation.z = quaternion[2]
+        self.chair_15_state.pose.orientation.w = quaternion[3]
+        # twist
+        self.chair_15_state.twist.linear.x = 0
+        self.chair_15_state.twist.linear.y = 0
+        self.chair_15_state.twist.linear.z = 0
+        self.chair_15_state.twist.angular.x = 0
+        self.chair_15_state.twist.angular.y = 0
+        self.chair_15_state.twist.angular.z = 0
+
+
+        self.chair_16_state = ModelState()
+        self.chair_16_state.model_name = 'chair_16'
+        self.chair_16_state.reference_frame = 'world'  # ''ground_plane'
+        # pose
+        self.chair_16_state.pose.position.x = -6.16
+        self.chair_16_state.pose.position.y = 3.76
+        self.chair_16_state.pose.position.z = 0
+        #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
+        quaternion = euler_to_quaternion(3.122560, 0, 0)
+        self.chair_16_state.pose.orientation.x = quaternion[0]
+        self.chair_16_state.pose.orientation.y = quaternion[1]
+        self.chair_16_state.pose.orientation.z = quaternion[2]
+        self.chair_16_state.pose.orientation.w = quaternion[3]
+        # twist
+        self.chair_16_state.twist.linear.x = 0
+        self.chair_16_state.twist.linear.y = 0
+        self.chair_16_state.twist.linear.z = 0
+        self.chair_16_state.twist.angular.x = 0
+        self.chair_16_state.twist.angular.y = 0
+        self.chair_16_state.twist.angular.z = 0
+
         
         # create the base plot structure
         if self.plot_local_costmap_bool == True or self.plot_global_costmap_bool == True or self.plot_local_semantic_map_bool == True or self.plot_global_semantic_map_bool == True:
@@ -587,9 +631,9 @@ class hixron(object):
         # odometry subscriber
         #self.sub_odom = rospy.Subscriber("/mobile_base_controller/odom", Odometry, self.odom_callback)
 
-        self.pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=10)
-        self.pub_current_path = rospy.Publisher('/path_markers', MarkerArray, queue_size=10)
-        self.pub_old_path = rospy.Publisher('/old_path_markers', MarkerArray, queue_size=10)
+        self.pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=1)
+        self.pub_current_path = rospy.Publisher('/path_markers', MarkerArray, queue_size=1)
+        self.pub_old_path = rospy.Publisher('/old_path_markers', MarkerArray, queue_size=1)
 
         self.semantic_labels_marker_array = MarkerArray()
         self.current_path_marker_array = MarkerArray()
@@ -608,7 +652,7 @@ class hixron(object):
 
         # explanation layer
         if self.explanation_layer_bool:
-            self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2, queue_size=10)
+            self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2, queue_size=1)
         
             # point_cloud variables
             self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
@@ -715,9 +759,9 @@ class hixron(object):
         #self.robot_pose_map.position.x -= 9.0
         #self.robot_pose_map.position.y += 9.0
 
-        if self.chair1_moved == False:
+        if self.chair_15_moved == False:
             x = -7.73 + 9.0
-            y = 5.97 + 1.2 - 9.0
+            y = 5.84 + 1.6 - 9.0
 
             dx = self.robot_pose_map.position.x - x
             dy = self.robot_pose_map.position.y - y
@@ -725,59 +769,19 @@ class hixron(object):
             dist = math.sqrt(dx**2 + dy**2)
 
             if dist < 0.5:
-                state = ModelState()
-                state.model_name = 'chair_15'
-                state.reference_frame = 'world'  # ''ground_plane'
-                # pose
-                state.pose.position.x = -7.73
-                state.pose.position.y = 5.97
-                state.pose.position.z = 0
-                #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
-                quaternion = euler_to_quaternion(3.122560, 0, 0)
-                state.pose.orientation.x = quaternion[0]
-                state.pose.orientation.y = quaternion[1]
-                state.pose.orientation.z = quaternion[2]
-                state.pose.orientation.w = quaternion[3]
-                # twist
-                state.twist.linear.x = 0
-                state.twist.linear.y = 0
-                state.twist.linear.z = 0
-                state.twist.angular.x = 0
-                state.twist.angular.y = 0
-                state.twist.angular.z = 0
+                self.pub_move.publish(self.chair_15_state)
+                self.pub_move.publish(self.chair_15_state)
+                self.pub_move.publish(self.chair_15_state)
+                self.pub_move.publish(self.chair_15_state)
+                self.pub_move.publish(self.chair_15_state)
 
-                self.pub_move.publish(state)
-
-                self.chair1_moved = True
-
+                self.chair_15_moved = True
         else:
-            state = ModelState()
-            state.model_name = 'chair_15'
-            state.reference_frame = 'world'  # ''ground_plane'
-            # pose
-            state.pose.position.x = -7.73
-            state.pose.position.y = 5.97
-            state.pose.position.z = 0
-            #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
-            quaternion = euler_to_quaternion(3.122560, 0, 0)
-            state.pose.orientation.x = quaternion[0]
-            state.pose.orientation.y = quaternion[1]
-            state.pose.orientation.z = quaternion[2]
-            state.pose.orientation.w = quaternion[3]
-            # twist
-            state.twist.linear.x = 0
-            state.twist.linear.y = 0
-            state.twist.linear.z = 0
-            state.twist.angular.x = 0
-            state.twist.angular.y = 0
-            state.twist.angular.z = 0
+            self.pub_move.publish(self.chair_15_state)
 
-            self.pub_move.publish(state)
-
-
-        if self.chair2_moved == False:
+        if self.chair_16_moved == False:
             x = -6.16 + 9.0
-            y = 3.51 + 1.6 - 9.0
+            y = 3.76 + 1.8 - 9.0
 
             dx = self.robot_pose_map.position.x - x
             dy = self.robot_pose_map.position.y - y
@@ -785,54 +789,16 @@ class hixron(object):
             dist = math.sqrt(dx**2 + dy**2)
 
             if dist < 0.5:
-                state = ModelState()
-                state.model_name = 'chair_16'
-                state.reference_frame = 'world'  # ''ground_plane'
-                # pose
-                state.pose.position.x = -6.16
-                state.pose.position.y = 3.51
-                state.pose.position.z = 0
-                #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
-                quaternion = euler_to_quaternion(3.122560, 0, 0)
-                state.pose.orientation.x = quaternion[0]
-                state.pose.orientation.y = quaternion[1]
-                state.pose.orientation.z = quaternion[2]
-                state.pose.orientation.w = quaternion[3]
-                # twist
-                state.twist.linear.x = 0
-                state.twist.linear.y = 0
-                state.twist.linear.z = 0
-                state.twist.angular.x = 0
-                state.twist.angular.y = 0
-                state.twist.angular.z = 0
-
-                self.pub_move.publish(state)
-
-                self.chair2_moved = True
+                self.pub_move.publish(self.chair_16_state)
+                self.pub_move.publish(self.chair_16_state)
+                self.pub_move.publish(self.chair_16_state)
+                self.pub_move.publish(self.chair_16_state)
+                self.pub_move.publish(self.chair_16_state)
+                
+                self.chair_16_moved = True
 
         else:
-            state = ModelState()
-            state.model_name = 'chair_16'
-            state.reference_frame = 'world'  # ''ground_plane'
-            # pose
-            state.pose.position.x = -6.16
-            state.pose.position.y = 3.51
-            state.pose.position.z = 0
-            #quaternion = tf.transformations.quaternion_from_euler(0, 0, 3.122560)
-            quaternion = euler_to_quaternion(3.122560, 0, 0)
-            state.pose.orientation.x = quaternion[0]
-            state.pose.orientation.y = quaternion[1]
-            state.pose.orientation.z = quaternion[2]
-            state.pose.orientation.w = quaternion[3]
-            # twist
-            state.twist.linear.x = 0
-            state.twist.linear.y = 0
-            state.twist.linear.z = 0
-            state.twist.angular.x = 0
-            state.twist.angular.y = 0
-            state.twist.angular.z = 0
-
-            self.pub_move.publish(state)
+            self.pub_move.publish(self.chair_16_state)
         
     # goal pose callback
     def goal_pose_callback(self, msg):
@@ -1142,7 +1108,7 @@ class hixron(object):
         # simulation relying on Gazebo
         if self.simulation:
             multiplication_factor = 0.75
-            for i in range(0, self.ontology.shape[0]):
+            for i in range(14, 16): #(0, self.ontology.shape[0]):
                 # if the object has some affordance (etc. movability, openability), then it may have changed its position 
                 if self.ontology[i][7] == 1:
                     # get the object's new position from Gazebo
@@ -1856,46 +1822,46 @@ class hixron(object):
 
     # publish semantic layer
     def publish_explanation_layer(self, output):
-        if self.use_global_semantic_map:
-            #points_start = time.time()
+        #points_start = time.time()
             
-            z = 0.0
-            a = 255                    
-            points = []
+        z = 0.0
+        a = 255                    
+        points = []
 
-            # define output
-            #output = self.global_semantic_map * 255.0
-            #output = self.global_semantic_map_inflated * 255.0
-            #output = output[:, :, [2, 1, 0]] * 255.0
-            #output = output.astype(np.uint8)
+        # define output
+        #output = self.global_semantic_map * 255.0
+        #output = self.global_semantic_map_inflated * 255.0
+        #output = output[:, :, [2, 1, 0]] * 255.0
+        #output = output.astype(np.uint8)
 
-            # draw layer
-            size_1 = int(self.global_semantic_map_size[1])
-            size_0 = int(self.global_semantic_map_size[0])
-            for i in range(0, size_1):
-                for j in range(0, size_0):
-                    x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
-                    y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
-                    r = int(output[j, i, 0])
-                    g = int(output[j, i, 1])
-                    b = int(output[j, i, 2])
-                    rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
-                    pt = [x, y, z, rgb]
-                    points.append(pt)
+        # draw layer
+        size_1 = int(self.global_semantic_map_size[1])
+        size_0 = int(self.global_semantic_map_size[0])
+        for i in range(0, size_1):
+            for j in range(0, size_0):
+                x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
+                y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
+                r = int(output[j, i, 0])
+                g = int(output[j, i, 1])
+                b = int(output[j, i, 2])
+                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                pt = [x, y, z, rgb]
+                points.append(pt)
 
-            #points_end = time.time()
-            #print('explanation layer runtime = ', round(points_end - points_start,3))
-            
-            # publish
-            self.header.frame_id = 'map'
-            pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
-            pc2.header.stamp = rospy.Time.now()
-            self.pub_explanation_layer.publish(pc2)
-            
-            self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
-            self.pub_current_path.publish(self.current_path_marker_array)
-            self.pub_old_path.publish(self.old_path_marker_array)
-
+        #points_end = time.time()
+        #print('explanation layer runtime = ', round(points_end - points_start,3))
+        
+        # publish
+        self.header.frame_id = 'map'
+        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+        pc2.header.stamp = rospy.Time.now()
+        #print('PUBLISHED!')
+        
+        self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
+        self.pub_current_path.publish(self.current_path_marker_array)
+        self.pub_old_path.publish(self.old_path_marker_array)
+        self.pub_explanation_layer.publish(pc2)
+        
     # decide on explanation variables
     def set_explanation_vars(self):
         explanaton_timing = ['always', 'when_change_in_behavior', '']
@@ -1926,7 +1892,7 @@ class hixron(object):
         if len(np.unique(global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
             return
 
-        color_shape_path_combination = [1,1,1]
+        color_shape_path_combination = [2,1,0]
         
         color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
         color_scheme = color_schemes[color_shape_path_combination[0]]
@@ -2137,8 +2103,7 @@ class hixron(object):
 
 
                 self.dynamic_explanation = False
-        
-                
+                        
         # VISUALIZE OBSTACLE NAMES USING PC2
         if shape_scheme == shape_schemes[1]:
             self.semantic_labels_marker_array.markers = []
@@ -2174,8 +2139,7 @@ class hixron(object):
                 marker.text = self.ontology[i][2]
                 marker.ns = "my_namespace"
                 self.semantic_labels_marker_array.markers.append(marker)
-                            
-             
+                                         
         # DYNAMIC PART
         if len(self.global_plan_history) > 1:
             # test if there is deviation between current and previous
@@ -2412,10 +2376,10 @@ class hixron(object):
 
         # COLOR RED OBJECT
         if self.red_object_countdown > 0:
-            print('BOJI STOLICU CRVENO!!!')
-            print('self.red_object_countdown = ', self.red_object_countdown)
-            print('self.red_object_value = ', self.red_object_value)
-            print('self.last_object_moved_ID = ', self.last_object_moved_ID)
+            #print('BOJI STOLICU CRVENO!!!')
+            #print('self.red_object_countdown = ', self.red_object_countdown)
+            #print('self.red_object_value = ', self.red_object_value)
+            #print('self.last_object_moved_ID = ', self.last_object_moved_ID)
 
             #RGB_val = [201,9,9]
             RGB_val = [255,0,0]
@@ -2930,11 +2894,17 @@ def main():
     hixron_obj.first_call = True
     hixron_obj.test_explain()
     hixron_obj.first_call = False
-    
+    hixron_obj.test_explain()
+    hixron_obj.test_explain()
+    hixron_obj.test_explain()
+    hixron_obj.test_explain()
+    hixron_obj.test_explain()
+    hixron_obj.test_explain()
+    print('BEFORE SLEEP')
     # sleep for 10s until Amar starts the video
-    d = rospy.Duration(1.5, 0)
+    d = rospy.Duration(3, 0)
     rospy.sleep(d)
-    
+    print('AFTER SLEEP')
     # send the goal pose to start navigation
     hixron_obj.send_goal_pose()
     
