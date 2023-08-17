@@ -376,6 +376,8 @@ def euler_to_quaternion(yaw, pitch, roll):
 class hixron(object):
     # constructor
     def __init__(self):
+        self.robot_offset = 9.0
+
         self.simulation = True
 
         # hri vars
@@ -528,19 +530,19 @@ class hixron(object):
         self.ontology = np.array(self.ontology)
         #print(self.ontology)
         for i in range(self.ontology.shape[0]):
-            self.ontology[i, 3] += 9.0
-            self.ontology[i, 4] -= 9.0
+            self.ontology[i, 3] += self.robot_offset
+            self.ontology[i, 4] -= self.robot_offset
 
-            self.ontology[i, 12] += 9.0
-            self.ontology[i, 13] -= 9.0
+            self.ontology[i, 12] += self.robot_offset
+            self.ontology[i, 13] -= self.robot_offset
 
         # load global semantic map info
         self.global_semantic_map_info = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'map_info.csv')) 
         # global semantic map vars
         self.global_semantic_map_origin_x = float(self.global_semantic_map_info[0,4])
-        self.global_semantic_map_origin_x += 9.0  
+        self.global_semantic_map_origin_x += self.robot_offset  
         self.global_semantic_map_origin_y = float(self.global_semantic_map_info[0,5])
-        self.global_semantic_map_origin_y -= 9.0 
+        self.global_semantic_map_origin_y -= self.robot_offset 
         self.global_semantic_map_resolution = float(self.global_semantic_map_info[0,1])
         self.global_semantic_map_size = [int(self.global_semantic_map_info[0,3]), int(self.global_semantic_map_info[0,2])]
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
@@ -727,8 +729,8 @@ class hixron(object):
         goal.target_pose.header.stamp.nsecs = 0
         goal.target_pose.header.frame_id = "map"
 
-        goal.target_pose.pose.position.x = -7.55 + 9.0
-        goal.target_pose.pose.position.y = 2.3 - 9.0
+        goal.target_pose.pose.position.x = -7.65 + self.robot_offset
+        goal.target_pose.pose.position.y = 2.5 - self.robot_offset
         goal.target_pose.pose.position.z = 0.0
 
         goal.target_pose.pose.orientation.x = 0.0
@@ -756,12 +758,12 @@ class hixron(object):
         #self.robot_position_map = msg.pose.pose.position
         #self.robot_orientation_map = msg.pose.pose.orientation
         self.robot_pose_map = msg.pose.pose
-        #self.robot_pose_map.position.x -= 9.0
-        #self.robot_pose_map.position.y += 9.0
+        #self.robot_pose_map.position.x -= self.robot_offset
+        #self.robot_pose_map.position.y += self.robot_offset
 
         if self.chair_8_moved == False:
-            x = -7.73 + 9.0
-            y = 5.84 + 1.6 - 9.0
+            x = -7.73 + self.robot_offset
+            y = 5.84 + 1.6 - self.robot_offset
 
             dx = self.robot_pose_map.position.x - x
             dy = self.robot_pose_map.position.y - y
@@ -771,6 +773,10 @@ class hixron(object):
             if dist < 0.5:
                 self.pub_move.publish(self.chair_8_state)
                 self.pub_move.publish(self.chair_8_state)
+                self.pub_move.publish(self.chair_8_state)
+                self.pub_move.publish(self.chair_8_state)
+                self.pub_move.publish(self.chair_8_state)
+
                 self.pub_move.publish(self.chair_8_state)
                 self.pub_move.publish(self.chair_8_state)
                 self.pub_move.publish(self.chair_8_state)
@@ -780,8 +786,8 @@ class hixron(object):
             self.pub_move.publish(self.chair_8_state)
 
         if self.chair_9_moved == False:
-            x = -6.16 + 9.0
-            y = 3.76 + 1.8 - 9.0
+            x = -6.16 + self.robot_offset
+            y = 3.76 + 1.8 - self.robot_offset
 
             dx = self.robot_pose_map.position.x - x
             dy = self.robot_pose_map.position.y - y
@@ -791,6 +797,10 @@ class hixron(object):
             if dist < 0.5:
                 self.pub_move.publish(self.chair_9_state)
                 self.pub_move.publish(self.chair_9_state)
+                self.pub_move.publish(self.chair_9_state)
+                self.pub_move.publish(self.chair_9_state)
+                self.pub_move.publish(self.chair_9_state)
+
                 self.pub_move.publish(self.chair_9_state)
                 self.pub_move.publish(self.chair_9_state)
                 self.pub_move.publish(self.chair_9_state)
@@ -805,8 +815,8 @@ class hixron(object):
         print('goal_pose_callback')
 
         self.goal_pose_current = msg.pose
-        self.goal_pose_current.position.x -= 9.0
-        self.goal_pose_current.position.y += 9.0
+        self.goal_pose_current.position.x -= self.robot_offset
+        self.goal_pose_current.position.y += self.robot_offset
         self.goal_pose_history.append(msg.pose)
 
     # robot footprint callback
@@ -1097,8 +1107,8 @@ class hixron(object):
 
         self.humans = []
         for i in range(0, len(gazebo_names)):
-            gazebo_poses[i].position.x += 9.0
-            gazebo_poses[i].position.y -= 9.0 
+            gazebo_poses[i].position.x += self.robot_offset
+            gazebo_poses[i].position.y -= self.robot_offset 
             if 'citizen' in gazebo_names[i] or 'human' in gazebo_names[i]:
                 self.humans.append(gazebo_poses[i])
 
@@ -1892,7 +1902,7 @@ class hixron(object):
         if len(np.unique(global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
             return
 
-        color_shape_path_combination = [2,1,0]
+        color_shape_path_combination = [2,1,1]
         
         color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
         color_scheme = color_schemes[color_shape_path_combination[0]]
