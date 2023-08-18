@@ -15,6 +15,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_srvs
   cv_bridge
   image_transport
+  rqt_gui 
+  rqt_gui_py
 )
 
 ## System dependencies are found with CMake's conventions
@@ -162,10 +164,6 @@ include_directories(SYSTEM ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-# catkin_install_python(PROGRAMS
-#   scripts/my_python_script
-#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
 
 ## Mark executables for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
