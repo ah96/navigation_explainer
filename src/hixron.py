@@ -608,8 +608,6 @@ class hixron(object):
         # camera projection matrix 
         self.P = np.array([])
 
-        self.semantic_labels_marker_array = MarkerArray()
-
     # declare subscribers
     def main_(self):
         self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=1)
@@ -739,6 +737,40 @@ class hixron(object):
 
             # load gazebo tags
             self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'gazebo_tags.csv')) 
+        
+        if self.extrovert:
+            self.semantic_labels_marker_array = MarkerArray()
+            self.semantic_labels_marker_array.markers = []
+            for i in range(0, self.ontology.shape[0]):                
+                x_map = self.ontology[i][12]
+                y_map = self.ontology[i][13]
+                
+                # visualize orientations and semantic labels of known objects
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.id = i
+                marker.type = marker.TEXT_VIEW_FACING
+                marker.action = marker.ADD
+                marker.pose = Pose()
+                marker.pose.position.x = x_map
+                marker.pose.position.y = y_map
+                marker.pose.position.z = 0.5
+                marker.pose.orientation.x = 0.0#qx
+                marker.pose.orientation.y = 0.0#qy
+                marker.pose.orientation.z = 0.0#qz
+                marker.pose.orientation.w = 0.0#qw
+                marker.color.r = 1.0
+                marker.color.g = 1.0
+                marker.color.b = 1.0
+                marker.color.a = 1.0
+                marker.scale.x = 0.35
+                marker.scale.y = 0.35
+                marker.scale.z = 0.35
+                #marker.frame_locked = False
+                marker.text = self.ontology[i][1]
+                marker.ns = "my_namespace"
+                self.semantic_labels_marker_array.markers.append(marker)
+                self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
             
     # camera feed callback
     def camera_feed_callback(self, img, depth_img, info):
@@ -3778,6 +3810,7 @@ class hixron(object):
             explanation_G = copy.deepcopy(explanation_R)
             explanation_B = copy.deepcopy(explanation_R)
             output = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+            output = np.fliplr(output)
 
             z = 0.0
             a = 255                    
@@ -3804,6 +3837,8 @@ class hixron(object):
             #print('PUBLISHED!')
         
             self.pub_explanation_layer.publish(pc2)
+
+            self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
 
         # define local explanation window around robot
         around_robot_size_x = 1.5
@@ -3927,16 +3962,16 @@ def main():
         hixron_obj.first_call = True
         hixron_obj.test_explain_icsr()
         hixron_obj.first_call = False
-        hixron_obj.test_explain_icsr()
-        hixron_obj.test_explain_icsr()
-        hixron_obj.test_explain_icsr()
-        hixron_obj.test_explain_icsr()
-        hixron_obj.test_explain_icsr()
-        hixron_obj.test_explain_icsr()
+        #hixron_obj.test_explain_icsr()
+        #hixron_obj.test_explain_icsr()
+        #hixron_obj.test_explain_icsr()
+        #hixron_obj.test_explain_icsr()
+        #hixron_obj.test_explain_icsr()
+        #hixron_obj.test_explain_icsr()
         #print('BEFORE SLEEP')
         
         # sleep for 10s until Amar starts the video
-        d = rospy.Duration(3, 0)
+        d = rospy.Duration(1, 0)
         rospy.sleep(d)
         #print('AFTER SLEEP')
         
