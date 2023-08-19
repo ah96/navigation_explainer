@@ -30,14 +30,13 @@ from psutil import Popen
 from sklearn.linear_model import Ridge, lars_path
 from sklearn.utils import check_random_state
 import sklearn.metrics
-import matplotlib
-from scipy import misc
 import PIL
 from visualization_msgs.msg import Marker, MarkerArray
-from PIL import ImageFont, ImageDraw
-from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 import actionlib
-import tf
+from std_msgs.msg import String
+
+PI = math.pi
 
 class klasa(object):
     def what_to_explain(control_param, locality_param):
@@ -372,10 +371,71 @@ def euler_to_quaternion(yaw, pitch, roll):
     qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
     return [qx, qy, qz, qw]
 
+# convert orientation quaternion to euler angles
+def quaternion_to_euler(x, y, z, w):
+    # roll (x-axis rotation)
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    # pitch (y-axis rotation)
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+
+    # yaw (z-axis rotation)
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return [yaw, pitch, roll]
+
+# get QSR value
+def getIntrinsicQsrValue(angle):
+    value = ''
+    qsr_choice = 0    
+
+    if qsr_choice == 0:
+        if -PI/2 <= angle < PI/2:
+            value += 'right'
+        elif PI/2 <= angle < PI or -PI <= angle < -PI/2:
+            value += 'left'
+
+    elif qsr_choice == 1:
+        if 0 <= angle < PI/2:
+            value += 'left/front'
+        elif PI/2 <= angle <= I:
+            value += 'left/back'
+        elif PI/2 <= angle < 0:
+            value += 'right/front'
+        elif PI <= angle < PI/2:
+            value += 'right/back'
+
+    return value
+
 # hixron_subscriber class
 class hixron(object):
     # constructor
     def __init__(self):
+        # icsr vars
+        self.icsr = True
+        self.humans_nearby = False
+        self.pub_text_exp = rospy.Publisher('/textual_explanation', String, queue_size=10)
+        self.text_exp = ''
+        self.extrovert = True
+        if self.extrovert:
+            self.timing = 'immediately' # 'delayed'
+            self.duration = 'short' # 'short', 'long'
+            self.representation = 'textual' # 'textual', 'visual', 'textual-visual'
+            self.detail_level = 'poor' # 'poor', 'rich'
+        else:
+            self.timing = 'delayed' # 'delayed'
+            self.duration = 'long' # 'short', 'long'
+            self.representation = 'textual-visual' # 'textual', 'visual', 'textual-visual'
+            self.detail_level = 'rich' # 'poor', 'rich'
+            self.introvert_publish_ctr = 4
+
         self.robot_offset = 9.0
 
         self.simulation = True
@@ -390,13 +450,6 @@ class hixron(object):
         self.humans = []
         self.human_blinking = False
         self.object_arrow_blinking = False
-
-        # icsr vars
-        self.extrovert = 1.0
-        self.human_detected = False
-        self.navigating = True
-        self.stopping = False
-        self.deviating = False
 
         # whether to plot
         self.plot_local_costmap_bool = False
@@ -2890,6 +2943,946 @@ class hixron(object):
         #end = time.time()
         #print('DISTANCES CREATION RUNTIME = ', round(end-start,3))
 
+    # test whether explanation is needed
+    def test_explain_icsr(self):
+        #print('test_explain!')
+
+        if self.first_call:
+            self.create_semantic_data()
+     
+        if self.extrovert:
+            #if self.representation == 'textual' and self.timing == 'immediately' and self.duration = 'short':
+            self.explain_textual_icsr()
+            self.publish_textual_icsr()
+        else:
+            # introvert
+            if self.introvert_publish_ctr == 4:
+                self.explain_textual_icsr()
+                self.explain_visual_icsr()
+
+            elif self.introvert_publish_ctr == 3:
+                self.publish_textual_empty()
+                self.publish_visual_empty()
+
+            if self.introvert_publish_ctr == 2:
+                self.humans_nearby = False
+                for human_pose in self.humans:
+                    x_map = human_pose.position.x
+                    y_map = human_pose.position.y    
+                    distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
+                    if distance_human_robot < 2.0:
+                        self.humans_nearby = True
+                        break
+
+                if self.representation == 'visual':
+                    self.publish_visual_icsr()
+
+                elif self.representation == 'textual-visual':
+                    self.publish_textual_icsr()
+                    self.publish_visual_icsr()
+
+            elif self.introvert_publish_ctr == 1:
+                self.humans_nearby = False
+                for human_pose in self.humans:
+                    x_map = human_pose.position.x
+                    y_map = human_pose.position.y    
+                    distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
+                    if distance_human_robot < 2.0:
+                        self.humans_nearby = True
+                        break
+
+                if self.representation == 'visual':
+                    self.publish_visual_icsr()
+
+                elif self.representation == 'textual-visual':
+                    self.publish_textual_icsr()
+                    self.publish_visual_icsr()
+                
+                self.introvert_publish_ctr = 5
+               
+            self.introvert_publish_ctr -= 1
+ 
+    def explain_visual_icsr(self):
+        # STATIC PART        
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+
+        if len(np.unique(global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
+            return
+
+        color_shape_path_combination = [2,1,1]
+        
+        color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
+        color_scheme = color_schemes[color_shape_path_combination[0]]
+        color_whole_objects = False
+
+        shape_schemes = ['wo_text', 'with_text']
+        shape_scheme = shape_schemes[color_shape_path_combination[1]]
+
+        path_schemes = ['full_line', 'arrows']
+        path_scheme = path_schemes[color_shape_path_combination[2]]
+
+        # define local explanation window around robot
+        around_robot_size_x = 2.5
+        around_robot_size_y = 2.5
+
+        # create the RGB explanation matrix of the same size as semantic map
+        self.explanation_size_y = self.global_semantic_map_size[0]
+        self.explanation_size_x = self.global_semantic_map_size[1]
+        #print('(self.explanation_size_x,self.explanation_size_y)',(self.explanation_size_y,self.explanation_size_x))
+        explanation_R = np.zeros((self.explanation_size_y, self.explanation_size_x))
+        explanation_R[:,:] = 120 # free space
+        explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
+        explanation_G = copy.deepcopy(explanation_R)
+        explanation_B = copy.deepcopy(explanation_R)
+
+        # find the objects/obstacles in the robot's local neighbourhood
+        robot_pose = self.robot_pose_map
+        x_min = robot_pose.position.x - around_robot_size_x
+        y_min = robot_pose.position.y - around_robot_size_y
+        x_max = robot_pose.position.x + around_robot_size_x
+        y_max = robot_pose.position.y + around_robot_size_y
+        #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+
+        x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)        
+        x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+        y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        
+        x_min_pixel = max(0, x_min_pixel)
+        x_max_pixel = min(self.explanation_size_x - 1, x_max_pixel)
+        y_min_pixel = max(0, y_min_pixel)
+        y_max_pixel = min(self.explanation_size_y - 1, y_max_pixel)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        
+        neighborhood_objects_IDs = np.unique(global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
+        if 0 in neighborhood_objects_IDs:
+            neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
+        neighborhood_objects_IDs = [int(item) for item in neighborhood_objects_IDs]
+        #print('neighborhood_objects_IDs =', neighborhood_objects_IDs)
+
+        # OBSTACLE COLORING
+        if color_scheme == color_schemes[1]:
+            c_x_pixel = int(0.5*(x_min_pixel + x_max_pixel)+1)
+            c_y_pixel = int(0.5*(y_min_pixel + y_max_pixel)+1)
+            d_x = x_max_pixel - x_min_pixel
+            d_y = y_max_pixel - y_min_pixel
+            #print('(d_x, d_y) = ', (d_x, d_y))
+
+            R_temp = copy.deepcopy(explanation_R)
+
+            bgr_temp = (np.dstack((explanation_B,explanation_G,explanation_R))).astype(np.uint8)
+            #hsv_temp = matplotlib.colors.rgb_to_hsv(bgr_temp)
+            hsv_temp = cv2.cvtColor(bgr_temp, cv2.COLOR_BGR2HSV)
+            #print(type(hsv_temp))
+            #print(hsv_temp.shape)
+
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 0] = 0
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 2] = 255
+            
+
+            hsv_temp[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x), 1] = 160
+            
+            hsv_temp[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x), 1] = 135
+            hsv_temp[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x), 1] = 135
+            hsv_temp[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x), 1] = 135
+            hsv_temp[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x), 1] = 135
+            
+            hsv_temp[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x), 1] = 95
+            hsv_temp[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x), 1] = 95
+            hsv_temp[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x), 1] = 95
+            hsv_temp[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x), 1] = 95
+            
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x), 1] = 50
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x), 1] = 50
+            hsv_temp[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 1] = 50
+            hsv_temp[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x), 1] = 50
+            
+
+            bgr_temp = cv2.cvtColor(hsv_temp, cv2.COLOR_HSV2BGR)
+            explanation_R = bgr_temp[:,:,2]
+            explanation_G = bgr_temp[:,:,1]
+            explanation_B = bgr_temp[:,:,0]
+
+            explanation_R[R_temp == 120] = 120 # return free space to original values
+            explanation_G[R_temp == 120] = 120 # return free space to original values
+            explanation_B[R_temp == 120] = 120 # return free space to original value
+
+            for row in self.ontology[-4:,:]:
+                wall_ID = row[0]
+                if wall_ID in neighborhood_objects_IDs:
+                    explanation_R[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_G[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_B[global_semantic_map_complete_copy == wall_ID] = 180 
+
+        elif color_scheme == color_schemes[2]:
+            R_temp = copy.deepcopy(explanation_R)
+
+            c_x_pixel = int(0.5*(x_min_pixel + x_max_pixel)+1)
+            c_y_pixel = int(0.5*(y_min_pixel + y_max_pixel)+1)
+            d_x = x_max_pixel - x_min_pixel
+            d_y = y_max_pixel - y_min_pixel
+            #print('(d_x, d_y) = ', (d_x, d_y))
+
+            
+            explanation_R[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 227
+            explanation_G[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 242
+            explanation_B[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 19
+
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 206
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 206
+            explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 206
+            explanation_R[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 206
+            explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 215
+            explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 215
+            explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 215
+            explanation_G[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 215
+            explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 15
+            explanation_B[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 15
+            
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 124
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 124
+            explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 124
+            explanation_R[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 124
+            explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 220
+            explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 220
+            explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 220
+            explanation_G[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 220
+            explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 15
+            explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 15
+            explanation_B[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 15
+            
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 108
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 108
+            explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 108
+            explanation_R[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 108
+            explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 196
+            explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 196
+            explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 196
+            explanation_G[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 196
+            explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 8
+            explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 8
+            explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 8
+            explanation_B[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 8
+            
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 98
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 98
+            explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 98
+            explanation_R[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 98
+            explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 176
+            explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 176
+            explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 176
+            explanation_G[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 176
+            explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 9
+            explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 9
+            explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 9
+            explanation_B[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 9
+            
+            explanation_R[R_temp == 120] = 120 # return free space to original values
+            explanation_G[R_temp == 120] = 120 # return free space to original values
+            explanation_B[R_temp == 120] = 120 # return free space to original value
+
+            '''
+            if color_whole_objects == True:
+                for ID in neighborhood_objects_IDs:
+                        if self.ontology[ID-1][7] == 0:
+                            explanation_R[global_semantic_map_complete_copy == ID] = 3
+                            explanation_G[global_semantic_map_complete_copy == ID] = 144
+                            explanation_B[global_semantic_map_complete_copy == ID] = 31
+                        elif self.ontology[ID-1][7] == 1:
+                            explanation_R[global_semantic_map_complete_copy == ID] = 230
+                            explanation_G[global_semantic_map_complete_copy == ID] = 217
+                            explanation_B[global_semantic_map_complete_copy == ID] = 26
+            else:
+                N_objects = self.ontology.shape[0]
+                neighborhood_mask = copy.deepcopy(global_semantic_map_complete_copy)
+                neighborhood_mask[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel] += N_objects
+                for ID in neighborhood_objects_IDs:
+                    if self.ontology[ID-1][7] == 1:
+                        explanation_R[neighborhood_mask == ID + N_objects] = 230
+                        explanation_G[neighborhood_mask == ID + N_objects] = 217
+                        explanation_B[neighborhood_mask == ID + N_objects] = 26  
+                    if self.ontology[ID-1][7] == 0:
+                        explanation_R[neighborhood_mask == ID + N_objects] = 3
+                        explanation_G[neighborhood_mask == ID + N_objects] = 144
+                        explanation_B[neighborhood_mask == ID + N_objects] = 31
+            '''
+
+            for row in self.ontology[-4:,:]:
+                wall_ID = row[0]
+                if wall_ID in neighborhood_objects_IDs:
+                    explanation_R[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_G[global_semantic_map_complete_copy == wall_ID] = 180
+                    explanation_B[global_semantic_map_complete_copy == wall_ID] = 180
+
+
+                self.dynamic_explanation = False
+                        
+        # VISUALIZE OBSTACLE NAMES USING PC2
+        if shape_scheme == shape_schemes[1]:
+            self.semantic_labels_marker_array.markers = []
+            for i in range(0, self.ontology.shape[0] - 4):                
+                x_map = self.ontology[i][12]
+                y_map = self.ontology[i][13]
+                
+                # visualize orientations and semantic labels of known objects
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.id = i
+                marker.type = marker.TEXT_VIEW_FACING
+                if self.ontology[i][0] in neighborhood_objects_IDs:
+                    marker.action = marker.ADD
+                else:
+                    marker.action = marker.DELETE
+                marker.pose = Pose()
+                marker.pose.position.x = x_map
+                marker.pose.position.y = y_map
+                marker.pose.position.z = 0.5
+                marker.pose.orientation.x = 0.0#qx
+                marker.pose.orientation.y = 0.0#qy
+                marker.pose.orientation.z = 0.0#qz
+                marker.pose.orientation.w = 0.0#qw
+                marker.color.r = 1.0
+                marker.color.g = 1.0
+                marker.color.b = 1.0
+                marker.color.a = 1.0
+                marker.scale.x = 0.35
+                marker.scale.y = 0.35
+                marker.scale.z = 0.35
+                #marker.frame_locked = False
+                marker.text = self.ontology[i][2]
+                marker.ns = "my_namespace"
+                self.semantic_labels_marker_array.markers.append(marker)
+                                         
+        # DYNAMIC PART
+        if len(self.global_plan_history) > 1:
+            # test if there is deviation between current and previous
+            self.deviation_between_global_plans = False
+            deviation_threshold = 10.0
+            
+            self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:])
+            #self.global_plan_history_hold = copy.deepcopy(self.global_plan_history)
+            self.global_plan_current_hold = copy.deepcopy(self.global_plan_history[-1])
+            if len(self.global_plan_history) > 1:
+                self.global_plan_previous_hold = copy.deepcopy(self.global_plan_history[-2])
+            
+                min_plan_length = min(len(self.global_plan_current_hold.poses), len(self.global_plan_previous_hold.poses))
+                
+                # calculate deivation
+                global_dev = 0
+                for i in range(0, min_plan_length):
+                    dev_x = self.global_plan_current_hold.poses[i].pose.position.x - self.global_plan_previous_hold.poses[i].pose.position.x
+                    dev_y = self.global_plan_current_hold.poses[i].pose.position.y - self.global_plan_previous_hold.poses[i].pose.position.y
+                    local_dev = dev_x**2 + dev_y**2
+                    global_dev += local_dev
+                global_dev = math.sqrt(global_dev)
+                #print('\nDEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                #print('OBJECT_MOVED_ID = ', self.last_object_moved_ID)
+            
+                if global_dev > deviation_threshold:
+                    #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                    self.deviation_between_global_plans = True
+                    self.deviating = True
+
+            # check if the last two global plans have the same goal pose
+            same_goal_pose = False
+            if len(self.globalPlan_goalPose_indices_history_hold) > 1:
+                if self.globalPlan_goalPose_indices_history_hold[-1][1] == self.globalPlan_goalPose_indices_history_hold[-2][1]:
+                    same_goal_pose = True
+
+            if same_goal_pose == False:
+                print('New goal chosen!!!')
+                self.old_plan_bool = False
+
+            # if deviation happened and some object was moved
+            if self.deviation_between_global_plans and same_goal_pose:
+                #print('TESTIRA se moguca devijacija')
+                if self.last_object_moved_ID > 0 and self.red_object_countdown == -1: #self.last_object_moved_ID in neighborhood_objects_IDs
+                    # define the red object
+                    self.red_object_value = copy.deepcopy(self.last_object_moved_ID)
+                    self.red_object_countdown = 7
+                    self.last_object_moved_ID = -1
+
+                    # save the previous plan
+                    self.old_plan = copy.deepcopy(self.global_plan_previous_hold)
+                    self.old_plan_bool = True
+
+            # VISUALIZE OLD PATH
+            if self.old_plan_bool == True:
+                self.old_path_marker_array.markers = []
+
+                #print('len(self.old_plan.poses) = ', len(self.old_plan.poses))
+                for i in range(0, len(self.old_plan.poses)):
+                    x_map = self.old_plan.poses[i].pose.position.x
+                    y_map = self.old_plan.poses[i].pose.position.y
+
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.SPHERE
+                    marker.action = marker.ADD
+                    marker.pose = Pose()
+                    marker.pose.position.x = self.old_plan.poses[i].pose.position.x
+                    marker.pose.position.y = self.old_plan.poses[i].pose.position.y
+                    marker.pose.position.z = 0.8
+                    marker.pose.orientation.x = self.old_plan.poses[i].pose.orientation.x
+                    marker.pose.orientation.y = self.old_plan.poses[i].pose.orientation.y
+                    marker.pose.orientation.z = self.old_plan.poses[i].pose.orientation.z
+                    marker.pose.orientation.w = self.old_plan.poses[i].pose.orientation.w
+                    marker.color.r = 0.85
+                    marker.color.g = 0.85
+                    marker.color.b = 0.85
+                    marker.color.a = 0.8
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.old_path_marker_array.markers.append(marker)
+
+                for i in range(len(self.old_plan.poses), 600):
+                    x_map = 0
+                    y_map = 0
+
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.SPHERE
+                    marker.action = marker.DELETE
+                    marker.pose = Pose()
+                    marker.pose.position.x = 0
+                    marker.pose.position.y = 0
+                    marker.pose.position.z = 0.8
+                    marker.pose.orientation.x = 0
+                    marker.pose.orientation.y = 0
+                    marker.pose.orientation.z = 0
+                    marker.pose.orientation.w = 0
+                    marker.color.r = 0.85
+                    marker.color.g = 0.85
+                    marker.color.b = 0.85
+                    marker.color.a = 0.8
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.old_path_marker_array.markers.append(marker)
+
+            # VISUALIZE CURRENT PATH
+            if path_scheme == path_schemes[0]:         
+                previous_marker_array_length = len(self.current_path_marker_array.markers)
+                current_marker_array_length = len(self.global_plan_current_hold.poses)-25
+                delete_needed = False
+                if current_marker_array_length < previous_marker_array_length:
+                    delete_needed = True
+                len_max = max(previous_marker_array_length, current_marker_array_length)
+                self.current_path_marker_array.markers = []        
+                
+                for i in range(25, len_max+25):
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = i
+                    marker.type = marker.SPHERE
+                    marker.action = marker.ADD #DELETEALL #ADD
+                    if delete_needed and i >= current_marker_array_length+25:
+                        marker.action = marker.DELETE
+                        #marker.lifetime = 1.0
+                        marker.pose = Pose()
+                        marker.pose.position.x = 0.0
+                        marker.pose.position.y = 0.0
+                        marker.pose.position.z = 0.95
+                        marker.pose.orientation.x = 0.0
+                        marker.pose.orientation.y = 0.0
+                        marker.pose.orientation.z = 0.0
+                        marker.pose.orientation.w = 1.0
+                        marker.color.r = 0.043
+                        marker.color.g = 0.941
+                        marker.color.b = 1.0
+                        marker.color.a = 0.5        
+                        marker.scale.x = 0.1
+                        marker.scale.y = 0.1
+                        marker.scale.z = 0.1
+                        #marker.frame_locked = False
+                        marker.ns = "my_namespace"
+                        self.current_path_marker_array.markers.append(marker)
+                        continue
+                    #marker.lifetime = 1.0
+                    marker.pose = Pose()
+                    marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
+                    marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
+                    marker.pose.position.z = 0.95
+                    marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
+                    marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
+                    marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
+                    marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
+                    marker.color.r = 0.043
+                    marker.color.g = 0.941
+                    marker.color.b = 1.0
+                    marker.color.a = 0.5        
+                    marker.scale.x = 0.1
+                    marker.scale.y = 0.1
+                    marker.scale.z = 0.1
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.current_path_marker_array.markers.append(marker)
+            elif path_scheme == path_schemes[1]:
+                # ARROWS
+                previous_marker_array_length = len(self.current_path_marker_array.markers)
+                current_marker_array_length = int(float(len(self.global_plan_current_hold.poses)-21) / 75) + 1
+                delete_needed = False
+                if current_marker_array_length < previous_marker_array_length:
+                    delete_needed = True
+                len_max = max(previous_marker_array_length, current_marker_array_length)
+                self.current_path_marker_array.markers = []        
+                        
+                marker_ID = 0
+                for i in range(35, len(self.global_plan_current_hold.poses) - 1 , 75):
+                    # visualize path
+                    marker = Marker()
+                    marker.header.frame_id = 'map'
+                    marker.id = marker_ID
+                    marker_ID += 1
+                    marker.type = marker.ARROW
+                    marker.action = marker.ADD
+                    if delete_needed and marker_ID >= current_marker_array_length:
+                        marker.action = marker.DELETE
+                        #marker.lifetime = 1.0
+                        marker.pose = Pose()
+                        marker.pose.position.x = 0.0
+                        marker.pose.position.y = 0.0
+                        marker.pose.position.z = 0.95
+                        marker.pose.orientation.x = 0.0
+                        marker.pose.orientation.y = 0.0
+                        marker.pose.orientation.z = 0.0
+                        marker.pose.orientation.w = 1.0
+                        marker.color.r = 0.0
+                        marker.color.g = 1.0
+                        marker.color.b = 1.0
+                        marker.color.a = 0.8
+                        marker.scale.x = 1.0
+                        marker.scale.y = 0.15
+                        marker.scale.z = 0.25
+                        #marker.frame_locked = False
+                        marker.ns = "my_namespace"
+                        self.current_path_marker_array.markers.append(marker)
+                        continue
+                    marker.pose = Pose()
+                    marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
+                    marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
+                    marker.pose.position.z = 0.95
+                    marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
+                    marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
+                    marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
+                    marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
+                    marker.color.r = 0.0
+                    marker.color.g = 1.0
+                    marker.color.b = 1.0
+                    marker.color.a = 0.8
+                    marker.scale.x = 1.0
+                    marker.scale.y = 0.15
+                    marker.scale.z = 0.25
+                    #marker.frame_locked = False
+                    marker.ns = "my_namespace"
+                    self.current_path_marker_array.markers.append(marker)
+
+        # COLOR RED OBJECT
+        if self.red_object_countdown > 0:
+            #print('BOJI STOLICU CRVENO!!!')
+            #print('self.red_object_countdown = ', self.red_object_countdown)
+            #print('self.red_object_value = ', self.red_object_value)
+            #print('self.last_object_moved_ID = ', self.last_object_moved_ID)
+
+            #RGB_val = [201,9,9]
+            RGB_val = [255,0,0]
+            explanation_R[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[0]
+            explanation_G[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[1]
+            explanation_B[global_semantic_map_complete_copy == self.red_object_value] = RGB_val[2]
+            
+            self.red_object_countdown -= 1
+        elif self.red_object_countdown == 0:
+            self.red_object_countdown = -1
+            self.red_object_value = -1
+
+
+        # FORM THE EXPLANATION IMAGE                  
+        explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+
+        #font = {'family' : 'fantasy', #{'cursive', 'fantasy', 'monospace', 'sans', 'sans serif', 'sans-serif', 'serif'}
+        #'weight' : 'normal', #[ 'normal' | 'bold' | 'heavy' | 'light' | 'ultrabold' | 'ultralight']
+        #'size'   : 5}
+        #matplotlib.rc('font', **font)
+
+        fig = plt.figure(frameon=True)
+        w = 0.01 * self.explanation_size_x
+        h = 0.01 * self.explanation_size_y
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(np.fliplr(explanation)) #np.flip(explanation))#.astype(np.uint8))
+
+        # VISUALIZE OBSTACLE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
+        for i in range(0, self.ontology.shape[0] - 4):            
+            # if it is a movable object and in the robot's neighborhood
+            if self.ontology[i][0] in neighborhood_objects_IDs and self.ontology[i][7] == 1:
+                x_map = self.ontology[i][3]
+                y_map = self.ontology[i][4]
+
+                x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                dx = int(self.ontology[i][5] / 0.05)
+                dy = int(self.ontology[i][6] / 0.05)
+
+                xs_plot = []
+                ys_plot = []
+                arrows = []
+
+                # if object under table
+                if self.ontology[i][11] == 'y':
+                    if self.ontology[i][10] == 'r':
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx - 1)
+                        ys_plot.append(y_pixel - 1)
+                        arrows.append('>')
+                    elif self.ontology[i][10] == 'l':
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx - 1)
+                        ys_plot.append(y_pixel - 1)
+                        arrows.append('<')
+                    elif self.ontology[i][10] == 't':
+                        xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                        ys_plot.append(y_pixel - dy - 2)
+                        arrows.append('^')
+                    elif self.ontology[i][10] == 'b':
+                        xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                        ys_plot.append(y_pixel + dy - 1)
+                        arrows.append('v')
+                # if object is not under the table
+                elif self.ontology[i][11] == 'n' or self.ontology[i][11] == 'na':
+                    xs_plot.append(self.explanation_size_x - x_pixel + dx - 1)
+                    ys_plot.append(y_pixel - 1)
+                    arrows.append('>')
+                    xs_plot.append(self.explanation_size_x - x_pixel - dx - 1)
+                    ys_plot.append(y_pixel - 1)
+                    arrows.append('<')
+
+                    xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                    ys_plot.append(y_pixel - dy - 2)
+                    arrows.append('^')
+                    xs_plot.append(self.explanation_size_x - x_pixel - 2)
+                    ys_plot.append(y_pixel + dy - 1)
+                    arrows.append('v')
+                '''
+                elif self.ontology[i][11] == 'na':
+                    objects_to_the_left = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel-1.5*dx_):int(x_pixel-0.5*dx_)]) 
+                    objects_to_the_right = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel+0.5*dx_):int(x_pixel+1.5*dx_)])
+                    objects_to_the_top = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.5*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
+                    objects_to_the_bottom = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.9*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
+
+                    if len(objects_to_the_left) == 1 and objects_to_the_left[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel - dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('<')
+
+                    if len(objects_to_the_right) == 1 and objects_to_the_right[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel + dx)
+                        ys_plot.append(y_pixel)
+                        arrows.append('>')
+
+                    if len(objects_to_the_top) == 1 and objects_to_the_top[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel - dy)
+                        arrows.append('^')
+
+                    if len(objects_to_the_bottom) == 1 and objects_to_the_bottom[0] == 0:
+                        xs_plot.append(self.explanation_size_x - x_pixel)
+                        ys_plot.append(y_pixel + dy)
+                        arrows.append('v')
+                '''
+
+                if self.ontology[i][0] == self.red_object_value:
+                    for j in range(0, len(arrows)):
+                        #C = np.array([201, 9, 9])
+                        C = np.array([255, 0, 0])
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                elif color_scheme == color_schemes[1] or color_scheme == color_schemes[2]:
+                    for j in range(0, len(arrows)):
+                        R = explanation[y_pixel][x_pixel][0]
+                        G = explanation[y_pixel][x_pixel][1]
+                        B = explanation[y_pixel][x_pixel][2]
+                        C = np.array([R, G, B])
+                        #plt.plot(xs_plot[j] + 0.3, ys_plot[j] - 0.2, marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                elif color_scheme == color_schemes[0]:
+                    C = np.array([180, 180, 180])   
+                    for j in range(0, len(arrows)):
+                        plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+
+        # PLOT HUMAN AS BLINKING EXCLAMATION MARK
+        ID = self.ontology.shape[0]
+        for human_pose in self.humans:
+            x_map = human_pose.position.x
+            y_map = human_pose.position.y
+            
+            distance_human_robot = math.sqrt((x_map - robot_pose.position.x)**2 + (y_map - robot_pose.position.y)**2)
+            
+            # visualize orientations and semantic labels of humans
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.id = ID
+            ID += 1
+            marker.type = marker.TEXT_VIEW_FACING
+            if distance_human_robot > 2.0:
+                marker.action = marker.DELETE
+            else:
+                marker.action = marker.ADD
+            marker.pose = Pose()
+            marker.pose.position.x = x_map + 0.25
+            marker.pose.position.y = y_map - 0.6
+            marker.pose.position.z = 0.5
+            marker.pose.orientation.x = 0.0#qx
+            marker.pose.orientation.y = 0.0#qy
+            marker.pose.orientation.z = 0.0#qz
+            marker.pose.orientation.w = 0.0#qw
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.35
+            #marker.frame_locked = False
+            marker.text = "human"
+            marker.ns = "my_namespace"
+            self.semantic_labels_marker_array.markers.append(marker)
+
+            if self.human_blinking == True:
+                # for nicer plotting
+                x_map += 0.2
+                y_map += 0.2
+
+                x_pixel = int((x_map + - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                if distance_human_robot > 2.0:
+                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c='yellow')
+                else:
+                    C = np.array([255,102,102])
+                    ax.text(self.explanation_size_x - x_pixel, y_pixel, 'i', c=C/255.0)
+        
+        if self.human_blinking == True:
+            self.human_blinking = False
+        else:
+            self.human_blinking = True
+
+    def publish_visual_icsr(self):
+        #points_start = time.time()
+            
+        z = 0.0
+        a = 255                    
+        points = []
+
+        # draw layer
+        size_1 = int(self.global_semantic_map_size[1])
+        size_0 = int(self.global_semantic_map_size[0])
+        for i in range(0, size_1):
+            for j in range(0, size_0):
+                x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
+                y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
+                r = int(self.output[j, i, 0])
+                g = int(self.output[j, i, 1])
+                b = int(self.output[j, i, 2])
+                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                pt = [x, y, z, rgb]
+                points.append(pt)
+
+        #points_end = time.time()
+        #print('explanation layer runtime = ', round(points_end - points_start,3))
+        
+        # publish
+        self.header.frame_id = 'map'
+        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+        pc2.header.stamp = rospy.Time.now()
+        #print('PUBLISHED!')
+        
+        self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
+        self.pub_current_path.publish(self.current_path_marker_array)
+        self.pub_old_path.publish(self.old_path_marker_array)
+        self.pub_explanation_layer.publish(pc2)
+
+    def publish_visual_empty(self):
+        #points_start = time.time()
+            
+        z = 0.0
+        a = 255                    
+        points = []
+
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+
+        explanation_size_y = self.global_semantic_map_size[0]
+        explanation_size_x = self.global_semantic_map_size[1]
+        
+        explanation_R = np.zeros((explanation_size_y, explanation_size_x))
+        explanation_R[:,:] = 120 # free space
+        explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
+        explanation_G = copy.deepcopy(explanation_R)
+        explanation_B = copy.deepcopy(explanation_R)
+
+        output = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+
+        # draw layer
+        size_1 = int(self.global_semantic_map_size[1])
+        size_0 = int(self.global_semantic_map_size[0])
+        for i in range(0, size_1):
+            for j in range(0, size_0):
+                x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
+                y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
+                r = int(output[j, i, 0])
+                g = int(output[j, i, 1])
+                b = int(output[j, i, 2])
+                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                pt = [x, y, z, rgb]
+                points.append(pt)
+
+        #points_end = time.time()
+        #print('explanation layer runtime = ', round(points_end - points_start,3))
+        
+        # publish
+        self.header.frame_id = 'map'
+        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+        pc2.header.stamp = rospy.Time.now()
+        #print('PUBLISHED!')
+        
+        self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
+        self.pub_current_path.publish(self.current_path_marker_array)
+        self.pub_old_path.publish(self.old_path_marker_array)
+        self.pub_explanation_layer.publish(pc2)
+
+    def explain_textual_icsr(self):
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+
+        # create the RGB explanation matrix of the same size as semantic map
+        explanation_size_y = self.global_semantic_map_size[0]
+        explanation_size_x = self.global_semantic_map_size[1]
+        #print('(self.explanation_size_x,self.explanation_size_y)',(self.explanation_size_y,self.explanation_size_x))
+
+        if self.extrovert:
+            explanation_R = np.zeros((explanation_size_y, explanation_size_x))
+            explanation_R[:,:] = 120 # free space
+            explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
+            explanation_G = copy.deepcopy(explanation_R)
+            explanation_B = copy.deepcopy(explanation_R)
+            output = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+
+            z = 0.0
+            a = 255                    
+            points = []
+
+            # draw layer
+            size_1 = int(self.global_semantic_map_size[1])
+            size_0 = int(self.global_semantic_map_size[0])
+            for i in range(0, size_1):
+                for j in range(0, size_0):
+                    x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
+                    y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
+                    r = int(output[j, i, 0])
+                    g = int(output[j, i, 1])
+                    b = int(output[j, i, 2])
+                    rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                    pt = [x, y, z, rgb]
+                    points.append(pt)
+
+            # publish
+            self.header.frame_id = 'map'
+            pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+            pc2.header.stamp = rospy.Time.now()
+            #print('PUBLISHED!')
+        
+            self.pub_explanation_layer.publish(pc2)
+
+        # define local explanation window around robot
+        around_robot_size_x = 1.5
+        around_robot_size_y = 1.5
+        if self.extrovert == False:
+            around_robot_size_x = 2.5
+            around_robot_size_y = 2.5
+
+        # find the objects/obstacles in the robot's local neighbourhood
+        robot_pose = self.robot_pose_map
+        x_min = robot_pose.position.x - around_robot_size_x
+        y_min = robot_pose.position.y - around_robot_size_y
+        x_max = robot_pose.position.x + around_robot_size_x
+        y_max = robot_pose.position.y + around_robot_size_y
+        #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+
+        x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)        
+        x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+        y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        
+        x_min_pixel = max(0, x_min_pixel)
+        x_max_pixel = min(explanation_size_x - 1, x_max_pixel)
+        y_min_pixel = max(0, y_min_pixel)
+        y_max_pixel = min(explanation_size_y - 1, y_max_pixel)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        
+        neighborhood_objects_IDs = np.unique(global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
+        if 0 in neighborhood_objects_IDs:
+            neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
+        neighborhood_objects_IDs = [int(item) for item in neighborhood_objects_IDs]
+        #print('neighborhood_objects_IDs =', neighborhood_objects_IDs)
+
+        neighborhood_objects_distances = []
+        neighborhood_objects_spatials = []
+        neighborhood_objects_names = []
+        for ID in neighborhood_objects_IDs:
+            obj_pos_x = self.ontology[ID-1][3]
+            obj_pos_y = self.ontology[ID-1][4]
+
+            d_x = obj_pos_x - robot_pose.position.x
+            d_y = obj_pos_y - robot_pose.position.y
+
+            dist = math.sqrt(d_x**2 + d_y**2)
+            neighborhood_objects_distances.append(dist)
+
+            angle = np.arctan2(d_y, d_x)
+            [angle_ref,pitch,roll] = quaternion_to_euler(robot_pose.orientation.x,robot_pose.orientation.y,robot_pose.orientation.z,robot_pose.orientation.w)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = getIntrinsicQsrValue(angle)
+            neighborhood_objects_spatials.append(qsr_value)
+            neighborhood_objects_names.append(self.ontology[ID-1][1])
+            #print('tiago passes ' + qsr_value + ' of the ' + self.ontology[ID-1][1])
+        #print(len(neighborhood_objects_spatials))
+        self.text_exp = 'I am passing by '
+        if len(neighborhood_objects_names) > 2:
+            for i in range(0, len(neighborhood_objects_names)-2):
+                self.text_exp += neighborhood_objects_names[i] + ', '
+            self.text_exp += neighborhood_objects_names[i] + ' and '
+            i += 1
+            self.text_exp += neighborhood_objects_names[i] + '.'
+        elif len(neighborhood_objects_names) == 2:
+            self.text_exp += neighborhood_objects_names[0] + ' and ' + neighborhood_objects_names[1] + '.'
+        elif len(neighborhood_objects_names) == 1:    
+            self.text_exp += neighborhood_objects_names[0]
+        print(self.text_exp)
+            
+    def publish_textual_icsr(self):
+        self.pub_text_exp.publish(self.text_exp)
+
+    def publish_textual_empty(self):
+        text_exp = ''
+        self.pub_text_exp.publish(text_exp)
+
 def main():
     # ----------main-----------
     rospy.init_node('hixron', anonymous=False)
@@ -2900,32 +3893,63 @@ def main():
     # call main to initialize subscribers
     hixron_obj.main_()
     
-    # call explanation once to establish static map
-    hixron_obj.first_call = True
-    hixron_obj.test_explain()
-    hixron_obj.first_call = False
-    hixron_obj.test_explain()
-    hixron_obj.test_explain()
-    hixron_obj.test_explain()
-    hixron_obj.test_explain()
-    hixron_obj.test_explain()
-    hixron_obj.test_explain()
-    #print('BEFORE SLEEP')
-    
-    # sleep for 10s until Amar starts the video
-    d = rospy.Duration(3, 0)
-    rospy.sleep(d)
-    #print('AFTER SLEEP')
-    
-    # send the goal pose to start navigation
-    hixron_obj.send_goal_pose()
-    
-    #rate = rospy.Rate(0.15)
-    # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
-    while not rospy.is_shutdown():
-        #print('spinning')
-        #rate.sleep()
+    if hixron_obj.icsr == False:
+        # call explanation once to establish static map
+        hixron_obj.first_call = True
         hixron_obj.test_explain()
-        #rospy.spin()
+        hixron_obj.first_call = False
+        hixron_obj.test_explain()
+        hixron_obj.test_explain()
+        hixron_obj.test_explain()
+        hixron_obj.test_explain()
+        hixron_obj.test_explain()
+        hixron_obj.test_explain()
+        #print('BEFORE SLEEP')
+        
+        # sleep for 10s until Amar starts the video
+        d = rospy.Duration(3, 0)
+        rospy.sleep(d)
+        #print('AFTER SLEEP')
+        
+        # send the goal pose to start navigation
+        hixron_obj.send_goal_pose()
+        
+        #rate = rospy.Rate(0.15)
+        # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
+        while not rospy.is_shutdown():
+            #print('spinning')
+            #rate.sleep()
+            hixron_obj.test_explain()
+            #rospy.spin()
+
+    else:
+        # call explanation once to establish static map
+        hixron_obj.first_call = True
+        hixron_obj.test_explain_icsr()
+        hixron_obj.first_call = False
+        hixron_obj.test_explain_icsr()
+        hixron_obj.test_explain_icsr()
+        hixron_obj.test_explain_icsr()
+        hixron_obj.test_explain_icsr()
+        hixron_obj.test_explain_icsr()
+        hixron_obj.test_explain_icsr()
+        #print('BEFORE SLEEP')
+        
+        # sleep for 10s until Amar starts the video
+        d = rospy.Duration(3, 0)
+        rospy.sleep(d)
+        #print('AFTER SLEEP')
+        
+        # send the goal pose to start navigation
+        hixron_obj.send_goal_pose()
+        
+        #rate = rospy.Rate(0.15)
+        # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
+        while not rospy.is_shutdown():
+            #print('spinning')
+            #rate.sleep()
+            hixron_obj.test_explain_icsr()
+            #rospy.spin()
+        
 
 main()
