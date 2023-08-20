@@ -94,11 +94,10 @@ class hixron(object):
     # constructor
     def __init__(self):
         # icsr vars
-        self.icsr = True
         self.humans_nearby = False
         self.pub_text_exp = rospy.Publisher('/textual_explanation', String, queue_size=10)
         self.text_exp = ''
-        self.extrovert = True
+        self.extrovert = False
         if self.extrovert:
             self.timing = 'immediately' # 'delayed'
             self.duration = 'short' # 'short', 'long'
@@ -112,6 +111,8 @@ class hixron(object):
             self.introvert_publish_ctr = 4
 
         self.robot_offset = 9.0
+        self.red_object_countdown_textual_only = -1
+        self.red_object_value_textual_only = -1
 
         # hri and icsr and icra vars
         self.last_object_moved_ID = -1
@@ -249,39 +250,38 @@ class hixron(object):
         # load gazebo tags
         self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'gazebo_tags.csv')) 
         
-        if self.extrovert:
-            self.semantic_labels_marker_array = MarkerArray()
-            self.semantic_labels_marker_array.markers = []
-            for i in range(0, self.ontology.shape[0]):                
-                x_map = self.ontology[i][12]
-                y_map = self.ontology[i][13]
-                
-                # visualize orientations and semantic labels of known objects
-                marker = Marker()
-                marker.header.frame_id = 'map'
-                marker.id = i
-                marker.type = marker.TEXT_VIEW_FACING
-                marker.action = marker.ADD
-                marker.pose = Pose()
-                marker.pose.position.x = x_map
-                marker.pose.position.y = y_map
-                marker.pose.position.z = 0.5
-                marker.pose.orientation.x = 0.0#qx
-                marker.pose.orientation.y = 0.0#qy
-                marker.pose.orientation.z = 0.0#qz
-                marker.pose.orientation.w = 0.0#qw
-                marker.color.r = 1.0
-                marker.color.g = 1.0
-                marker.color.b = 1.0
-                marker.color.a = 1.0
-                marker.scale.x = 0.25
-                marker.scale.y = 0.25
-                marker.scale.z = 0.25
-                #marker.frame_locked = False
-                marker.text = self.ontology[i][1]
-                marker.ns = "my_namespace"
-                self.semantic_labels_marker_array.markers.append(marker)
-                self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
+        self.semantic_labels_marker_array = MarkerArray()
+        self.semantic_labels_marker_array.markers = []
+        for i in range(0, self.ontology.shape[0]):                
+            x_map = self.ontology[i][12]
+            y_map = self.ontology[i][13]
+            
+            # visualize orientations and semantic labels of known objects
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.id = i
+            marker.type = marker.TEXT_VIEW_FACING
+            marker.action = marker.ADD
+            marker.pose = Pose()
+            marker.pose.position.x = x_map
+            marker.pose.position.y = y_map
+            marker.pose.position.z = 0.5
+            marker.pose.orientation.x = 0.0#qx
+            marker.pose.orientation.y = 0.0#qy
+            marker.pose.orientation.z = 0.0#qz
+            marker.pose.orientation.w = 0.0#qw
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.25
+            marker.scale.y = 0.25
+            marker.scale.z = 0.25
+            #marker.frame_locked = False
+            marker.text = self.ontology[i][1]
+            marker.ns = "my_namespace"
+            self.semantic_labels_marker_array.markers.append(marker)
+        #self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
   
     # send goal pose
     def send_goal_pose(self):
@@ -565,8 +565,6 @@ class hixron(object):
                         if self.ontology[i][11] == 'y':
                             self.ontology[i][11] = 'n'
 
-    
-
     # create global semantic map
     def create_global_semantic_map(self):
         #start = time.time()
@@ -634,14 +632,86 @@ class hixron(object):
 
         self.global_semantic_map_complete = copy.deepcopy(self.global_semantic_map)
 
-        # find centroids of the objects in the semantic map
-        #lc_regions = regionprops(self.global_semantic_map.astype(int))
-        #print('\nlen(lc_regions) = ', len(lc_regions))
-        #self.centroids_global_semantic_map = []
-        #for lc_region in lc_regions:
-        #    v = lc_region.label
-        #    cy, cx = lc_region.centroid
-        #    self.centroids_global_semantic_map.append([v,cx,cy,self.ontology[v-1][1]])
+
+    # publish common things
+    def publish_map_humans_names(self):
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+
+        # create the RGB explanation matrix of the same size as semantic map
+        explanation_size_y = self.global_semantic_map_size[0]
+        explanation_size_x = self.global_semantic_map_size[1]
+
+        explanation_R = np.zeros((explanation_size_y, explanation_size_x))
+        explanation_R[:,:] = 120 # free space
+        explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
+        explanation_G = copy.deepcopy(explanation_R)
+        explanation_B = copy.deepcopy(explanation_R)
+        output = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+        output = np.fliplr(output)
+
+        z = 0.0
+        a = 255                    
+        points = []
+
+        # draw layer
+        size_1 = int(self.global_semantic_map_size[1])
+        size_0 = int(self.global_semantic_map_size[0])
+        for i in range(0, size_1):
+            for j in range(0, size_0):
+                x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
+                y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
+                r = int(output[j, i, 0])
+                g = int(output[j, i, 1])
+                b = int(output[j, i, 2])
+                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                pt = [x, y, z, rgb]
+                points.append(pt)
+
+        # publish
+        self.header.frame_id = 'map'
+        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+        pc2.header.stamp = rospy.Time.now()
+        self.pub_explanation_layer.publish(pc2)
+
+
+        self.semantic_labels_marker_array.markers[7].pose.position.x = self.ontology[7][12]
+        self.semantic_labels_marker_array.markers[8].pose.position.y = self.ontology[8][13]
+
+        ID = self.ontology.shape[0]
+        for human_pose in self.humans:
+            x_map = human_pose.position.x
+            y_map = human_pose.position.y
+            
+            # visualize orientations and semantic labels of humans
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.id = ID
+            ID += 1
+            marker.type = marker.TEXT_VIEW_FACING
+            marker.action = marker.ADD
+            marker.pose = Pose()
+            marker.pose.position.x = x_map + 0.25
+            marker.pose.position.y = y_map - 0.6
+            marker.pose.position.z = 0.5
+            marker.pose.orientation.x = 0.0#qx
+            marker.pose.orientation.y = 0.0#qy
+            marker.pose.orientation.z = 0.0#qz
+            marker.pose.orientation.w = 0.0#qw
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
+            marker.scale.x = 0.25
+            marker.scale.y = 0.25
+            marker.scale.z = 0.25
+            #marker.frame_locked = False
+            marker.text = "human"
+            marker.ns = "my_namespace"
+            if ID > len(self.semantic_labels_marker_array.markers):
+                self.semantic_labels_marker_array.markers.append(marker)
+            else:
+                self.semantic_labels_marker_array.markers[ID - 1] = marker
+        self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
 
     # test whether explanation is needed
     def test_explain_icsr(self):
@@ -649,21 +719,27 @@ class hixron(object):
 
         if self.first_call:
             self.create_semantic_data()
+            self.publish_map_humans_names()
             return
-     
+        
+        #'''
         if self.extrovert:
-            #if self.representation == 'textual' and self.timing == 'immediately' and self.duration = 'short':
-            self.explain_textual_icsr()
+            # extrovert
+            self.publish_map_humans_names()
+            self.explain_textual_only_icsr()
             self.publish_textual_icsr()
         else:
             # introvert
             if self.introvert_publish_ctr == 4:
-                self.explain_textual_icsr()
                 self.explain_visual_icsr()
+                self.explain_textual_icsr()
 
-            elif self.introvert_publish_ctr == 3:
+                self.publish_map_humans_names()
                 self.publish_textual_empty()
-                self.publish_visual_empty()
+            
+            elif self.introvert_publish_ctr == 3:
+                self.publish_map_humans_names()
+                self.publish_textual_empty()
 
             if self.introvert_publish_ctr == 2:
                 self.humans_nearby = False
@@ -675,34 +751,21 @@ class hixron(object):
                         self.humans_nearby = True
                         break
 
-                if self.representation == 'visual':
+                if self.humans_nearby == True:
                     self.publish_visual_icsr()
+                    self.publish_textual_empty()
 
-                elif self.representation == 'textual-visual':
-                    self.publish_textual_icsr()
+                else:
                     self.publish_visual_icsr()
+                    self.publish_textual_icsr()
 
             elif self.introvert_publish_ctr == 1:
-                self.humans_nearby = False
-                for human_pose in self.humans:
-                    x_map = human_pose.position.x
-                    y_map = human_pose.position.y    
-                    distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
-                    if distance_human_robot < 2.0:
-                        self.humans_nearby = True
-                        break
-
-                if self.representation == 'visual':
-                    self.publish_visual_icsr()
-
-                elif self.representation == 'textual-visual':
-                    self.publish_textual_icsr()
-                    self.publish_visual_icsr()
-                
                 self.introvert_publish_ctr = 5
                
             self.introvert_publish_ctr -= 1
+        #'''
  
+
     def explain_visual_icsr(self):
         # STATIC PART        
         global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
@@ -710,7 +773,7 @@ class hixron(object):
         if len(np.unique(global_semantic_map_complete_copy)) != self.ontology.shape[0]+1:
             return
 
-        color_shape_path_combination = [2,1,1]
+        color_shape_path_combination = [2,1,0]
         
         color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
         color_scheme = color_schemes[color_shape_path_combination[0]]
@@ -923,9 +986,12 @@ class hixron(object):
                 self.dynamic_explanation = False
                         
         # VISUALIZE OBSTACLE NAMES USING PC2
+        self.semantic_labels_marker_array.markers[7].pose.position.x = self.ontology[7][12]
+        self.semantic_labels_marker_array.markers[8].pose.position.y = self.ontology[8][13]
+        '''
         if shape_scheme == shape_schemes[1]:
             self.semantic_labels_marker_array.markers = []
-            for i in range(0, self.ontology.shape[0] - 4):                
+            for i in range(7, 9):                
                 x_map = self.ontology[i][12]
                 y_map = self.ontology[i][13]
                 
@@ -934,10 +1000,11 @@ class hixron(object):
                 marker.header.frame_id = 'map'
                 marker.id = i
                 marker.type = marker.TEXT_VIEW_FACING
-                if self.ontology[i][0] in neighborhood_objects_IDs:
-                    marker.action = marker.ADD
-                else:
-                    marker.action = marker.DELETE
+                marker.action = marker.ADD
+                #if self.ontology[i][0] in neighborhood_objects_IDs:
+                #    marker.action = marker.ADD
+                #else:
+                #    marker.action = marker.DELETE
                 marker.pose = Pose()
                 marker.pose.position.x = x_map
                 marker.pose.position.y = y_map
@@ -950,13 +1017,14 @@ class hixron(object):
                 marker.color.g = 1.0
                 marker.color.b = 1.0
                 marker.color.a = 1.0
-                marker.scale.x = 0.35
-                marker.scale.y = 0.35
-                marker.scale.z = 0.35
+                marker.scale.x = 0.25
+                marker.scale.y = 0.25
+                marker.scale.z = 0.25
                 #marker.frame_locked = False
-                marker.text = self.ontology[i][2]
+                marker.text = self.ontology[i][1]
                 marker.ns = "my_namespace"
                 self.semantic_labels_marker_array.markers.append(marker)
+        '''
                                          
         # DYNAMIC PART
         if len(self.global_plan_history) > 1:
@@ -1338,10 +1406,11 @@ class hixron(object):
             marker.id = ID
             ID += 1
             marker.type = marker.TEXT_VIEW_FACING
-            if distance_human_robot > 2.0:
-                marker.action = marker.DELETE
-            else:
-                marker.action = marker.ADD
+            #if distance_human_robot > 2.0:
+            #    marker.action = marker.DELETE
+            #else:
+            #    marker.action = marker.ADD
+            marker.action = marker.ADD
             marker.pose = Pose()
             marker.pose.position.x = x_map + 0.25
             marker.pose.position.y = y_map - 0.6
@@ -1354,13 +1423,16 @@ class hixron(object):
             marker.color.g = 1.0
             marker.color.b = 1.0
             marker.color.a = 1.0
-            marker.scale.x = 0.35
-            marker.scale.y = 0.35
-            marker.scale.z = 0.35
+            marker.scale.x = 0.25
+            marker.scale.y = 0.25
+            marker.scale.z = 0.25
             #marker.frame_locked = False
             marker.text = "human"
             marker.ns = "my_namespace"
-            self.semantic_labels_marker_array.markers.append(marker)
+            if ID > len(self.semantic_labels_marker_array.markers):
+                self.semantic_labels_marker_array.markers.append(marker)
+            else:
+                self.semantic_labels_marker_array.markers[ID - 1] = marker
 
             if self.human_blinking == True:
                 # for nicer plotting
@@ -1380,6 +1452,12 @@ class hixron(object):
             self.human_blinking = False
         else:
             self.human_blinking = True
+
+        # CONVERT IMAGE TO NUMPY ARRAY 
+        fig.savefig('explanation' + '.png', transparent=False)
+        plt.close()
+        self.output = PIL.Image.open(os.getcwd() + '/explanation.png').convert('RGB')        
+        self.output = np.array(self.output)[:,:,:3].astype(np.uint8)
 
     def publish_visual_icsr(self):
         #points_start = time.time()
@@ -1435,6 +1513,7 @@ class hixron(object):
         explanation_B = copy.deepcopy(explanation_R)
 
         output = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+        output = np.fliplr(output)
 
         # draw layer
         size_1 = int(self.global_semantic_map_size[1])
@@ -1465,51 +1544,24 @@ class hixron(object):
         self.pub_explanation_layer.publish(pc2)
 
     def explain_textual_icsr(self):
-        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+        if self.red_object_countdown > 0:
+            obj_pos_x = self.ontology[self.red_object_value-1][3]
+            obj_pos_y = self.ontology[self.red_object_value-1][4]
 
-        # create the RGB explanation matrix of the same size as semantic map
-        explanation_size_y = self.global_semantic_map_size[0]
-        explanation_size_x = self.global_semantic_map_size[1]
-        #print('(self.explanation_size_x,self.explanation_size_y)',(self.explanation_size_y,self.explanation_size_x))
+            d_x = obj_pos_x - self.robot_pose_map.position.x
+            d_y = obj_pos_y - self.robot_pose_map.position.y
 
-        if self.extrovert:
-            explanation_R = np.zeros((explanation_size_y, explanation_size_x))
-            explanation_R[:,:] = 120 # free space
-            explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
-            explanation_G = copy.deepcopy(explanation_R)
-            explanation_B = copy.deepcopy(explanation_R)
-            output = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
-            output = np.fliplr(output)
+            angle = np.arctan2(d_y, d_x)
+            [angle_ref,pitch,roll] = quaternion_to_euler(self.robot_pose_map.orientation.x,self.robot_pose_map.orientation.y,self.robot_pose_map.orientation.z,self.robot_pose_map.orientation.w)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = getIntrinsicQsrValue(angle)
 
-            z = 0.0
-            a = 255                    
-            points = []
-
-            # draw layer
-            size_1 = int(self.global_semantic_map_size[1])
-            size_0 = int(self.global_semantic_map_size[0])
-            for i in range(0, size_1):
-                for j in range(0, size_0):
-                    x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
-                    y = self.global_semantic_map_origin_y + j * self.global_semantic_map_resolution
-                    r = int(output[j, i, 0])
-                    g = int(output[j, i, 1])
-                    b = int(output[j, i, 2])
-                    rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
-                    pt = [x, y, z, rgb]
-                    points.append(pt)
-
-            # publish
-            self.header.frame_id = 'map'
-            pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
-            pc2.header.stamp = rospy.Time.now()
-            #print('PUBLISHED!')
-        
-            self.pub_explanation_layer.publish(pc2)
-
-            self.semantic_labels_marker_array.markers[7].pose.position.x = self.ontology[7][12]
-            self.semantic_labels_marker_array.markers[8].pose.position.y = self.ontology[8][13]
-            self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
+            self.text_exp = 'I am deviating because the ' + self.ontology[self.red_object_value - 1][1] + ', which is to my ' + qsr_value + ', was moved.'
+            return
 
         # define local explanation window around robot
         around_robot_size_x = 1.5
@@ -1532,12 +1584,17 @@ class hixron(object):
         y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
         #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
         
+        explanation_size_y = self.global_semantic_map_size[0]
+        explanation_size_x = self.global_semantic_map_size[1]
+        #print('(self.explanation_size_x,self.explanation_size_y)',(self.explanation_size_y,self.explanation_size_x))
+
         x_min_pixel = max(0, x_min_pixel)
         x_max_pixel = min(explanation_size_x - 1, x_max_pixel)
         y_min_pixel = max(0, y_min_pixel)
         y_max_pixel = min(explanation_size_y - 1, y_max_pixel)
         #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
         
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
         neighborhood_objects_IDs = np.unique(global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
         if 0 in neighborhood_objects_IDs:
             neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
@@ -1569,19 +1626,322 @@ class hixron(object):
             neighborhood_objects_names.append(self.ontology[ID-1][1])
             #print('tiago passes ' + qsr_value + ' of the ' + self.ontology[ID-1][1])
         #print(len(neighborhood_objects_spatials))
-        self.text_exp = 'I am passing by '
+            
+        # FORM THE TEXTUAL EXPLANATION
         if len(neighborhood_objects_names) > 2:
-            for i in range(0, len(neighborhood_objects_names)-2):
-                self.text_exp += neighborhood_objects_names[i] + ', '
-            i += 1
-            self.text_exp += neighborhood_objects_names[i] + ' and '
-            i += 1
-            self.text_exp += neighborhood_objects_names[i] + '.'
+            left_objects = []
+            right_objects = []
+            for i in range(0, len(neighborhood_objects_names)):
+                if neighborhood_objects_spatials[i] == 'left':
+                    left_objects.append(neighborhood_objects_names[i])
+                else:
+                    right_objects.append(neighborhood_objects_names[i])
+
+            if len(left_objects) != 0 and len(right_objects) != 0:
+                self.text_exp = 'I am passing by '
+
+                if len(left_objects) > 2:
+                        for i in range(0, len(left_objects) - 2):    
+                            self.text_exp += left_objects[i] + ', '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' and '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' to my left'
+                elif len(left_objects) == 2:
+                    self.text_exp += left_objects[0] + ' and ' + left_objects[1] + ' to my left'
+                elif len(left_objects) == 1:
+                    self.text_exp += left_objects[0] + ' to my left'
+
+                self.text_exp += ' and '
+
+                if len(right_objects) > 2:
+                    for i in range(0, len(right_objects) - 2):    
+                        self.text_exp += right_objects[i] + ', '
+                    i += 1
+                    self.text_exp += right_objects[i] + ' and '
+                    i += 1
+                    self.text_exp += right_objects[i] + ' to my right.'
+                elif len(right_objects) == 2:
+                    self.text_exp += right_objects[0] + ' and ' + right_objects[1] + ' to my right.'
+                elif len(right_objects) == 1:
+                    self.text_exp += right_objects[0] + ' to my right.'
+            else:
+                self.text_exp = 'I am passing by '
+
+                if len(left_objects) != 0:
+                    if len(left_objects) > 2:
+                        for i in range(0, len(left_objects) - 2):    
+                            self.text_exp += left_objects[i] + ', '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' and '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' to my left.'
+                    elif len(left_objects) == 2:
+                        self.text_exp += left_objects[0] + ' and ' + left_objects[1] + ' to my left.'
+                    elif len(left_objects) == 1:
+                        self.text_exp += left_objects[0] + ' to my left.'
+
+                if len(right_objects) != 0:
+                    if len(right_objects) > 2:
+                        for i in range(0, len(right_objects) - 2):    
+                            self.text_exp += right_objects[i] + ', '
+                        i += 1
+                        self.text_exp += right_objects[i] + ' and '
+                        i += 1
+                        self.text_exp += right_objects[i] + ' to my right.'
+                    elif len(right_objects) == 2:
+                        self.text_exp += right_objects[0] + ' and ' + right_objects[1] + ' to my right.'
+                    elif len(right_objects) == 1:
+                        self.text_exp += right_objects[0] + ' to my right.'
+        
         elif len(neighborhood_objects_names) == 2:
-            self.text_exp += neighborhood_objects_names[0] + ' and ' + neighborhood_objects_names[1] + '.'
-        elif len(neighborhood_objects_names) == 1:    
-            self.text_exp += neighborhood_objects_names[0]
-        print(self.text_exp)
+            left_objects = []
+            right_objects = []
+            for i in range(0, len(neighborhood_objects_names)):
+                if neighborhood_objects_spatials[i] == 'left':
+                    left_objects.append(neighborhood_objects_names[i])
+                else:
+                    right_objects.append(neighborhood_objects_names[i])
+            
+            if len(left_objects) != 0 and len(right_objects) != 0:
+                self.text_exp = 'I am passing by '
+                self.text_exp += left_objects[0] + ' to my left and ' + right_objects[1] + ' to my right.'
+            elif len(left_objects) == 0:
+                self.text_exp = 'I am passing by ' 
+                self.text_exp += right_objects[0] + ' and ' + right_objects[1] + ' to my right.'
+            elif len(right_objects) == 0:
+                self.text_exp = 'I am passing by ' 
+                self.text_exp += left_objects[0] + ' and ' + left_objects[1] + ' to my left.'
+        
+        elif len(neighborhood_objects_names) == 1:
+            self.text_exp = 'I am passing by '    
+            self.text_exp += neighborhood_objects_names[0] + ' to my ' + neighborhood_objects_spatials[0] + '.'
+        #print(self.text_exp)
+
+    def explain_textual_only_icsr(self):
+        if self.red_object_countdown_textual_only > 0:
+            self.red_object_countdown_textual_only -= 1
+            return
+        elif self.red_object_countdown_textual_only == 0:
+            self.red_object_countdown_textual_only = -1
+            self.red_object_value_textual_only = -1
+
+                # TEST THE DEVIATION
+        if len(self.global_plan_history) > 1:
+            # test if there is deviation between current and previous
+            deviation_between_global_plans_textual = False
+            deviation_threshold = 10.0
+            
+            self.globalPlan_goalPose_indices_history_hold = copy.deepcopy(self.globalPlan_goalPose_indices_history[-2:])
+            #self.global_plan_history_hold = copy.deepcopy(self.global_plan_history)
+            self.global_plan_current_hold = copy.deepcopy(self.global_plan_history[-1])
+            if len(self.global_plan_history) > 1:
+                self.global_plan_previous_hold = copy.deepcopy(self.global_plan_history[-2])
+            
+                min_plan_length = min(len(self.global_plan_current_hold.poses), len(self.global_plan_previous_hold.poses))
+                
+                # calculate deivation
+                global_dev = 0
+                for i in range(0, min_plan_length):
+                    dev_x = self.global_plan_current_hold.poses[i].pose.position.x - self.global_plan_previous_hold.poses[i].pose.position.x
+                    dev_y = self.global_plan_current_hold.poses[i].pose.position.y - self.global_plan_previous_hold.poses[i].pose.position.y
+                    local_dev = dev_x**2 + dev_y**2
+                    global_dev += local_dev
+                global_dev = math.sqrt(global_dev)
+                #print('\nDEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                #print('OBJECT_MOVED_ID = ', self.last_object_moved_ID)
+            
+                if global_dev > deviation_threshold:
+                    #print('DEVIATION BETWEEN GLOBAL PLANS!!! = ', global_dev)
+                    deviation_between_global_plans_textual = True
+
+            # check if the last two global plans have the same goal pose
+            same_goal_pose = False
+            if len(self.globalPlan_goalPose_indices_history_hold) > 1:
+                if self.globalPlan_goalPose_indices_history_hold[-1][1] == self.globalPlan_goalPose_indices_history_hold[-2][1]:
+                    same_goal_pose = True
+
+            # if deviation happened and some object was moved
+            if deviation_between_global_plans_textual and same_goal_pose:
+                #print('TESTIRA se moguca devijacija')
+                if self.last_object_moved_ID > 0 and self.red_object_countdown == -1: #self.last_object_moved_ID in neighborhood_objects_IDs
+                    # define the red object
+                    self.red_object_value_textual_only = copy.deepcopy(self.last_object_moved_ID)
+                    self.red_object_countdown_textual_only = 12
+                    self.last_object_moved_ID = -1
+
+                    obj_pos_x = self.ontology[self.red_object_value_textual_only-1][3]
+                    obj_pos_y = self.ontology[self.red_object_value_textual_only-1][4]
+
+                    d_x = obj_pos_x - self.robot_pose_map.position.x
+                    d_y = obj_pos_y - self.robot_pose_map.position.y
+
+                    angle = np.arctan2(d_y, d_x)
+                    [angle_ref,pitch,roll] = quaternion_to_euler(self.robot_pose_map.orientation.x,self.robot_pose_map.orientation.y,self.robot_pose_map.orientation.z,self.robot_pose_map.orientation.w)
+                    angle = angle - angle_ref
+                    if angle >= PI:
+                        angle -= 2*PI
+                    elif angle < -PI:
+                        angle += 2*PI
+                    qsr_value = getIntrinsicQsrValue(angle)
+
+                    self.text_exp = 'I am deviating because the ' + self.ontology[self.red_object_value_textual_only - 1][1] + ', which is to my ' + qsr_value + ', was moved.'
+                    return    
+
+        # define local explanation window around robot
+        around_robot_size_x = 1.5
+        around_robot_size_y = 1.5
+        if self.extrovert == False:
+            around_robot_size_x = 2.5
+            around_robot_size_y = 2.5
+
+        # find the objects/obstacles in the robot's local neighbourhood
+        robot_pose = self.robot_pose_map
+        x_min = robot_pose.position.x - around_robot_size_x
+        y_min = robot_pose.position.y - around_robot_size_y
+        x_max = robot_pose.position.x + around_robot_size_x
+        y_max = robot_pose.position.y + around_robot_size_y
+        #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+
+        x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)        
+        x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+        y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        
+        explanation_size_y = self.global_semantic_map_size[0]
+        explanation_size_x = self.global_semantic_map_size[1]
+        #print('(self.explanation_size_x,self.explanation_size_y)',(self.explanation_size_y,self.explanation_size_x))
+
+        x_min_pixel = max(0, x_min_pixel)
+        x_max_pixel = min(explanation_size_x - 1, x_max_pixel)
+        y_min_pixel = max(0, y_min_pixel)
+        y_max_pixel = min(explanation_size_y - 1, y_max_pixel)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+        
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
+        neighborhood_objects_IDs = np.unique(global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
+        if 0 in neighborhood_objects_IDs:
+            neighborhood_objects_IDs = neighborhood_objects_IDs[1:]
+        neighborhood_objects_IDs = [int(item) for item in neighborhood_objects_IDs]
+        #print('neighborhood_objects_IDs =', neighborhood_objects_IDs)
+
+        neighborhood_objects_distances = []
+        neighborhood_objects_spatials = []
+        neighborhood_objects_names = []
+        for ID in neighborhood_objects_IDs:
+            obj_pos_x = self.ontology[ID-1][3]
+            obj_pos_y = self.ontology[ID-1][4]
+
+            d_x = obj_pos_x - robot_pose.position.x
+            d_y = obj_pos_y - robot_pose.position.y
+
+            dist = math.sqrt(d_x**2 + d_y**2)
+            neighborhood_objects_distances.append(dist)
+
+            angle = np.arctan2(d_y, d_x)
+            [angle_ref,pitch,roll] = quaternion_to_euler(robot_pose.orientation.x,robot_pose.orientation.y,robot_pose.orientation.z,robot_pose.orientation.w)
+            angle = angle - angle_ref
+            if angle >= PI:
+                angle -= 2*PI
+            elif angle < -PI:
+                angle += 2*PI
+            qsr_value = getIntrinsicQsrValue(angle)
+            neighborhood_objects_spatials.append(qsr_value)
+            neighborhood_objects_names.append(self.ontology[ID-1][1])
+            #print('tiago passes ' + qsr_value + ' of the ' + self.ontology[ID-1][1])
+        #print(len(neighborhood_objects_spatials))
+            
+        # FORM THE TEXTUAL EXPLANATION
+        if len(neighborhood_objects_names) > 2:
+            left_objects = []
+            right_objects = []
+            for i in range(0, len(neighborhood_objects_names)):
+                if neighborhood_objects_spatials[i] == 'left':
+                    left_objects.append(neighborhood_objects_names[i])
+                else:
+                    right_objects.append(neighborhood_objects_names[i])
+
+            if len(left_objects) != 0 and len(right_objects) != 0:
+                self.text_exp = 'I am passing by '
+
+                if len(left_objects) > 2:
+                        for i in range(0, len(left_objects) - 2):    
+                            self.text_exp += left_objects[i] + ', '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' and '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' to my left'
+                elif len(left_objects) == 2:
+                    self.text_exp += left_objects[0] + ' and ' + left_objects[1] + ' to my left'
+                elif len(left_objects) == 1:
+                    self.text_exp += left_objects[0] + ' to my left'
+
+                self.text_exp += ' and '
+
+                if len(right_objects) > 2:
+                    for i in range(0, len(right_objects) - 2):    
+                        self.text_exp += right_objects[i] + ', '
+                    i += 1
+                    self.text_exp += right_objects[i] + ' and '
+                    i += 1
+                    self.text_exp += right_objects[i] + ' to my right.'
+                elif len(right_objects) == 2:
+                    self.text_exp += right_objects[0] + ' and ' + right_objects[1] + ' to my right.'
+                elif len(right_objects) == 1:
+                    self.text_exp += right_objects[0] + ' to my right.'
+            else:
+                self.text_exp = 'I am passing by '
+
+                if len(left_objects) != 0:
+                    if len(left_objects) > 2:
+                        for i in range(0, len(left_objects) - 2):    
+                            self.text_exp += left_objects[i] + ', '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' and '
+                        i += 1
+                        self.text_exp += left_objects[i] + ' to my left.'
+                    elif len(left_objects) == 2:
+                        self.text_exp += left_objects[0] + ' and ' + left_objects[1] + ' to my left.'
+                    elif len(left_objects) == 1:
+                        self.text_exp += left_objects[0] + ' to my left.'
+
+                if len(right_objects) != 0:
+                    if len(right_objects) > 2:
+                        for i in range(0, len(right_objects) - 2):    
+                            self.text_exp += right_objects[i] + ', '
+                        i += 1
+                        self.text_exp += right_objects[i] + ' and '
+                        i += 1
+                        self.text_exp += right_objects[i] + ' to my right.'
+                    elif len(right_objects) == 2:
+                        self.text_exp += right_objects[0] + ' and ' + right_objects[1] + ' to my right.'
+                    elif len(right_objects) == 1:
+                        self.text_exp += right_objects[0] + ' to my right.'
+        
+        elif len(neighborhood_objects_names) == 2:
+            left_objects = []
+            right_objects = []
+            for i in range(0, len(neighborhood_objects_names)):
+                if neighborhood_objects_spatials[i] == 'left':
+                    left_objects.append(neighborhood_objects_names[i])
+                else:
+                    right_objects.append(neighborhood_objects_names[i])
+            
+            if len(left_objects) != 0 and len(right_objects) != 0:
+                self.text_exp = 'I am passing by '
+                self.text_exp += left_objects[0] + ' to my left and ' + right_objects[1] + ' to my right.'
+            elif len(left_objects) == 0:
+                self.text_exp = 'I am passing by ' 
+                self.text_exp += right_objects[0] + ' and ' + right_objects[1] + ' to my right.'
+            elif len(right_objects) == 0:
+                self.text_exp = 'I am passing by ' 
+                self.text_exp += left_objects[0] + ' and ' + left_objects[1] + ' to my left.'
+        
+        elif len(neighborhood_objects_names) == 1:
+            self.text_exp = 'I am passing by '    
+            self.text_exp += neighborhood_objects_names[0] + ' to my ' + neighborhood_objects_spatials[0] + '.'
+        #print(self.text_exp)
             
     def publish_textual_icsr(self):
         self.pub_text_exp.publish(self.text_exp)
