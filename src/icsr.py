@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from nav_msgs.msg import OccupancyGrid, Odometry, Path
-from geometry_msgs.msg import PolygonStamped, PoseWithCovariance, PoseWithCovarianceStamped, PoseStamped, Pose
+from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, Pose
 import rospy
 import numpy as np
 from matplotlib import pyplot as plt
@@ -10,26 +10,17 @@ import time
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 import copy
-import tf2_ros
 import os
 from gazebo_msgs.msg import ModelStates, ModelState
 import math
 from skimage.measure import regionprops
 from geometry_msgs.msg import Point, Quaternion
-from sensor_msgs.msg import CameraInfo, Image
-import message_filters
-import torch
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 import cv2
 from sensor_msgs import point_cloud2
 import struct
 import math
-import shlex
-from psutil import Popen
-from sklearn.linear_model import Ridge, lars_path
-from sklearn.utils import check_random_state
-import sklearn.metrics
 import PIL
 from visualization_msgs.msg import Marker, MarkerArray
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
@@ -38,6 +29,7 @@ from std_msgs.msg import String
 
 PI = math.pi
 
+# convert euler angles to orientation quaternion
 def euler_to_quaternion(yaw, pitch, roll):
 
     qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
@@ -69,7 +61,7 @@ def quaternion_to_euler(x, y, z, w):
 # get QSR value
 def getIntrinsicQsrValue(angle):
     value = ''
-    qsr_choice = 2    
+    qsr_choice = 3    
 
     if qsr_choice == 0:
         if -PI/2 <= angle < PI/2:
@@ -93,39 +85,46 @@ def getIntrinsicQsrValue(angle):
         elif 3*PI/4 <= angle < PI or -PI <= angle < -3*PI/4:
             value += 'left'
 
+    elif qsr_choice == 3:
+        if -PI/4 <= angle < PI/4:
+            value += 'right'
+        if PI/4 <= angle < 3*PI/4:
+            value += 'front'
+        elif 3*PI/4 <= angle < PI or -PI <= angle < -3*PI/4:
+            value += 'left'
+        elif -3*PI/4 <= angle < -PI/4:
+            value += 'back'
+
     return value
 
 # hixron_subscriber class
 class hixron(object):
     # constructor
     def __init__(self):
-        # icsr vars
+        # extroversion vars
         self.humans_nearby = False
-        self.pub_text_exp = rospy.Publisher('/textual_explanation', String, queue_size=10)
-        self.text_exp = ''
-        self.extrovert = False
-        if self.extrovert:
-            self.timing = 'immediately' # 'delayed'
-            self.duration = 'short' # 'short', 'long'
-            #self.representation = 'textual' # 'textual', 'visual', 'textual-visual'
+        
+        self.extroversion_prob = 1.0
+        if self.extroversion_prob == 1.0:
+            self.extrovert = True
+        elif self.extroversion_prob == 0.0:
+            self.extrovert = False
+
+        self.explanation_representation_threshold = 2.4 * self.extroversion_prob + 1.2
+        self.explanation_window = 2.4 * self.extroversion_prob + 1.2
+
+        self.timing = int(10 - 10 * self.extroversion_prob)
+        self.duration = int(10 - 10 * self.extroversion_prob)
+        self.explanation_cycle_len = self.timing + self.duration
+
+        if self.extroversion_prob >= 0.5:
             self.detail_level = 'poor' # 'poor', 'rich'
-            self.human_distance_threshold = 1.2
-            self.explanation_window = 1.2
         else:
-            self.timing = 'delayed' # 'delayed'
-            self.duration = 'long' # 'short', 'long'
-            #self.representation = 'textual-visual' # 'textual', 'visual', 'textual-visual'
             self.detail_level = 'rich' # 'poor', 'rich'
-            self.INTROVERT_LENGTH = 20
-            self.introvert_publish_ctr = self.INTROVERT_LENGTH
-            self.human_distance_threshold = 3.0
-            self.explanation_window = 3.0
-
-        self.robot_offset = 9.0
+        
+        # visualization explanation vars
         self.red_object_countdown_textual_only = -1
-        self.red_object_value_textual_only = -1
-
-        # hri and icsr and icra vars
+        self.red_object_value_textual_only = -1 
         self.last_object_moved_ID = -1
         self.old_plan = Path()
         self.old_plan_bool = False
@@ -135,18 +134,51 @@ class hixron(object):
         self.human_blinking = False
         self.object_arrow_blinking = False
 
+        # textual explanation vars
+        self.pub_text_exp = rospy.Publisher('/textual_explanation', String, queue_size=10)
+        self.text_exp = ''
+
+        # point cloud vars
+        self.semantic_labels_marker_array = MarkerArray()
+        self.current_path_marker_array = MarkerArray()
+        self.old_path_marker_array = MarkerArray()
+        self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
+        PointField('y', 4, PointField.FLOAT32, 1),
+        PointField('z', 8, PointField.FLOAT32, 1),
+        PointField('rgba', 12, PointField.UINT32, 1),
+        ]
+        self.header = Header()
+
+        # subscribers 
+        self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
+        self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
+        self.sub_goal_pose = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_pose_callback)
+        self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.gazebo_callback)
+
+        # publishers
+        self.pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=1)
+        self.pub_current_path = rospy.Publisher('/path_markers', MarkerArray, queue_size=1)
+        self.pub_old_path = rospy.Publisher('/old_path_markers', MarkerArray, queue_size=1)
+        self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2, queue_size=1)
+        self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=1)
+
         # inflation
         self.inflation_radius = 0.275
 
+        # directory
         self.dirCurr = os.getcwd()
 
         # gazebo vars
         self.gazebo_names = []
         self.gazebo_poses = []
         self.gazebo_labels = []
+        # load gazebo tags
+        self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'gazebo_tags.csv')) 
 
+        # robot vars
         self.robot_pose_map = Pose()
-
+        self.robot_offset = 9.0
+        
         # plans' variables
         self.global_plan_current = Path() 
         self.global_plan_history = []
@@ -160,10 +192,8 @@ class hixron(object):
         self.scenario_name = 'icsr' #'scenario1', 'library', 'library_2', 'library_3'
         # load ontology
         self.ontology = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv')
-        #cols = ['c_map_x', 'c_map_y', 'd_map_x', 'd_map_y']
-        #self.ontology[cols] = self.ontology[cols].astype(float)
         self.ontology = np.array(self.ontology)
-        #print(self.ontology)
+        # apply map-world offset
         for i in range(self.ontology.shape[0]):
             self.ontology[i, 3] += self.robot_offset
             self.ontology[i, 4] -= self.robot_offset
@@ -184,7 +214,14 @@ class hixron(object):
         #print(self.global_semantic_map_origin_x, self.global_semantic_map_origin_y, self.global_semantic_map_resolution, self.global_semantic_map_size)
         self.global_semantic_map_complete = []
 
-        self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=1)
+        # initialize objects which will be moved
+        self.init_objects_to_move()
+
+        # initialize an array of semantic labels (static map)
+        self.init_semantic_labels()
+
+    # intialize objects which will be moved
+    def init_objects_to_move(self):
         self.chair_8_moved = False
         self.chair_9_moved = False
 
@@ -231,36 +268,8 @@ class hixron(object):
         self.chair_9_state.twist.angular.y = 0
         self.chair_9_state.twist.angular.z = 0
 
-        # global plan subscriber 
-        self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
-        self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
-        self.sub_goal_pose = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_pose_callback)
-
-        self.pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=1)
-        self.pub_current_path = rospy.Publisher('/path_markers', MarkerArray, queue_size=1)
-        self.pub_old_path = rospy.Publisher('/old_path_markers', MarkerArray, queue_size=1)
-        self.pub_explanation_layer = rospy.Publisher("/explanation_layer", PointCloud2, queue_size=1)
-   
-        self.semantic_labels_marker_array = MarkerArray()
-        self.current_path_marker_array = MarkerArray()
-        self.old_path_marker_array = MarkerArray()
-
-        # point_cloud variables
-        self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
-        PointField('y', 4, PointField.FLOAT32, 1),
-        PointField('z', 8, PointField.FLOAT32, 1),
-        PointField('rgba', 12, PointField.UINT32, 1),
-        ]
-
-        # header
-        self.header = Header()
-
-        # gazebo model states subscriber
-        self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.gazebo_callback)
-
-        # load gazebo tags
-        self.gazebo_labels = np.array(pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'gazebo_tags.csv')) 
-        
+    # initialize an array of semantic labels (static map)
+    def init_semantic_labels(self):
         self.semantic_labels_marker_array = MarkerArray()
         self.semantic_labels_marker_array.markers = []
         for i in range(0, self.ontology.shape[0]):                
@@ -292,8 +301,7 @@ class hixron(object):
             marker.text = self.ontology[i][1]
             marker.ns = "my_namespace"
             self.semantic_labels_marker_array.markers.append(marker)
-        #self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
-  
+
     # send goal pose
     def send_goal_pose(self):
         client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
@@ -325,12 +333,13 @@ class hixron(object):
     def amcl_callback(self, msg):
         #print('amcl_callback')
 
-        #self.robot_position_map = msg.pose.pose.position
-        #self.robot_orientation_map = msg.pose.pose.orientation
         self.robot_pose_map = msg.pose.pose
-        #self.robot_pose_map.position.x -= self.robot_offset
-        #self.robot_pose_map.position.y += self.robot_offset
 
+        # move objects
+        self.move_objects
+
+    # move objects
+    def move_objects(self):
         if self.chair_8_moved == False:
             x = -7.73 + self.robot_offset
             y = 5.84 + 1.6 - self.robot_offset
@@ -419,10 +428,15 @@ class hixron(object):
                     
     # update ontology
     def update_ontology(self):
-        # check if any object changed its position from simulation or from object detection (and tracking)
+        # check if any object changed its position
 
+        # apply correction between world and map frame on recived data about objects
+        # find positions of humans
         gazebo_names = copy.deepcopy(self.gazebo_names)
         gazebo_poses = copy.deepcopy(self.gazebo_poses)
+
+        if gazebo_names == [] or gazebo_poses == []:
+            return
 
         self.humans = []
         for i in range(0, len(gazebo_names)):
@@ -431,12 +445,9 @@ class hixron(object):
             if 'citizen' in gazebo_names[i] or 'human' in gazebo_names[i]:
                 self.humans.append(gazebo_poses[i])
 
-        if gazebo_names == [] or gazebo_poses == []:
-            return
-
         # simulation relying on Gazebo
         multiplication_factor = 0.75
-        for i in range(7, 9): #(0, self.ontology.shape[0]):
+        for i in range(7, 9): #(0, self.ontology.shape[0]): # heuristics - we know which objects could change their positions
             # if the object has some affordance (etc. movability, openability), then it may have changed its position 
             if self.ontology[i][7] == 1:
                 # get the object's new position from Gazebo
@@ -580,12 +591,12 @@ class hixron(object):
     def create_global_semantic_map(self):
         #start = time.time()
 
-        # do not update the map, if
+        # do not update the map, if none object is moved 
         if self.last_object_moved_ID == -1 and len(np.unique(self.global_semantic_map)) != 1:
             return
         
         self.global_semantic_map = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
-        self.global_semantic_map_inflated = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
+        #self.global_semantic_map_inflated = np.zeros((self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         #print('(self.global_semantic_map_size[0],self.global_semantic_map_size[1]) = ', (self.global_semantic_map_size[0],self.global_semantic_map_size[1]))
         
         for i in range(0, self.ontology.shape[0]):
@@ -643,9 +654,7 @@ class hixron(object):
 
         self.global_semantic_map_complete = copy.deepcopy(self.global_semantic_map)
 
-
-    # publish common things
-    def publish_map_humans_names(self):
+    def publish_global_semantic_map(self):
         global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
 
         # create the RGB explanation matrix of the same size as semantic map
@@ -685,6 +694,8 @@ class hixron(object):
         self.pub_explanation_layer.publish(pc2)
 
 
+    # publish common things
+    def publish_map_humans_names(self):
         self.semantic_labels_marker_array.markers[7].pose.position.x = self.ontology[7][12]
         self.semantic_labels_marker_array.markers[7].pose.position.y = self.ontology[7][13]
 
@@ -860,7 +871,7 @@ class hixron(object):
             self.introvert_publish_ctr -= 1
         #'''
  
-
+    # explanation functions
     def explain_visual_icsr(self):
         # STATIC PART        
         global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
@@ -1850,13 +1861,6 @@ def main():
     hixron_obj.first_call = True
     hixron_obj.test_explain_icsr()
     hixron_obj.first_call = False
-    #hixron_obj.test_explain_icsr()
-    #hixron_obj.test_explain_icsr()
-    #hixron_obj.test_explain_icsr()
-    #hixron_obj.test_explain_icsr()
-    #hixron_obj.test_explain_icsr()
-    #hixron_obj.test_explain_icsr()
-    #print('BEFORE SLEEP')
     
     # sleep for x sec until Amar starts the video
     d = rospy.Duration(1, 0)
@@ -1866,8 +1870,8 @@ def main():
     # send the goal pose to start navigation
     hixron_obj.send_goal_pose()
     
-    #rate = rospy.Rate(0.15)
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
+    #rate = rospy.Rate(0.15)
     while not rospy.is_shutdown():
         #print('spinning')
         #rate.sleep()
