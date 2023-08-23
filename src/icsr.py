@@ -1038,10 +1038,7 @@ class hixron(object):
         #'''
         if self.fully_extrovert:
             self.publish_semantic_labels()
-            self.explain_visual_icsr()
-            self.publish_visual_icsr()
             # extrovert
-            '''
             if humans_nearby:
                 self.explain_visual_icsr()
 
@@ -1054,7 +1051,6 @@ class hixron(object):
 
                 self.publish_visual_icsr()
                 self.publish_textual_icsr()
-            '''
         else:
             # introvert
             if self.introvert_publish_ctr == self.INTROVERT_LENGTH:
@@ -1132,7 +1128,7 @@ class hixron(object):
         explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
         explanation_G = copy.deepcopy(explanation_R)
         explanation_B = copy.deepcopy(explanation_R)
-        vis_exp_coords = (y_min_pixel, y_max_pixel, x_min_pixel, x_max_pixel)
+        self.vis_exp_coords = (y_min_pixel, y_max_pixel, x_min_pixel, x_max_pixel)
 
         # OBSTACLE COLORING using a chosen color scheme
         if self.color_scheme == self.color_schemes[1]:
@@ -1521,13 +1517,13 @@ class hixron(object):
         plt.close()
         output = PIL.Image.open(os.getcwd() + '/explanation.png').convert('RGB')        
         output = np.array(output)[:,:,:3].astype(np.uint8)
-        self.visual_explanation = output[vis_exp_coords[0]:vis_exp_coords[1], (semantic_map_size_x-vis_exp_coords[3]):(semantic_map_size_x-vis_exp_coords[2]), :]
-        self.visual_explanation_origin_x = self.global_semantic_map_origin_x + (vis_exp_coords[2]) * self.visual_explanation_resolution #robot_pose.position.x - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[3] - vis_exp_coords[2]) 
-        self.visual_explanation_origin_y = self.global_semantic_map_origin_y + vis_exp_coords[0] * self.visual_explanation_resolution #robot_pose.position.y - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[1] - vis_exp_coords[0]) 
+        self.visual_explanation = output[self.vis_exp_coords[0]:self.vis_exp_coords[1], (semantic_map_size_x-self.vis_exp_coords[3]):(semantic_map_size_x-self.vis_exp_coords[2]), :]
+        self.visual_explanation_origin_x = self.global_semantic_map_origin_x + (self.vis_exp_coords[2]) * self.visual_explanation_resolution #robot_pose.position.x - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[3] - vis_exp_coords[2]) 
+        self.visual_explanation_origin_y = self.global_semantic_map_origin_y + self.vis_exp_coords[0] * self.visual_explanation_resolution #robot_pose.position.y - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[1] - vis_exp_coords[0]) 
         
         #from PIL import Image
         #im = Image.fromarray(self.visual_explanation)
-        i#m.save("visual_explanation.png")
+        #im.save("visual_explanation.png")
 
     def publish_visual_icsr(self):
         #points_start = time.time()
@@ -1575,10 +1571,10 @@ class hixron(object):
 
         global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
 
-        explanation_size_y = self.global_semantic_map_size[0]
-        explanation_size_x = self.global_semantic_map_size[1]
+        semantic_map_size_y = self.global_semantic_map_size[0]
+        semantic_map_size_x = self.global_semantic_map_size[1]
         
-        explanation_R = np.zeros((explanation_size_y, explanation_size_x))
+        explanation_R = np.zeros((semantic_map_size_y, semantic_map_size_x))
         explanation_R[:,:] = 120 # free space
         explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
         explanation_G = copy.deepcopy(explanation_R)
@@ -1587,9 +1583,15 @@ class hixron(object):
         output = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
         output = np.fliplr(output)
 
+        #output = np.array(output)[:,:,:3].astype(np.uint8)
+        self.visual_explanation = output[self.vis_exp_coords[0]:self.vis_exp_coords[1], (semantic_map_size_x-self.vis_exp_coords[3]):(semantic_map_size_x-self.vis_exp_coords[2]), :]
+        self.visual_explanation_origin_x = self.global_semantic_map_origin_x + (self.vis_exp_coords[2]) * self.visual_explanation_resolution #robot_pose.position.x - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[3] - vis_exp_coords[2]) 
+        self.visual_explanation_origin_y = self.global_semantic_map_origin_y + self.vis_exp_coords[0] * self.visual_explanation_resolution #robot_pose.position.y - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[1] - vis_exp_coords[0]) 
+        
+
         # draw layer
-        size_1 = int(self.global_semantic_map_size[1])
-        size_0 = int(self.global_semantic_map_size[0])
+        size_1 = int(self.visual_explanation_origin_y)
+        size_0 = int(self.visual_explanation_origin_x)
         for i in range(0, size_1):
             for j in range(0, size_0):
                 x = self.global_semantic_map_origin_x + (size_1-i) * self.global_semantic_map_resolution
@@ -1632,7 +1634,10 @@ class hixron(object):
                 angle += 2*PI
             qsr_value = getIntrinsicQsrValue(angle)
 
-            self.text_exp = 'I am deviating because the ' + self.ontology[self.red_object_value - 1][1] + ', which is to my ' + qsr_value + ', was moved.'
+            if self.detail_level == 'rich':
+                self.text_exp = 'I am deviating because the ' + self.ontology[self.red_object_value - 1][1] + ', which is to my ' + qsr_value + ', was moved.'
+            elif self.detail_level == 'poor':
+                self.text_exp = 'The ' + self.ontology[self.red_object_value - 1][1] + ' was moved.' 
             return
 
         # define local explanation window around robot
