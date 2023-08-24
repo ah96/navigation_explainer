@@ -102,7 +102,7 @@ class hixron(object):
     # constructor
     def __init__(self):
         # extroversion vars
-        self.extroversion_prob = 0.5
+        self.extroversion_prob = 0.6
         self.fully_extrovert = False
         if self.extroversion_prob == 1.0:
             self.fully_extrovert = True
@@ -136,6 +136,13 @@ class hixron(object):
         self.object_arrow_blinking = False
         self.visual_explanation = []
         self.visual_explanation_resolution = 0.05
+
+        # statistics
+        self.N_deviations_explained = 0
+        self.N_words = 0
+        self.N_objects = 0
+        self.visual_N = 0
+        self.textual_N = 0
 
         color_shape_path_combination = [2,1,0]
         
@@ -464,10 +471,12 @@ class hixron(object):
         #self.global_plan_history.append(self.global_plan_current)
         #self.globalPlan_goalPose_indices_history.append([len(self.global_plan_history), len(self.goal_pose_history)])
 
+
+
         if self.global_plan_ctr > 1: 
             # calculate deivation
-            ind_current = int(0.5 * len(self.global_plan_current.poses))
-            ind_previous = int(0.5 * len(self.global_plan_previous.poses))
+            ind_current = int(0.5 * (len(self.global_plan_current.poses) - 1))
+            ind_previous = int(0.5 * (len(self.global_plan_previous.poses) - 1))
                 
             dev = 0
             dev_x = self.global_plan_current.poses[ind_current].pose.position.x - self.global_plan_previous.poses[ind_previous].pose.position.x
@@ -1145,7 +1154,7 @@ class hixron(object):
             
             self.publish_semantic_labels()
             
-        self.publish_semantic_labels()
+        #self.publish_semantic_labels()
             
         self.humans_nearby = False
         for human_pose in self.humans:
@@ -1159,42 +1168,90 @@ class hixron(object):
         if self.fully_extrovert:
             # extrovert
             if self.humans_nearby:
+                start = time.time()
                 self.explain_visual_icsr()
+                end = time.time()
+                self.visual_time = end-start
+                self.visual_N += 1
                 self.publish_visual_icsr()
 
                 self.publish_textual_empty()
+                self.N_words = 0
+
+                if self.moved_object_countdown > 0:
+                    self.N_objects = 1
+                else:
+                    self.N_objects = len(self.neighborhood_objects_IDs)
             else:
+                start = time.time()
                 self.explain_visual_icsr()
+                end = time.time()
+                self.visual_time = end-start
+                self.visual_N += 1
                 self.publish_visual_icsr()
     
+                start = time.time()
                 self.explain_textual_icsr()
+                end = time.time()
+                self.textual_time = end-start
+                self.textual_N += 1
                 self.publish_textual_icsr()
+                self.N_words = len(self.text_exp.split())
+
+                if self.moved_object_countdown > 0:
+                    self.N_objects = 1
+                else:
+                    self.N_objects = len(self.neighborhood_objects_IDs)
         else:
             # introvert
             if self.introvert_publish_ctr == self.explanation_cycle_len:
+                start = time.time()
                 self.explain_visual_icsr()
+                end = time.time()
+                self.visual_time = end-start
+                self.visual_N += 1
                 self.publish_visual_empty()
 
+                start = time.time()
                 self.explain_textual_icsr()
+                end = time.time()
+                self.textual_time = end-start
+                self.textual_N += 1
                 self.publish_textual_empty()
+                self.N_words = 0
+
+                if self.moved_object_countdown > 0:
+                    self.N_objects = 1
+                else:
+                    self.N_objects = len(self.neighborhood_objects_IDs)
             
             elif self.introvert_publish_ctr > self.explanation_cycle_len / 2 and self.introvert_publish_ctr < self.explanation_cycle_len:
                 self.publish_visual_empty()
                 self.publish_textual_empty()
+                self.N_words = 0
 
             if self.introvert_publish_ctr <= self.explanation_cycle_len / 2 and self.introvert_publish_ctr > 1:
                 if self.humans_nearby:
                     self.publish_visual_icsr()
                     self.publish_textual_empty()
+                    self.N_words = 0
 
                 else:
                     self.publish_visual_icsr()
                     self.publish_textual_icsr()
+                    self.N_words = len(self.text_exp.split())
 
             elif self.introvert_publish_ctr == 1:
                 self.introvert_publish_ctr = self.explanation_cycle_len + 1
                
             self.introvert_publish_ctr -= 1
+
+        if self.moved_object_countdown == 11:
+            self.N_deviations_explained += 1
+
+        with open('eval.csv', "a") as myfile:
+            myfile.write(str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
+        myfile.close()
 
     # explanation functions
     def explain_visual_icsr(self):
@@ -1403,7 +1460,7 @@ class hixron(object):
             
             #self.moved_object_countdown -= 1
         #elif self.moved_object_countdown == 0:
-        #    #print('self.moved_object_countdown = ', self.moved_object_countdown)
+            #print('self.moved_object_countdown = ', self.moved_object_countdown)
         #    self.moved_object_countdown = -1
         #    self.moved_object_value = -1
             #self.prepare_global_semantic_map_for_publishing()
@@ -1514,7 +1571,7 @@ class hixron(object):
     def publish_visual_icsr(self):
         print('publishing visual')
         #points_start = time.time()
-
+        #'''
         if self.moved_object_countdown > 0:
             #print('self.moved_object_countdown = ', self.moved_object_countdown)
             self.moved_object_countdown -= 1
@@ -1524,7 +1581,7 @@ class hixron(object):
             self.moved_object_value = -1
             #self.prepare_global_semantic_map_for_publishing()
             #self.publish_global_semantic_map()
-            
+        #'''    
         z = 0.0
         a = 255                    
         points = []
