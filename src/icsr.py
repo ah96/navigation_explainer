@@ -102,7 +102,7 @@ class hixron(object):
     # constructor
     def __init__(self):
         # extroversion vars
-        self.extroversion_prob = 0.6
+        self.extroversion_prob = 0.5
         self.fully_extrovert = False
         if self.extroversion_prob == 1.0:
             self.fully_extrovert = True
@@ -1155,8 +1155,7 @@ class hixron(object):
             if distance_human_robot < self.explanation_representation_threshold:
                 self.humans_nearby = True
                 break
-        
-        #'''
+
         if self.fully_extrovert:
             # extrovert
             if self.humans_nearby:
@@ -1196,7 +1195,6 @@ class hixron(object):
                 self.introvert_publish_ctr = self.explanation_cycle_len + 1
                
             self.introvert_publish_ctr -= 1
-        #'''
 
     # explanation functions
     def explain_visual_icsr(self):
@@ -1481,33 +1479,6 @@ class hixron(object):
                     xs_plot.append(semantic_map_size_x - x_pixel - 2)
                     ys_plot.append(y_pixel + dy - 1)
                     arrows.append('v')
-                '''
-                elif self.ontology[i][11] == 'na':
-                    objects_to_the_left = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel-1.5*dx_):int(x_pixel-0.5*dx_)]) 
-                    objects_to_the_right = np.unique(global_semantic_map_complete_copy[int(y_pixel-0.5*dy_):int(y_pixel+0.5*dy_),int(x_pixel+0.5*dx_):int(x_pixel+1.5*dx_)])
-                    objects_to_the_top = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.5*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
-                    objects_to_the_bottom = np.unique(global_semantic_map_complete_copy[int(y_pixel-1.5*dy_):int(y_pixel-0.9*dy_),int(x_pixel-0.5*dx_):int(x_pixel+0.5*dx_)])
-
-                    if len(objects_to_the_left) == 1 and objects_to_the_left[0] == 0:
-                        xs_plot.append(semantic_map_size_x - x_pixel - dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('<')
-
-                    if len(objects_to_the_right) == 1 and objects_to_the_right[0] == 0:
-                        xs_plot.append(semantic_map_size_x - x_pixel + dx)
-                        ys_plot.append(y_pixel)
-                        arrows.append('>')
-
-                    if len(objects_to_the_top) == 1 and objects_to_the_top[0] == 0:
-                        xs_plot.append(semantic_map_size_x - x_pixel)
-                        ys_plot.append(y_pixel - dy)
-                        arrows.append('^')
-
-                    if len(objects_to_the_bottom) == 1 and objects_to_the_bottom[0] == 0:
-                        xs_plot.append(semantic_map_size_x - x_pixel)
-                        ys_plot.append(y_pixel + dy)
-                        arrows.append('v')
-                '''
 
                 if self.ontology[i][0] == self.moved_object_value:
                     for j in range(0, len(arrows)):
@@ -1541,6 +1512,7 @@ class hixron(object):
         #im.save("visual_explanation.png")
 
     def publish_visual_icsr(self):
+        print('publishing visual')
         #points_start = time.time()
 
         if self.moved_object_countdown > 0:
