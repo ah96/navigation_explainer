@@ -1155,82 +1155,106 @@ class hixron(object):
             self.publish_semantic_labels()
             
         #self.publish_semantic_labels()
-            
-        self.humans_nearby = False
-        for human_pose in self.humans:
-            x_map = human_pose.position.x
-            y_map = human_pose.position.y    
-            distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
-            if distance_human_robot < self.explanation_representation_threshold:
-                self.humans_nearby = True
-                break
 
         if self.fully_extrovert:
+            self.humans_nearby = False
+            for human_pose in self.humans:
+                x_map = human_pose.position.x
+                y_map = human_pose.position.y    
+                distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
+                if distance_human_robot < self.explanation_representation_threshold:
+                    self.humans_nearby = True
+                    break
+
             # extrovert
             if self.humans_nearby:
                 start = time.time()
                 self.explain_visual_icsr()
                 end = time.time()
                 self.visual_time = end-start
-                self.visual_N += 1
+                
                 self.publish_visual_icsr()
+                self.visual_N += 1
+
+                start = time.time()
+                self.explain_textual_icsr()
+                end = time.time()
+                self.textual_time = end-start
 
                 self.publish_textual_empty()
                 self.N_words = 0
-
-                if self.moved_object_countdown > 0:
-                    self.N_objects = 1
-                else:
-                    self.N_objects = len(self.neighborhood_objects_IDs)
             else:
                 start = time.time()
                 self.explain_visual_icsr()
                 end = time.time()
                 self.visual_time = end-start
-                self.visual_N += 1
+                
                 self.publish_visual_icsr()
-    
+                self.visual_N += 1
+                
                 start = time.time()
                 self.explain_textual_icsr()
                 end = time.time()
                 self.textual_time = end-start
-                self.textual_N += 1
+                
                 self.publish_textual_icsr()
+                self.textual_N += 1
                 self.N_words = len(self.text_exp.split())
 
-                if self.moved_object_countdown > 0:
-                    self.N_objects = 1
-                else:
-                    self.N_objects = len(self.neighborhood_objects_IDs)
+            if self.moved_object_countdown > 0:
+                self.N_objects = 1
+            else:
+                self.N_objects = len(self.neighborhood_objects_IDs)
+
+            if self.moved_object_countdown == 11:
+                self.N_deviations_explained += 1
+
+            with open('eval.csv', "a") as myfile:
+                myfile.write(str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
+            myfile.close()
+
         else:
-            # introvert
+            # not fully extrovert
             if self.introvert_publish_ctr == self.explanation_cycle_len:
                 start = time.time()
                 self.explain_visual_icsr()
                 end = time.time()
                 self.visual_time = end-start
-                self.visual_N += 1
+                
                 self.publish_visual_empty()
 
                 start = time.time()
                 self.explain_textual_icsr()
                 end = time.time()
                 self.textual_time = end-start
-                self.textual_N += 1
+                
                 self.publish_textual_empty()
-                self.N_words = 0
-
-                if self.moved_object_countdown > 0:
-                    self.N_objects = 1
-                else:
-                    self.N_objects = len(self.neighborhood_objects_IDs)
-            
+                
             elif self.introvert_publish_ctr > self.explanation_cycle_len / 2 and self.introvert_publish_ctr < self.explanation_cycle_len:
                 self.publish_visual_empty()
                 self.publish_textual_empty()
-                self.N_words = 0
 
-            if self.introvert_publish_ctr <= self.explanation_cycle_len / 2 and self.introvert_publish_ctr > 1:
+            elif self.introvert_publish_ctr == self.explanation_cycle_len / 2:
+                self.humans_nearby = False
+                for human_pose in self.humans:
+                    x_map = human_pose.position.x
+                    y_map = human_pose.position.y    
+                    distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
+                    if distance_human_robot < self.explanation_representation_threshold:
+                        self.humans_nearby = True
+                        break 
+
+                if self.humans_nearby:
+                    self.publish_visual_icsr()
+                    self.publish_textual_empty()
+                    self.N_words = 0
+
+                else:
+                    self.publish_visual_icsr()
+                    self.publish_textual_icsr()
+                    self.N_words = len(self.text_exp.split())
+
+            elif self.introvert_publish_ctr <= self.explanation_cycle_len / 2 and self.introvert_publish_ctr > 1:
                 if self.humans_nearby:
                     self.publish_visual_icsr()
                     self.publish_textual_empty()
@@ -1245,13 +1269,6 @@ class hixron(object):
                 self.introvert_publish_ctr = self.explanation_cycle_len + 1
                
             self.introvert_publish_ctr -= 1
-
-        if self.moved_object_countdown == 11:
-            self.N_deviations_explained += 1
-
-        with open('eval.csv', "a") as myfile:
-            myfile.write(str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
-        myfile.close()
 
     # explanation functions
     def explain_visual_icsr(self):
@@ -1694,7 +1711,7 @@ class hixron(object):
                 qsr_value = getIntrinsicQsrValue(angle)
 
                 if qsr_value == 'right' or qsr_value == 'left':
-                   self.text_exp = 'I am deviating because the ' + self.ontology[self.moved_object_value - 1][1] + ', which is to my ' + qsr_value + ', was moved.'
+                   self.text_exp = 'I am deviating because the ' + self.ontology[self.moved_object_value - 1][1] + ' to my ' + qsr_value + ', was moved.'
                 elif qsr_value == 'back':
                     self.text_exp = 'I am deviating because the ' + self.ontology[self.moved_object_value - 1][1] + ', which is behind me, was moved.'
                 elif qsr_value == 'back':
@@ -1896,6 +1913,10 @@ def main():
     
     # send the goal pose to start navigation
     hixron_obj.send_goal_pose()
+
+    with open('eval.csv', "a") as myfile:
+        myfile.write('extroversion,visual_time,visual_N,textual_time,textual_N,N_objects,N_words,N_deviations' + '\n')
+    myfile.close()
     
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
     #rate = rospy.Rate(0.15)
