@@ -102,7 +102,7 @@ class hixron(object):
     # constructor
     def __init__(self):
         # extroversion vars
-        self.extroversion_prob = 0.6
+        self.extroversion_prob = 0.0
         self.fully_extrovert = False
         if self.extroversion_prob == 1.0:
             self.fully_extrovert = True
@@ -1246,27 +1246,51 @@ class hixron(object):
 
                 if self.humans_nearby:
                     self.publish_visual_icsr()
+                    self.visual_N += 1
+
                     self.publish_textual_empty()
                     self.N_words = 0
 
                 else:
                     self.publish_visual_icsr()
+                    self.visual_N += 1
+
                     self.publish_textual_icsr()
+                    self.textual_N += 1
                     self.N_words = len(self.text_exp.split())
 
-            elif self.introvert_publish_ctr <= self.explanation_cycle_len / 2 and self.introvert_publish_ctr > 1:
+                if self.moved_object_countdown > 0:
+                    self.N_objects = 1
+                    self.N_deviations_explained += 1
+                else:
+                    self.N_objects = len(self.neighborhood_objects_IDs)
+
+                #if self.moved_object_countdown == 11:
+                #    self.N_deviations_explained += 1
+    
+            elif self.introvert_publish_ctr < self.explanation_cycle_len / 2 and self.introvert_publish_ctr > 1:
                 if self.humans_nearby:
                     self.publish_visual_icsr()
                     self.publish_textual_empty()
-                    self.N_words = 0
-
+                    
                 else:
                     self.publish_visual_icsr()
                     self.publish_textual_icsr()
-                    self.N_words = len(self.text_exp.split())
-
+                    
             elif self.introvert_publish_ctr == 1:
                 self.introvert_publish_ctr = self.explanation_cycle_len + 1
+
+                if self.humans_nearby:
+                    self.publish_visual_icsr()
+                    self.publish_textual_empty()
+                    
+                else:
+                    self.publish_visual_icsr()
+                    self.publish_textual_icsr()
+
+                with open('eval.csv', "a") as myfile:
+                    myfile.write(str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
+                myfile.close()
                
             self.introvert_publish_ctr -= 1
 
