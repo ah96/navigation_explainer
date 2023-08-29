@@ -102,7 +102,7 @@ class hixron(object):
     # constructor
     def __init__(self):
         # extroversion vars
-        self.extroversion_prob = 0.0
+        self.extroversion_prob = 1.0
         self.fully_extrovert = False
         if self.extroversion_prob == 1.0:
             self.fully_extrovert = True
@@ -1202,7 +1202,7 @@ class hixron(object):
                 self.N_words = len(self.text_exp.split())
 
             if self.moved_object_countdown > 0:
-                self.N_objects = 1
+                self.N_objects = 1 + len(self.neighborhood_objects_IDs)
             else:
                 self.N_objects = len(self.neighborhood_objects_IDs)
 
@@ -1260,7 +1260,7 @@ class hixron(object):
                     self.N_words = len(self.text_exp.split())
 
                 if self.moved_object_countdown > 0:
-                    self.N_objects = 1
+                    self.N_objects = 1 + len(self.neighborhood_objects_IDs)
                     self.N_deviations_explained += 1
                 else:
                     self.N_objects = len(self.neighborhood_objects_IDs)
@@ -1289,7 +1289,7 @@ class hixron(object):
                     self.publish_textual_icsr()
 
                 with open('eval.csv', "a") as myfile:
-                    myfile.write(str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
+                    myfile.write(str(int(10 * self.extroversion_prob)) + ',' + str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
                 myfile.close()
                
             self.introvert_publish_ctr -= 1
