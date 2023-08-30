@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+
+<launch>
+
+	<!-- ROSPlan -->
+	<include file="$(find rosplan_planning_system)/launch/interfaced_planning_system.launch" >
+		<arg name="domain_path"		value="/home/amar/ROSPlan/domain_icra.pddl" />
+		<arg name="problem_path"	value="/home/amar/ROSPlan/problem_failure_icra.pddl" />
+	</include>
+
+	<!-- sim actions -->
+	<include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+		<arg name="pddl_action_name" value="detect_human" />
+        <arg name="action_duration" value="5" />
+	</include>
+	<include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+		<arg name="pddl_action_name" value="move_obstacle" />
+        <arg name="action_duration" value="15" />
+	</include>
+	<include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+		<arg name="pddl_action_name" value="deviate" />
+        <arg name="action_duration" value="25" />
+	</include>
+	<include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+		<arg name="pddl_action_name" value="stop" />
+        <arg name="action_duration" value="35" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="explain_deviation" />
+        <arg name="action_duration" value="45" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="explain_failure" />
+        <arg name="action_duration" value="55" />
+	</include>
+</launch>

@@ -1,0 +1,30 @@
+digraph plan {
+0[ label="plan_start",style=filled,fillcolor=black,fontcolor=white];
+1[ label="detect_human_start
+(amar)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+2[ label="detect_human_end
+(amar)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+3[ label="move_obstacle_start
+(chair)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+4[ label="move_obstacle_end
+(chair)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+5[ label="stop_start
+(chair,tiago)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+6[ label="stop_end
+(chair,tiago)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+7[ label="explain_failure_start
+(chair,tiago,amar)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+8[ label="explain_failure_end
+(chair,tiago,amar)",style=filled,fillcolor=darkolivegreen,fontcolor=white];
+"0" -> "1" [ label="[0.001, inf]" , penwidth=2, color="black"]
+"0" -> "3" [ label="[0.001, inf]" , penwidth=2, color="black"]
+"1" -> "2" [ label="[1, 1]" , penwidth=2, color="black"]
+"3" -> "4" [ label="[1, 1]" , penwidth=2, color="black"]
+"4" -> "5" [ label="[0.001, inf]" , penwidth=2, color="black"]
+"5" -> "6" [ label="[1, 1]" , penwidth=2, color="black"]
+"6" -> "7" [ label="[0.001, inf]" , penwidth=2, color="black"]
+"2" -> "7" [ label="[0.001, inf]" , penwidth=2, color="black"]
+"7" -> "8" [ label="[1, 1]" , penwidth=2, color="black"]
+"0" -> "8" [ label="[0.001, inf]" , penwidth=2, color="black"]
+}
+
