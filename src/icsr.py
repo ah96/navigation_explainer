@@ -102,7 +102,7 @@ class hixron(object):
     # constructor
     def __init__(self):
         # extroversion vars
-        self.extroversion_prob = 0.4
+        self.extroversion_prob = 1.0
         self.fully_extrovert = False
         if self.extroversion_prob == 1.0:
             self.fully_extrovert = True
@@ -1170,39 +1170,55 @@ class hixron(object):
 
             # extrovert
             if self.humans_nearby:
+                # visual explanation
                 start = time.time()
                 self.explain_visual_icsr()
                 end = time.time()
                 self.visual_time = end-start
                 
+                start = time.time()
                 self.publish_visual_icsr()
+                end = time.time()
+                self.visual_publish_time = end-start
                 self.visual_N += 1
 
+                # textual explanation
                 start = time.time()
-                #self.explain_textual_icsr()
+                self.explain_textual_icsr()
                 end = time.time()
                 self.textual_time = end-start
-
-                #self.publish_textual_empty()
+                
+                start = time.time()
+                self.publish_textual_empty()
+                end = time.time()
+                self.textual_publish_time = end-start
                 self.N_words = 0
             else:
+                # visual explanation
                 start = time.time()
                 self.explain_visual_icsr()
                 end = time.time()
                 self.visual_time = end-start
                 
-                self.publish_visual_icsr()
-                self.visual_N += 1
-                
                 start = time.time()
-                #self.explain_textual_icsr()
+                self.publish_visual_icsr()
+                end = time.time()
+                self.visual_publish_time = end-start
+                self.visual_N += 1
+
+                # textual explanation
+                start = time.time()
+                self.explain_textual_icsr()
                 end = time.time()
                 self.textual_time = end-start
                 
+                start = time.time()
                 self.publish_textual_icsr()
-                #self.textual_N += 1
+                end = time.time()
+                self.textual_publish_time = end-start
+                self.textual_N += 1
                 self.N_words = len(self.text_exp.split())
-
+        
             if self.moved_object_countdown > 0:
                 self.N_objects = 1 + len(self.neighborhood_objects_IDs)
             else:
@@ -1215,12 +1231,13 @@ class hixron(object):
                 self.visualize_old_plan()
 
             with open('eval.csv', "a") as myfile:
-                myfile.write(str(int(10 * self.extroversion_prob)) + ',' + str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
+                myfile.write(str(int(10 * self.extroversion_prob)) + ',' + str(self.visual_time) + ',' + str(self.visual_publish_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_publish_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
             myfile.close()
 
         else:
             # not fully extrovert
             if self.introvert_publish_ctr == self.explanation_cycle_len:
+                # visual explanation
                 start = time.time()
                 self.explain_visual_icsr()
                 end = time.time()
@@ -1228,6 +1245,7 @@ class hixron(object):
                 
                 self.publish_visual_empty()
 
+                # textual explanation
                 start = time.time()
                 self.explain_textual_icsr()
                 end = time.time()
@@ -1236,6 +1254,7 @@ class hixron(object):
                 self.publish_textual_empty()
                 
             elif self.introvert_publish_ctr > self.explanation_cycle_len / 2 and self.introvert_publish_ctr < self.explanation_cycle_len:
+                pass
                 self.publish_visual_empty()
                 self.publish_textual_empty()
 
@@ -1250,17 +1269,33 @@ class hixron(object):
                         break 
 
                 if self.humans_nearby:
+                    # visual explanation
+                    start = time.time()
                     self.publish_visual_icsr()
+                    end = time.time()
+                    self.visual_publish_time = end-start
                     self.visual_N += 1
 
+                    # textual explanation
+                    start = time.time()
                     self.publish_textual_empty()
+                    end = time.time()
+                    self.textual_publish_time = end-start
                     self.N_words = 0
 
                 else:
+                    # visual explanation
+                    start = time.time()
                     self.publish_visual_icsr()
+                    end = time.time()
+                    self.visual_publish_time = end-start
                     self.visual_N += 1
 
+                    # textual explanation
+                    start = time.time()
                     self.publish_textual_icsr()
+                    end = time.time()
+                    self.textual_publish_time = end-start
                     self.textual_N += 1
                     self.N_words = len(self.text_exp.split())
 
@@ -1271,6 +1306,9 @@ class hixron(object):
 
                 if self.moved_object_countdown == 11:
                     self.N_deviations_explained += 1
+
+                    self.publish_empty_old_plan()
+                    self.visualize_old_plan()
     
             elif self.introvert_publish_ctr < self.explanation_cycle_len / 2 and self.introvert_publish_ctr > 1:
                 pass
@@ -1286,7 +1324,7 @@ class hixron(object):
                 self.introvert_publish_ctr = self.explanation_cycle_len + 1
 
                 with open('eval.csv', "a") as myfile:
-                    myfile.write(str(int(10 * self.extroversion_prob)) + ',' + str(self.visual_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
+                    myfile.write(str(int(10 * self.extroversion_prob)) + ',' + str(self.visual_time) + ',' + str(self.visual_publish_time) + ',' + str(self.visual_N) + ',' + str(self.textual_time) + ',' + str(self.textual_publish_time) + ',' + str(self.textual_N) + ',' + str(self.N_objects) + ',' + str(self.N_words) + ',' + str(self.N_deviations_explained) + '\n')
                 myfile.close()
 
                 pass
@@ -1945,7 +1983,7 @@ def main():
     hixron_obj.send_goal_pose()
 
     with open('eval.csv', "a") as myfile:
-        myfile.write('extroversion,visual_time,visual_N,textual_time,textual_N,N_objects,N_words,N_deviations' + '\n')
+        myfile.write('extroversion,visual_time,visual_publish_time,visual_N,textual_time,textual_publish_time,textual_N,N_objects,N_words,N_deviations' + '\n')
     myfile.close()
     
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
