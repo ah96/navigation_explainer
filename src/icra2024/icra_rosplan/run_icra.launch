@@ -5,7 +5,7 @@
 	<!-- ROSPlan -->
 	<include file="$(find rosplan_planning_system)/launch/interfaced_planning_system.launch" >
 		<arg name="domain_path"		value="/home/amar/ROSPlan/domain_icra.pddl" />
-		<arg name="problem_path"	value="/home/amar/ROSPlan/problem_failure_icra.pddl" />
+		<arg name="problem_path"	value="/home/amar/ROSPlan/problem_failure_introvert_icra.pddl" />	
 	</include>
 
 	<!-- sim actions -->
@@ -15,22 +15,46 @@
 	</include>
 	<include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
 		<arg name="pddl_action_name" value="move_obstacle" />
-        <arg name="action_duration" value="15" />
+        <arg name="action_duration" value="5" />
 	</include>
 	<include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
 		<arg name="pddl_action_name" value="deviate" />
-        <arg name="action_duration" value="25" />
+        <arg name="action_duration" value="5" />
 	</include>
 	<include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
-		<arg name="pddl_action_name" value="stop" />
-        <arg name="action_duration" value="35" />
+		<arg name="pddl_action_name" value="fail" />
+        <arg name="action_duration" value="5" />
 	</include>
     <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
-        <arg name="pddl_action_name" value="explain_deviation" />
-        <arg name="action_duration" value="45" />
+        <arg name="pddl_action_name" value="stop_because_of_deviation" />
+        <arg name="action_duration" value="5" />
 	</include>
     <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
-        <arg name="pddl_action_name" value="explain_failure" />
-        <arg name="action_duration" value="55" />
+        <arg name="pddl_action_name" value="stop_because_of_failure" />
+        <arg name="action_duration" value="5" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="wait_for_question_with_answer" />
+        <arg name="action_duration" value="5" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="wait_for_question_without_answer" />
+        <arg name="action_duration" value="5" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="explain_deviation_introvert" />
+        <arg name="action_duration" value="5" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="explain_failure_introvert" />
+        <arg name="action_duration" value="5" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="explain_deviation_extrovert" />
+        <arg name="action_duration" value="5" />
+	</include>
+    <include file="$(find rosplan_planning_system)/launch/includes/simulated_action.launch" >
+        <arg name="pddl_action_name" value="explain_failure_extrovert" />
+        <arg name="action_duration" value="5" />
 	</include>
 </launch>
