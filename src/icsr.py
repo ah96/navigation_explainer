@@ -102,7 +102,7 @@ class hixron(object):
     # constructor
     def __init__(self):
         # extroversion vars
-        self.extroversion_prob = 0.0
+        self.extroversion_prob = 1.0
         self.fully_extrovert = False
         if self.extroversion_prob == 1.0:
             self.fully_extrovert = True
@@ -1976,7 +1976,7 @@ def main():
     hixron_obj.first_call = False
     
     # sleep for x sec until Amar starts the video
-    d = rospy.Duration(1, 0)
+    d = rospy.Duration(2, 0)
     rospy.sleep(d)
     
     # send the goal pose to start navigation
