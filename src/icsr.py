@@ -102,7 +102,7 @@ class hixron(object):
     # constructor
     def __init__(self):
         # extroversion vars
-        self.extroversion_prob = 0.6
+        self.extroversion_prob = 1.0
         self.fully_extrovert = False
         if self.extroversion_prob == 1.0:
             self.fully_extrovert = True
@@ -110,8 +110,8 @@ class hixron(object):
         self.explanation_representation_threshold = 3.6 - 2.4 * self.extroversion_prob
         self.explanation_window = 3.6 - 2.4 * self.extroversion_prob
 
-        self.timing = int(30 * (1 - self.extroversion_prob))
-        self.duration = int(30 * (1 - self.extroversion_prob))
+        self.timing = int(20 * (1 - self.extroversion_prob))
+        self.duration = int(20 * (1 - self.extroversion_prob))
         self.explanation_cycle_len = self.timing + self.duration
         self.introvert_publish_ctr = copy.deepcopy(self.explanation_cycle_len)
 
@@ -1439,8 +1439,8 @@ class hixron(object):
                 self.dynamic_explanation = False
         
         if self.deviation and self.last_object_moved_ID > 0:
-                self.publish_empty_old_plan()
-                self.visualize_old_plan()
+                #self.publish_empty_old_plan()
+                #self.visualize_old_plan()
 
                 # define the red object
                 self.moved_object_value = copy.deepcopy(self.last_object_moved_ID)
@@ -1891,7 +1891,7 @@ def main():
     hixron_obj.first_call = False
     
     # sleep for x sec until Amar starts the video
-    d = rospy.Duration(1, 0)
+    d = rospy.Duration(3, 0)
     rospy.sleep(d)
     
     # send the goal pose to start navigation
