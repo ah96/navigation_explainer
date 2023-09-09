@@ -554,7 +554,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='desk_1'>
+      <model name='desk_2'>
         <pose frame=''>-9.5929 7.07119 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_5'>
@@ -570,7 +570,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='desk_2'>
+      <model name='desk_1'>
         <pose frame=''>-9.6042 4.0781 0 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link_5'>
@@ -2290,7 +2290,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>-3.48895 3.85681 0 0 -0 0</pose>
     </model>
-    <model name='desk_1'>
+    <model name='desk_2'>
       <link name='link_5'>
         <pose frame=''>-17.2782 -14.8666 0 0 -0 0</pose>
         <visual name='visual'>
@@ -2442,7 +2442,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>-6.43944 10.3254 0 0 -0 0</pose>
     </model>
-    <model name='desk_2'>
+    <model name='desk_1'>
       <link name='link_5'>
         <pose frame=''>-17.2782 -14.8666 0 0 -0 0</pose>
         <visual name='visual'>
