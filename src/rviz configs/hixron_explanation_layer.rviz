@@ -27,7 +27,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: Semantic Map
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -972,7 +972,7 @@ Visualization Manager:
               Axes Radius: 0.10000000149011612
               Class: rviz/Pose
               Color: 255; 25; 0
-              Enabled: true
+              Enabled: false
               Head Length: 0.30000001192092896
               Head Radius: 0.10000000149011612
               Name: Goal
@@ -981,7 +981,7 @@ Visualization Manager:
               Shape: Arrow
               Topic: move_base/current_goal
               Unreliable: false
-              Value: true
+              Value: false
           Enabled: true
           Name: Base
       Enabled: true
@@ -1111,7 +1111,7 @@ Visualization Manager:
       Marker Topic: /semantic_labels
       Name: Semantic Labels
       Namespaces:
-        {}
+        my_namespace: true
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -1158,6 +1158,14 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /goal_pose
+      Name: Goal Pose
+      Namespaces:
+        my_namespace: true
+      Queue Size: 100
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -1186,16 +1194,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 18.72504425048828
+      Distance: 9.99905776977539
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 4.291049957275391
-        Y: -2.465479612350464
-        Z: 0.31488314270973206
+        X: 2.594043254852295
+        Y: -4.527979373931885
+        Z: 0.31284400820732117
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -1204,7 +1212,7 @@ Visualization Manager:
       Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.726012706756592
+      Yaw: 4.706040859222412
     Saved: ~
 Window Geometry:
   Displays:

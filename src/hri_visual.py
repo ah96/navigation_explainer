@@ -63,13 +63,18 @@ def quaternion_to_euler(x, y, z, w):
 class hixron(object):
     # constructor
     def __init__(self):
-        # extroversion vars
-        self.extroversion_prob = 0.0        
-        self.explanation_window = 3.6 - 2.4 * self.extroversion_prob
+        self.explanation_window = 2.0
+
+        self.human_blinking = True
 
         self.humans_nearby = False
 
+        self.N_humans = 6
+
         self.moved_object_distance_threshold = 1.5
+
+        self.failure_started = False
+        self.failure_ended = False
         
         # visual explanation vars
         self.moved_object_countdown_textual_only = -1
@@ -86,24 +91,13 @@ class hixron(object):
         self.visual_explanation = []
         self.visual_explanation_resolution = 0.05
 
-        color_shape_path_combination = [2,1,0]
-        
-        self.color_schemes = ['only_red', 'red_nuanced', 'green_yellow_red']
-        self.color_scheme = self.color_schemes[color_shape_path_combination[0]]
-        #color_whole_objects = False
-
-        #shape_schemes = ['wo_text', 'with_text']
-        #shape_scheme = shape_schemes[color_shape_path_combination[1]]
-
-        self.path_schemes = ['full_line', 'arrows']
-        self.path_scheme = self.path_schemes[color_shape_path_combination[2]]
-
 
         # textual explanation vars
         self.pub_text_exp = rospy.Publisher('/textual_explanation', String, queue_size=10)
         self.text_exp = ''
 
         # point cloud vars
+        self.goal_marker_array = MarkerArray()
         self.semantic_labels_marker_array = MarkerArray()
         self.current_path_marker_array = MarkerArray()
         self.old_path_marker_array = MarkerArray()
@@ -138,14 +132,14 @@ class hixron(object):
         self.same_goal_pose = True
 
         # goal pose
-        self.goal_pose_current = Pose()
-        #self.goal_pose_history = []
+        self.init_goal()
 
         # ontology part
         self.scenario_name = 'icra_melodic'
         # load ontology
         self.ontology = pd.read_csv(self.dirCurr + '/src/navigation_explainer/src/scenarios/' + self.scenario_name + '/' + 'ontology.csv')
         self.ontology = np.array(self.ontology)
+        self.ont_len = self.ontology.shape[0]
         # apply map-world offset
         for i in range(self.ontology.shape[0]):
             self.ontology[i, 3] += self.robot_offset_x
@@ -181,12 +175,13 @@ class hixron(object):
         self.init_semantic_labels()
 
         # subscribers 
-        #self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
+        self.sub_global_plan = rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.global_plan_callback)
         self.sub_amcl = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_callback)
         #self.sub_goal_pose = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_pose_callback)
         #self.sub_state = rospy.Subscriber("/gazebo/model_states", ModelStates, self.gazebo_callback)
 
         # publishers
+        self.pub_goal_pose = rospy.Publisher('/goal_pose', MarkerArray, queue_size=1)
         self.pub_semantic_labels = rospy.Publisher('/semantic_labels', MarkerArray, queue_size=1)
         self.pub_current_path = rospy.Publisher('/path_markers', MarkerArray, queue_size=1)
         self.pub_old_path = rospy.Publisher('/old_path_markers', MarkerArray, queue_size=1)
@@ -194,6 +189,40 @@ class hixron(object):
         self.pub_move = rospy.Publisher("/gazebo/set_model_state", ModelState, queue_size=1)
         self.pub_semantic_map = rospy.Publisher("/semantic_map", PointCloud2, queue_size=1)
 
+    # intialize navigational goal and stop pose
+    def init_goal(self):
+        # Creates a goal to send to the action server.
+        self.goal = MoveBaseGoal()
+        self.goal.target_pose.header.seq = 0
+        self.goal.target_pose.header.stamp.secs = 0
+        self.goal.target_pose.header.stamp.nsecs = 0
+        self.goal.target_pose.header.frame_id = "map"
+
+        self.goal.target_pose.pose.position.x = 0.603
+        self.goal.target_pose.pose.position.y = -6.632
+        self.goal.target_pose.pose.position.z = 0.0
+
+        self.goal.target_pose.pose.orientation.x = 0.0
+        self.goal.target_pose.pose.orientation.y = 0.0
+        self.goal.target_pose.pose.orientation.z = -0.71
+        self.goal.target_pose.pose.orientation.w = 0.70
+
+        # Creates a stop goal to send to the action server.
+        self.stop_goal = MoveBaseGoal()
+        self.stop_goal.target_pose.header.seq = 0
+        self.stop_goal.target_pose.header.stamp.secs = 0
+        self.stop_goal.target_pose.header.stamp.nsecs = 0
+        self.stop_goal.target_pose.header.frame_id = "map"
+
+        self.stop_goal.target_pose.pose.position.x = 0.603
+        self.stop_goal.target_pose.pose.position.y = -6.632
+        self.stop_goal.target_pose.pose.position.z = 0.0
+
+        self.stop_goal.target_pose.pose.orientation.x = 0.0
+        self.stop_goal.target_pose.pose.orientation.y = 0.0
+        self.stop_goal.target_pose.pose.orientation.z = -0.71
+        self.stop_goal.target_pose.pose.orientation.w = 0.70
+   
     # intialize objects which will be moved
     def init_objects_to_move(self):
         self.chair_2_moved_moved = False
@@ -294,9 +323,39 @@ class hixron(object):
             marker.scale.y = 0.25
             marker.scale.z = 0.25
             #marker.frame_locked = False
-            marker.text = self.ontology[i][1]
+            marker.text = self.ontology[i][2]
             marker.ns = "my_namespace"
             self.semantic_labels_marker_array.markers.append(marker)
+
+    # visualize goal pose
+    def visualize_goal_pose(self):
+        self.goal_marker_array.markers = []
+
+        marker = Marker()
+        marker.header.frame_id = 'map'
+        marker.id = 0
+        marker.type = marker.ARROW
+        marker.action = marker.ADD
+        marker.pose = Pose()
+        marker.pose.position.x = self.goal.target_pose.pose.position.x
+        marker.pose.position.y = self.goal.target_pose.pose.position.y
+        marker.pose.position.z = 0.2 #self.goal.target_pose.pose.position.z
+        marker.pose.orientation.x = self.goal.target_pose.pose.orientation.x
+        marker.pose.orientation.y = self.goal.target_pose.pose.orientation.y
+        marker.pose.orientation.z = self.goal.target_pose.pose.orientation.z
+        marker.pose.orientation.w = self.goal.target_pose.pose.orientation.w
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+        marker.scale.x = 0.75
+        marker.scale.y = 0.05
+        marker.scale.z = 0.05
+        #marker.frame_locked = False
+        marker.ns = "my_namespace"
+        self.goal_marker_array.markers.append(marker)
+
+        self.pub_goal_pose.publish(self.goal_marker_array)
 
     # send goal pose
     def send_goal_pose(self):
@@ -306,24 +365,25 @@ class hixron(object):
         # listening for goals.
         client.wait_for_server()
    
-        # Creates a goal to send to the action server.
-        goal = MoveBaseGoal()
-        goal.target_pose.header.seq = 0
-        goal.target_pose.header.stamp.secs = 0
-        goal.target_pose.header.stamp.nsecs = 0
-        goal.target_pose.header.frame_id = "map"
-
-        goal.target_pose.pose.position.x = 0.603
-        goal.target_pose.pose.position.y = -6.632
-        goal.target_pose.pose.position.z = 0.0
-
-        goal.target_pose.pose.orientation.x = 0.0
-        goal.target_pose.pose.orientation.y = 0.0
-        goal.target_pose.pose.orientation.z = -0.71
-        goal.target_pose.pose.orientation.w = 0.70
-   
         # Sends the goal to the action server.
-        client.send_goal(goal)
+        client.send_goal(self.goal)
+
+    # send stop pose
+    def send_stop_pose(self):
+        client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
+  
+        # Waits until the action server has started up and started
+        # listening for goals.
+        client.wait_for_server()
+   
+        # Creates a goal to send to the action server.
+
+        self.stop_goal.target_pose.pose.position.x = self.robot_pose_map.position.x
+        self.stop_goal.target_pose.pose.position.y = self.robot_pose_map.position.y
+        self.stop_goal.target_pose.pose.position.z = 0.0
+
+        # Sends the goal to the action server.
+        client.send_goal(self.stop_goal)
 
     # send goal pose
     def cancel_goal_pose(self):
@@ -341,9 +401,6 @@ class hixron(object):
         #print('\namcl_callback')
 
         self.robot_pose_map = msg.pose.pose
-
-        # move objects
-        #self.move_objects()
 
     # move objects
     def move_objects(self):
@@ -372,9 +429,9 @@ class hixron(object):
                 self.prepare_global_semantic_map_for_publishing()
                 self.publish_global_semantic_map()
                 
-                self.publish_semantic_labels()
-                self.publish_semantic_labels()
-                self.publish_semantic_labels()
+                #self.publish_semantic_labels_all()
+                #self.publish_semantic_labels_all()
+                #self.publish_semantic_labels_all()
 
         if self.human_4_moved_moved == False:
             x = self.human_4_moved_state.pose.position.x + self.robot_offset_x
@@ -401,19 +458,25 @@ class hixron(object):
                 self.prepare_global_semantic_map_for_publishing()
                 self.publish_global_semantic_map()
                 
-                self.publish_semantic_labels()
-                self.publish_semantic_labels()
-                self.publish_semantic_labels()
+                #self.publish_semantic_labels_all()
+                #self.publish_semantic_labels_all()
+                #self.publish_semantic_labels_all()
 
-                self.cancel_goal_pose()
+                #self.cancel_goal_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
                 self.failure_start = time.time()
+                self.failure_started = True
 
-        if self.human_4_original_moved == False and self.human_4_moved_moved == True:
+        if self.human_4_moved_moved == True and self.failure_ended == False:
             self.failure_end = time.time()
             self.failure_time = self.failure_end - self.failure_start
-            print(self.failure_time)
+            #print(self.failure_time)
 
-            if self.failure_time > 2.5:
+            if self.failure_time > 8.0 and self.human_4_original_moved == False:
                 self.pub_move.publish(self.human_4_original_state)
                 self.pub_move.publish(self.human_4_original_state)
                 self.pub_move.publish(self.human_4_original_state)
@@ -429,12 +492,18 @@ class hixron(object):
                 self.prepare_global_semantic_map_for_publishing()
                 self.publish_global_semantic_map()
                 
-                self.publish_semantic_labels()
-                self.publish_semantic_labels()
-                self.publish_semantic_labels()
+                #self.publish_semantic_labels_all()
+                #self.publish_semantic_labels_all()
+                #self.publish_semantic_labels_all()
 
-            if self.failure_time > 2.99:
                 self.send_goal_pose()
+                self.failure_started = False
+                self.failure_ended = True
+
+            #if self.failure_time > 9.0 and self.failure_ended == False:
+            #    self.send_goal_pose()
+            #    self.failure_started = False
+            #    self.failure_ended = True
 
     # update ontology quick approach
     def update_ontology_quick(self, moved_ID):
@@ -456,6 +525,8 @@ class hixron(object):
             self.last_object_moved_ID_for_publishing = self.ontology[i][0]
             self.ontology[i][12] += obj_x_new - obj_x_current
             self.ontology[i][13] += obj_y_new - obj_y_current
+            if self.ontology[i][11] == 'y':
+                self.ontology[i][11] = 'n'
 
         elif i == 34:
             if self.human_4_original_moved == False:
@@ -479,7 +550,42 @@ class hixron(object):
                 self.last_object_moved_ID_for_publishing = self.ontology[i][0]
                 self.ontology[i][12] += obj_x_new - obj_x_current + 0.3
                 self.ontology[i][13] += obj_y_new - obj_y_current
-                print('DOING!!!!!')
+                #print('DOING!!!!!')
+
+        # global plan callback
+    
+    # global plan callback
+    def global_plan_callback(self, msg):
+        #print('\nglobal_plan_callback!')
+
+        try:
+            self.global_plan_ctr += 1
+            
+            # save global plan to class vars
+            self.global_plan_current = copy.deepcopy(msg)
+            #self.global_plan_history.append(self.global_plan_current)
+            #self.globalPlan_goalPose_indices_history.append([len(self.global_plan_history), len(self.goal_pose_history)])
+
+            if self.global_plan_ctr > 1: 
+                # calculate deivation
+                ind_current = int(0.5 * (len(self.global_plan_current.poses) - 1))
+                ind_previous = int(0.5 * (len(self.global_plan_previous.poses) - 1))
+                    
+                dev = 0
+                dev_x = self.global_plan_current.poses[ind_current].pose.position.x - self.global_plan_previous.poses[ind_previous].pose.position.x
+                dev_y = self.global_plan_current.poses[ind_current].pose.position.y - self.global_plan_previous.poses[ind_previous].pose.position.y
+                dev = dev_x**2 + dev_y**2
+                dev = math.sqrt(dev)
+                
+                if dev > self.deviation_threshold:
+                    #print('DEVIATION HAPPENED!!!')
+                    self.old_plan = copy.deepcopy(self.global_plan_previous)
+                    self.deviation = True
+
+            # save global plan to class vars
+            self.global_plan_previous = copy.deepcopy(msg)
+        except:
+            pass
 
     # create global semantic map
     def create_global_semantic_map(self):
@@ -553,7 +659,7 @@ class hixron(object):
 
     # prepare global semantic map for publishing
     def prepare_global_semantic_map_for_publishing(self):
-        print('prepare_global_semantic_map_for_publishing')
+        #print('prepare_global_semantic_map_for_publishing')
         global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
 
         # create the RGB explanation matrix of the same size as semantic map
@@ -599,8 +705,8 @@ class hixron(object):
         pc2.header.stamp = rospy.Time.now()
         self.pub_semantic_map.publish(pc2)
 
-    # publish semantic labels
-    def publish_semantic_labels(self):
+    # publish all semantic labels
+    def publish_semantic_labels_all(self):
         # update poses of possible objects
         self.semantic_labels_marker_array.markers[1].pose.position.x = self.ontology[1][12]
         self.semantic_labels_marker_array.markers[1].pose.position.y = self.ontology[1][13]
@@ -610,56 +716,537 @@ class hixron(object):
         
         self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
 
+    # setup func
+    def setup(self):
+        self.create_global_semantic_map()
+        
+        self.prepare_global_semantic_map_for_publishing()
+        
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        self.publish_global_semantic_map()
+        
+        #self.publish_semantic_labels_all()
+
+        return
+
     # test whether explanation is needed
     def test_explain(self):
-        #print('test_explain!')
+        self.create_visual_explanation()
+        self.publish_visual_explanation()
 
-        if self.first_call:
-            self.create_global_semantic_map()
-            
-            self.prepare_global_semantic_map_for_publishing()
-            
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            self.publish_global_semantic_map()
-            
-            self.publish_semantic_labels()
+    # create visual explanation
+    def create_visual_explanation(self):
+        # STATIC PART        
+        global_semantic_map_complete_copy = copy.deepcopy(self.global_semantic_map_complete)
 
-            return
-            
-        #self.publish_semantic_labels()
+        # define local explanation window around robot
+        around_robot_size_x = self.explanation_window
+        around_robot_size_y = self.explanation_window
 
-        #self.explain_visual()
+        # get the semantic map size
+        semantic_map_size_y = self.global_semantic_map_size[0]
+        semantic_map_size_x = self.global_semantic_map_size[1]
+
+        # find the objects/obstacles in the robot's local neighbourhood
+        robot_pose = copy.deepcopy(self.robot_pose_map)
+        x_min = robot_pose.position.x - around_robot_size_x
+        x_max = robot_pose.position.x + around_robot_size_x
+        y_min = robot_pose.position.y - around_robot_size_y
+        y_max = robot_pose.position.y + around_robot_size_y
+        #print('(x_min,x_max,y_min,y_max) = ', (x_min,x_max,y_min,y_max))
+
+        x_min_pixel = int((x_min - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)        
+        x_max_pixel = int((x_max - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+        y_min_pixel = int((y_min - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        y_max_pixel = int((y_max - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
         
+        x_min_pixel = max(0, x_min_pixel)
+        x_max_pixel = min(semantic_map_size_x - 1, x_max_pixel)
+        y_min_pixel = max(0, y_min_pixel)
+        y_max_pixel = min(semantic_map_size_y - 1, y_max_pixel)
+        #print('(x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel) = ', (x_min_pixel,x_max_pixel,y_min_pixel,y_max_pixel))
+
+        self.neighborhood_objects_IDs = np.unique(global_semantic_map_complete_copy[y_min_pixel:y_max_pixel, x_min_pixel:x_max_pixel])
+        if 0 in  self.neighborhood_objects_IDs:
+             self.neighborhood_objects_IDs =  self.neighborhood_objects_IDs[1:]
+        self.neighborhood_objects_IDs = [int(item) for item in  self.neighborhood_objects_IDs]
+        #print('self.neighborhood_objects_IDs =', self.neighborhood_objects_IDs)
+
+        # create the RGB explanation matrix of the same size as semantic map
+        #print('(semantic_map_size_x,semantic_map_size_y)',(semantic_map_size_y,semantic_map_size_x))
+        explanation_R = np.zeros((semantic_map_size_y, semantic_map_size_x))
+        explanation_R[:,:] = 120 # free space
+        explanation_R[global_semantic_map_complete_copy > 0] = 180.0 # obstacle
+        explanation_G = copy.deepcopy(explanation_R)
+        explanation_B = copy.deepcopy(explanation_R)
+        self.vis_exp_coords = (y_min_pixel, y_max_pixel, x_min_pixel, x_max_pixel)
+
+        # OBSTACLE COLORING using a yellow-green-red scheme
+        R_temp = copy.deepcopy(explanation_R)
+
+        c_x_pixel = int(0.5*(x_min_pixel + x_max_pixel)+1)
+        c_y_pixel = int(0.5*(y_min_pixel + y_max_pixel)+1)
+        d_x = x_max_pixel - x_min_pixel
+        d_y = y_max_pixel - y_min_pixel
+        #print('(d_x, d_y) = ', (d_x, d_y))
+
+        explanation_R[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 227
+        explanation_G[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 242
+        explanation_B[c_y_pixel-int(0.1*d_y):c_y_pixel+int(0.1*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.1*d_x)] = 19
+
+        explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 206
+        explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 206
+        explanation_R[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 206
+        explanation_R[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 206
+        explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 215
+        explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 215
+        explanation_G[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 215
+        explanation_G[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 215
+        explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel-int(0.1*d_x)] = 15
+        explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel+int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 15
+        explanation_B[c_y_pixel-int(0.2*d_y):c_y_pixel-int(0.1*d_y), c_x_pixel-int(0.2*d_x):c_x_pixel+int(0.2*d_x)] = 15
+        explanation_B[c_y_pixel+int(0.1*d_y):c_y_pixel+int(0.2*d_y), c_x_pixel-int(0.1*d_x):c_x_pixel+int(0.2*d_x)] = 15
+        
+        explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 124
+        explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 124
+        explanation_R[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 124
+        explanation_R[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 124
+        explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 220
+        explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 220
+        explanation_G[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 220
+        explanation_G[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 220
+        explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel-int(0.2*d_x)] = 15
+        explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel+int(0.2*d_x):c_x_pixel+int(0.3*d_x)] = 15
+        explanation_B[c_y_pixel-int(0.3*d_y):c_y_pixel-int(0.2*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 15
+        explanation_B[c_y_pixel+int(0.2*d_y):c_y_pixel+int(0.3*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.3*d_x)] = 15
+        
+        explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 108
+        explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 108
+        explanation_R[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 108
+        explanation_R[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 108
+        explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 196
+        explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 196
+        explanation_G[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 196
+        explanation_G[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 196
+        explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel-int(0.3*d_x)] = 8
+        explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel+int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 8
+        explanation_B[c_y_pixel-int(0.4*d_y):c_y_pixel-int(0.3*d_y), c_x_pixel-int(0.4*d_x):c_x_pixel+int(0.3*d_x)] = 8
+        explanation_B[c_y_pixel+int(0.3*d_y):c_y_pixel+int(0.4*d_y), c_x_pixel-int(0.3*d_x):c_x_pixel+int(0.4*d_x)] = 8
+        
+        explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 98
+        explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 98
+        explanation_R[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 98
+        explanation_R[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 98
+        explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 176
+        explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 176
+        explanation_G[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 176
+        explanation_G[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 176
+        explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel-int(0.4*d_x)] = 9
+        explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel+int(0.4*d_x):c_x_pixel+int(0.5*d_x)] = 9
+        explanation_B[c_y_pixel-int(0.5*d_y):c_y_pixel-int(0.4*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 9
+        explanation_B[c_y_pixel+int(0.4*d_y):c_y_pixel+int(0.5*d_y), c_x_pixel-int(0.5*d_x):c_x_pixel+int(0.5*d_x)] = 9
+        
+        explanation_R[R_temp == 120] = 120 # return free space to original values
+        explanation_G[R_temp == 120] = 120 # return free space to original values
+        explanation_B[R_temp == 120] = 120 # return free space to original value
+
+        # DEVIATION PART
+        if self.deviation and self.last_object_moved_ID == 2:
+            # define the moved object
+            self.moved_object_value = copy.deepcopy(self.last_object_moved_ID)
+            self.moved_object_countdown = 40
+            
+            # reset this variable
+            self.last_object_moved_ID = -1
+            self.deviation = False
+
+            self.visualize_old_plan()
+
+        # COLOR OBJECT THAT CAUSED DEVIATION
+        if self.moved_object_countdown > 0:
+            #print('self.moved_object_countdown = ', self.moved_object_countdown)
+            #RGB_val = [201,9,9]
+            RGB_val = [255,0,0]
+            #start = time.time()
+            explanation_R[global_semantic_map_complete_copy == self.moved_object_value] = RGB_val[0]
+            explanation_G[global_semantic_map_complete_copy == self.moved_object_value] = RGB_val[1]
+            explanation_B[global_semantic_map_complete_copy == self.moved_object_value] = RGB_val[2]
+            #end = time.time()
+            #print('DURATION = ', end-start)
+
+
+        # FORM THE EXPLANATION IMAGE                  
+        explanation = (np.dstack((explanation_R,explanation_G,explanation_B))).astype(np.uint8)
+
+        fig = plt.figure(frameon=True)
+        w = 0.01 * semantic_map_size_x
+        h = 0.01 * semantic_map_size_y
+        fig.set_size_inches(w, h)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(np.fliplr(explanation)) #np.flip(explanation))#.astype(np.uint8))
+
+        # VISUALIZE ARROWS AROUND MOVABLE OBJECTS USING MATPLOTLIB
+        for i in range(0, 9):
+            # if it is a movable object and in the robot's neighborhood
+            if self.ontology[i][0] in self.neighborhood_objects_IDs or self.ontology[i][0] == self.moved_object_value:
+                x_map = self.ontology[i][3]
+                y_map = self.ontology[i][4]
+
+                x_pixel = int((x_map - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                dx = int(self.ontology[i][5] / 0.05)
+                dy = int(self.ontology[i][6] / 0.05)
+
+                xs_plot = []
+                ys_plot = []
+                arrows = []
+
+                # if object under table
+                if self.ontology[i][11] == 'y':
+                    if self.ontology[i][10] == 'r':
+                        xs_plot.append(semantic_map_size_x - x_pixel + dx - 1)
+                        ys_plot.append(y_pixel - 1)
+                        arrows.append('>')
+                    elif self.ontology[i][10] == 'l':
+                        xs_plot.append(semantic_map_size_x - x_pixel - dx - 1)
+                        ys_plot.append(y_pixel - 1)
+                        arrows.append('<')
+                    elif self.ontology[i][10] == 't':
+                        xs_plot.append(semantic_map_size_x - x_pixel - 2)
+                        ys_plot.append(y_pixel - dy - 2)
+                        arrows.append('^')
+                    elif self.ontology[i][10] == 'b':
+                        xs_plot.append(semantic_map_size_x - x_pixel - 2)
+                        ys_plot.append(y_pixel + dy - 1)
+                        arrows.append('v')
+                # if object is not under the table
+                elif self.ontology[i][11] == 'n' or self.ontology[i][11] == 'na':
+                    xs_plot.append(semantic_map_size_x - x_pixel + dx - 1)
+                    ys_plot.append(y_pixel - 1)
+                    arrows.append('>')
+                    xs_plot.append(semantic_map_size_x - x_pixel - dx - 1)
+                    ys_plot.append(y_pixel - 1)
+                    arrows.append('<')
+
+                    xs_plot.append(semantic_map_size_x - x_pixel - 2)
+                    ys_plot.append(y_pixel - dy - 2)
+                    arrows.append('^')
+                    xs_plot.append(semantic_map_size_x - x_pixel - 2)
+                    ys_plot.append(y_pixel + dy - 1)
+                    arrows.append('v')
+
+                if self.ontology[i][0] == self.moved_object_value and self.moved_object_countdown > 0:
+                    for j in range(0, len(arrows)):
+                        C = np.array([255, 0, 0])
+                        if 'chair' in self.ontology[i][2]:
+                            plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                        else:
+                            plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=2, alpha=0.4)
+                else:
+                    for j in range(0, len(arrows)):
+                        R = explanation[y_pixel][x_pixel][0]
+                        G = explanation[y_pixel][x_pixel][1]
+                        B = explanation[y_pixel][x_pixel][2]
+                        C = np.array([R, G, B])
+                        if 'chair' in self.ontology[i][2]:
+                            plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=3, alpha=0.4)
+                        else:
+                            plt.plot(xs_plot[j], ys_plot[j], marker=arrows[j], c=C/255.0, markersize=1, alpha=0.6)
+
+        # PLOT HUMANS AS BLINKING EXCLAMATION MARKS        
+        if self.human_blinking == True:
+            for i in range(self.ont_len - 6, self.ont_len):
+                x_map = copy.deepcopy(self.ontology[i][3])
+                y_map = copy.deepcopy(self.ontology[i][4])
+
+                #distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
+            
+                #if distance_human_robot > self.explanation_window:
+                #    continue   
+
+                # for nicer plotting
+                x_map += 0.2
+                y_map += 0.2
+
+                x_pixel = int((x_map + - self.global_semantic_map_origin_x) / self.global_semantic_map_resolution)
+                y_pixel = int((y_map - self.global_semantic_map_origin_y) / self.global_semantic_map_resolution)
+
+                if self.failure_started == True and i == 34:
+                    #C = np.array([255,102,102])
+                    C = np.array([255,0,0])
+                    ax.text(semantic_map_size_x - x_pixel, y_pixel, 'i', c=C/255.0)
+                else:
+                    ax.text(semantic_map_size_x - x_pixel, y_pixel, 'i', c='yellow')
+
+            self.human_blinking = False
+        else:
+            self.human_blinking = True
+
+        # CONVERT IMAGE TO NUMPY ARRAY 
+        fig.savefig('explanation' + '.png', transparent=False)
+        plt.close()
+        output = PIL.Image.open(os.getcwd() + '/explanation.png').convert('RGB')        
+        output = np.array(output)[:,:,:3].astype(np.uint8)
+        self.visual_explanation = output #[self.vis_exp_coords[0]:self.vis_exp_coords[1], (semantic_map_size_x-self.vis_exp_coords[3]):(semantic_map_size_x-self.vis_exp_coords[2]), :]
+        self.visual_explanation_origin_x = self.global_semantic_map_origin_x # + (self.vis_exp_coords[2]) * self.visual_explanation_resolution #robot_pose.position.x - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[3] - vis_exp_coords[2]) 
+        self.visual_explanation_origin_y = self.global_semantic_map_origin_y # + self.vis_exp_coords[0] * self.visual_explanation_resolution #robot_pose.position.y - self.explanation_representation_threshold #0.5 * self.visual_explanation_resolution * (vis_exp_coords[1] - vis_exp_coords[0]) 
+        
+        #from PIL import Image
+        #im = Image.fromarray(self.visual_explanation)
+        #im.save("visual_explanation.png")
+
+        # VISUALIZE CURRENT PATH
+        if self.failure_started == False:
+            self.visualize_current_plan()
+        else:
+            self.visualize_empty_current_plan()
+            #self.current_path_marker_array.markers = []
+
+    # publish visual explanation
+    def publish_visual_explanation(self):
+        #print('publishing visual')
+        #points_start = time.time()
+
+        #'''
+        if self.moved_object_countdown > 0:
+            #print('self.moved_object_countdown = ', self.moved_object_countdown)
+            self.moved_object_countdown -= 1
+        elif self.moved_object_countdown == 0:
+            #print('self.moved_object_countdown = ', self.moved_object_countdown)
+            self.moved_object_countdown = -1
+            self.moved_object_value = -1
+            #self.prepare_global_semantic_map_for_publishing()
+            #self.publish_global_semantic_map()
+        #'''   
+    
+        z = 0.0
+        a = 255                    
+        points = []
+
+        # draw layer
+        size_1 = int(self.visual_explanation.shape[1])
+        size_0 = int(self.visual_explanation.shape[0])
+        for i in range(0, size_1):
+            for j in range(0, size_0):
+                #if (self.visual_explanation[j, i, 0] == 120 and self.visual_explanation[j, i, 1] == 120 and self.visual_explanation[j, i, 2] == 120) or (self.visual_explanation[j, i, 0] == 180 and self.visual_explanation[j, i, 1] == 180 and self.visual_explanation[j, i, 2] == 180):
+                #if self.visual_explanation[j, i, 0] == self.visual_explanation[j, i, 1] and self.visual_explanation[j, i, 1] == self.visual_explanation[j, i, 2] and self.visual_explanation[j, i, 2] == self.visual_explanation[j, i, 0]:
+                if self.visual_explanation[j, i, 0] == self.visual_explanation[j, i, 1] == self.visual_explanation[j, i, 2] == 120 or self.visual_explanation[j, i, 0] == self.visual_explanation[j, i, 1] == self.visual_explanation[j, i, 2] == 180:
+                    continue
+                x = self.visual_explanation_origin_x + (size_1-i) * self.visual_explanation_resolution
+                y = self.visual_explanation_origin_y + j * self.visual_explanation_resolution
+                z = 0.01
+                r = int(self.visual_explanation[j, i, 0])
+                g = int(self.visual_explanation[j, i, 1])
+                b = int(self.visual_explanation[j, i, 2])
+                rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                pt = [x, y, z, rgb]
+                points.append(pt)
+
+        #points_end = time.time()
+        #print('explanation layer runtime = ', round(points_end - points_start,3))
+        
+        # publish
+        self.header.frame_id = 'map'
+        pc2 = point_cloud2.create_cloud(self.header, self.fields, points)
+        pc2.header.stamp = rospy.Time.now()
+        self.pub_explanation_layer.publish(pc2)
+        
+        self.publish_semantic_labels_local()
+
+        #print(len(self.current_path_marker_array.markers))
+        self.pub_current_path.publish(self.current_path_marker_array)
+        
+        if self.moved_object_countdown == 39:
+            self.pub_old_path.publish(self.old_path_marker_array)
+            
+    # publish local semantic labels
+    def publish_semantic_labels_local(self):
+        # check objects
+        for i in range(0, len(self.ontology) - self.N_humans):
+            if self.ontology[i][0] in self.neighborhood_objects_IDs:
+                self.semantic_labels_marker_array.markers[i].action = self.semantic_labels_marker_array.markers[i].ADD
+                x_map = self.ontology[i][12]
+                y_map = self.ontology[i][13]            
+                self.semantic_labels_marker_array.markers[i].pose.position.x = x_map
+                self.semantic_labels_marker_array.markers[i].pose.position.y = y_map
+            else:
+                self.semantic_labels_marker_array.markers[i].action = self.semantic_labels_marker_array.markers[i].DELETE
+
+        # check humans
+        for i in range(len(self.ontology) - self.N_humans, len(self.ontology)):
+            x_map = self.ontology[i][3]
+            y_map = self.ontology[i][4]
+
+            distance_human_robot = math.sqrt((x_map - self.robot_pose_map.position.x)**2 + (y_map - self.robot_pose_map.position.y)**2)
+            
+            if distance_human_robot < self.explanation_window:
+                self.semantic_labels_marker_array.markers[i].action = self.semantic_labels_marker_array.markers[i].ADD
+                x_map = self.ontology[i][12]
+                y_map = self.ontology[i][13]            
+                self.semantic_labels_marker_array.markers[i].pose.position.x = x_map
+                self.semantic_labels_marker_array.markers[i].pose.position.y = y_map
+
+                if self.failure_started:
+                    self.semantic_labels_marker_array.markers[i].color.r = 1.0
+                    self.semantic_labels_marker_array.markers[i].color.g = 0.0
+                    self.semantic_labels_marker_array.markers[i].color.b = 0.0
+                else:
+                    self.semantic_labels_marker_array.markers[i].color.r = 1.0
+                    self.semantic_labels_marker_array.markers[i].color.g = 1.0
+                    self.semantic_labels_marker_array.markers[i].color.b = 1.0
+            else:
+                self.semantic_labels_marker_array.markers[i].action = self.semantic_labels_marker_array.markers[i].DELETE
+     
+        self.pub_semantic_labels.publish(self.semantic_labels_marker_array)
+
+    # visualize current path
+    def visualize_current_plan(self):
+        self.visualize_empty_current_plan()
+
+        self.global_plan_current_hold = copy.deepcopy(self.global_plan_current)
+     
+        current_path_length = len(self.global_plan_current_hold.poses)
+        current_marker_array_length = len(self.current_path_marker_array.markers)
+        
+        #self.current_path_marker_array.markers = []        
+        
+        if current_path_length > 15:
+            for i in range(15, current_path_length-8):
+                # visualize path
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                k = i - 15
+                marker.id = k
+                marker.type = marker.SPHERE
+                marker.action = marker.ADD #DELETEALL #ADD
+                marker.pose = Pose()
+                marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
+                marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
+                marker.pose.position.z = 0.95
+                marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
+                marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
+                marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
+                marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
+                marker.color.r = 0.043
+                marker.color.g = 0.941
+                marker.color.b = 1.0
+                marker.color.a = 0.5        
+                marker.scale.x = 0.1
+                marker.scale.y = 0.1
+                marker.scale.z = 0.1
+                #marker.frame_locked = False
+                marker.ns = "my_namespace"
+                if k >= current_marker_array_length:
+                    self.current_path_marker_array.markers.append(marker)
+                else:
+                    self.current_path_marker_array.markers[k] = marker
+
+        else:
+            for i in range(0, current_path_length-8):
+                # visualize path
+                marker = Marker()
+                marker.header.frame_id = 'map'
+                marker.id = i
+                marker.type = marker.SPHERE
+                marker.action = marker.ADD #DELETEALL #ADD
+                marker.pose = Pose()
+                marker.pose.position.x = self.global_plan_current_hold.poses[i].pose.position.x
+                marker.pose.position.y = self.global_plan_current_hold.poses[i].pose.position.y
+                marker.pose.position.z = 0.95
+                marker.pose.orientation.x = self.global_plan_current_hold.poses[i].pose.orientation.x
+                marker.pose.orientation.y = self.global_plan_current_hold.poses[i].pose.orientation.y
+                marker.pose.orientation.z = self.global_plan_current_hold.poses[i].pose.orientation.z
+                marker.pose.orientation.w = self.global_plan_current_hold.poses[i].pose.orientation.w
+                marker.color.r = 0.043
+                marker.color.g = 0.941
+                marker.color.b = 1.0
+                marker.color.a = 0.5        
+                marker.scale.x = 0.1
+                marker.scale.y = 0.1
+                marker.scale.z = 0.1
+                #marker.frame_locked = False
+                marker.ns = "my_namespace"
+                if i >= current_marker_array_length:
+                    self.current_path_marker_array.markers.append(marker)
+                else:
+                    self.current_path_marker_array.markers[i] = marker
+
+    # visualize empty current path
+    def visualize_empty_current_plan(self):
+        for i in range(0, len(self.current_path_marker_array.markers)):
+            #self.current_path_marker_array.markers[i].pose.position.x = 2.3
+            #self.current_path_marker_array.markers[i].pose.position.x = 2.3
+            #self.current_path_marker_array.markers[i].pose.position.x = 2.3
+            self.current_path_marker_array.markers[i].action = self.current_path_marker_array.markers[i].DELETE
+
+    # visualize old path 
+    def visualize_old_plan(self):
+        #print('\nvisualize_old_plan')
+        self.old_path_marker_array.markers = []
+
+        #print('len(self.old_plan.poses) = ', len(self.old_plan.poses))
+        for i in range(25, len(self.old_plan.poses), 1):
+            #x_map = self.old_plan.poses[i].pose.position.x
+            #y_map = self.old_plan.poses[i].pose.position.y
+
+            # visualize path
+            marker = Marker()
+            marker.header.frame_id = 'map'
+            marker.id = i
+            marker.type = marker.SPHERE
+            marker.action = marker.ADD
+            marker.pose = Pose()
+            marker.pose.position.x = self.old_plan.poses[i].pose.position.x
+            marker.pose.position.y = self.old_plan.poses[i].pose.position.y
+            marker.pose.position.z = 0.8
+            marker.pose.orientation.x = self.old_plan.poses[i].pose.orientation.x
+            marker.pose.orientation.y = self.old_plan.poses[i].pose.orientation.y
+            marker.pose.orientation.z = self.old_plan.poses[i].pose.orientation.z
+            marker.pose.orientation.w = self.old_plan.poses[i].pose.orientation.w
+            marker.color.r = 0.85
+            marker.color.g = 0.85
+            marker.color.b = 0.85
+            marker.color.a = 0.8
+            marker.scale.x = 0.1
+            marker.scale.y = 0.1
+            marker.scale.z = 0.1
+            #marker.frame_locked = False
+            marker.ns = "my_namespace"
+            self.old_path_marker_array.markers.append(marker)
 
 def main():
     # ----------main-----------
@@ -669,24 +1256,23 @@ def main():
     hixron_obj = hixron()
     
     # call explanation once to establish static map
-    hixron_obj.first_call = True
-    hixron_obj.test_explain()
-    hixron_obj.first_call = False
+    hixron_obj.setup()
     
     # sleep for x sec until Amar starts the video
-    d = rospy.Duration(1, 0)
+    d = rospy.Duration(5, 0)
     rospy.sleep(d)
     
     # send the goal pose to start navigation
     hixron_obj.send_goal_pose()
+    hixron_obj.visualize_goal_pose()
 
     # Loop to keep the program from shutting down unless ROS is shut down, or CTRL+C is pressed
     #rate = rospy.Rate(0.15)
     while not rospy.is_shutdown():
         #print('spinning')
         #rate.sleep()
-        #hixron_obj.test_explain()
         hixron_obj.move_objects()
+        hixron_obj.test_explain()
         #rospy.spin()
         
 main()

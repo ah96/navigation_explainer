@@ -39,7 +39,7 @@ def convert_csv_to_png(csv_file, png_file):
 
 
 # Usage example
-csv_file = 'map_1.csv'
-png_file = 'mapnew.png'
+csv_file = 'map_final.csv'
+png_file = 'map_final.png'
 
 convert_csv_to_png(csv_file, png_file)
