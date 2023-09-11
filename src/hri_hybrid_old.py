@@ -63,6 +63,34 @@ def quaternion_to_euler(x, y, z, w):
 class hixron(object):
     # constructor
     def __init__(self):
+        self.texts = ["Route found - straight path through desk_2, desk_1, bookshelf_1",
+                      "Heading straight",
+                      "Obstruction: 'chair_2'\nRerouting",
+                      "New route found\nThrough bookshelf_1, sofa_3. Turning around!",
+                      "Right turn\nAround the bookshelf_1",
+                      "Heading straight",
+                      "Moving obstruction: 'human_4'\n'Human_4, please move!'",
+                      "Obstruction cleared\nHeading straight",
+                      "Right turn",
+                      "Left turn",
+                      "Destination reached"
+                      ]
+        
+        self.texts_published = [False] * len(self.texts)
+
+        self.start_times = [6.00,
+                            9.50,
+                            12.00,
+                            15.50,
+                            20.00,
+                            27.00,
+                            37.50,
+                            45.00,
+                            52.50,
+                            58.00,
+                            64.50
+                           ]
+
         self.explanation_window = 2.0
 
         self.human_blinking = True
@@ -399,7 +427,6 @@ class hixron(object):
     # amcl (global) pose callback
     def amcl_callback(self, msg):
         #print('\namcl_callback')
-
         self.robot_pose_map = msg.pose.pose
 
     # move objects
@@ -462,7 +489,15 @@ class hixron(object):
                 #self.publish_semantic_labels_all()
                 #self.publish_semantic_labels_all()
 
-                #self.cancel_goal_pose()
+                self.cancel_goal_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
+                self.send_stop_pose()
                 self.send_stop_pose()
                 self.send_stop_pose()
                 self.send_stop_pose()
@@ -747,22 +782,25 @@ class hixron(object):
         self.publish_global_semantic_map()
         self.publish_global_semantic_map()
         self.publish_global_semantic_map()
-        self.publish_global_semantic_map()
-        self.publish_global_semantic_map()
-        self.publish_global_semantic_map()
-        self.publish_global_semantic_map()
-        self.publish_global_semantic_map()
-        self.publish_global_semantic_map()
-        self.publish_global_semantic_map()
         
         #self.publish_semantic_labels_all()
 
-        return
+        # sleep for x sec until Amar starts the video
+        #d = rospy.Duration(100, 0)
+        #rospy.sleep(d)
+
+        self.text_exp = "Target - Fetching coffee from coffee machine"
+        self.publish_textual_explanation()
+
+        #print('POCETAK!!!!')
+        self.running_time_start = time.time()
 
     # test whether explanation is needed
     def test_explain(self):
         self.create_visual_explanation()
         self.publish_visual_explanation()
+
+        self.create_textual_explanation()
 
     # create visual explanation
     def create_visual_explanation(self):
@@ -1053,7 +1091,7 @@ class hixron(object):
             #self.publish_global_semantic_map()
         #'''   
     
-        z = 0.0
+        z = 0.02
         a = 255                    
         points = []
 
@@ -1068,7 +1106,6 @@ class hixron(object):
                     continue
                 x = self.visual_explanation_origin_x + (size_1-i) * self.visual_explanation_resolution
                 y = self.visual_explanation_origin_y + j * self.visual_explanation_resolution
-                z = 0.01
                 r = int(self.visual_explanation[j, i, 0])
                 g = int(self.visual_explanation[j, i, 1])
                 b = int(self.visual_explanation[j, i, 2])
@@ -1247,6 +1284,26 @@ class hixron(object):
             #marker.frame_locked = False
             marker.ns = "my_namespace"
             self.old_path_marker_array.markers.append(marker)
+
+    # create visual explanation
+    def create_textual_explanation(self):
+        if self.texts_published[-1] == True:
+            return
+
+        self.running_time_end = time.time()
+
+        running_time = self.running_time_end - self.running_time_start
+
+        for i in range(0, len(self.texts)):
+            if running_time > self.start_times[i] and self.texts_published[i] == False:
+                self.text_exp = self.texts[i]
+                self.texts_published[i] = True
+                self.publish_textual_explanation()
+                break
+
+    # publish visual explanation
+    def publish_textual_explanation(self):
+        self.pub_text_exp.publish(self.text_exp)
 
 def main():
     # ----------main-----------
