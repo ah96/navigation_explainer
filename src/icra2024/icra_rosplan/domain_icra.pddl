@@ -153,19 +153,6 @@
 	:effect (at end (explaining_deviation_introvert ?r))
 )
 
-(:durative-action explain_failure_introvert
-	:parameters (?o - obstacle, ?r - robot, ?h - human)
-	:duration (= ?duration 2)
-	:condition (and 
-		(at start (stopped ?r))
-		(at start (question_received ?r))
-		(at start (failing ?r))
-		(at start (is_detected ?h))
-		(at start (is_introvert ?r))
-		)
-	:effect (at end (explaining_failure_introvert ?r))
-)
-
 (:durative-action explain_deviation_extrovert
 	:parameters (?o - obstacle, ?r - robot, ?h - human)
 	:duration (= ?duration 1)
@@ -175,6 +162,19 @@
 		(at start (is_extrovert ?r))
 		)
 	:effect (at end (explaining_deviation_extrovert ?r))
+)
+
+(:durative-action explain_failure_introvert
+	:parameters (?o - obstacle, ?r - robot, ?h - human)
+	:duration (= ?duration 5)
+	:condition (and 
+		(at start (stopped ?r))
+		(at start (question_received ?r))
+		(at start (failing ?r))
+		(at start (is_detected ?h))
+		(at start (is_introvert ?r))
+		)
+	:effect (at end (explaining_failure_introvert ?r))
 )
 
 (:durative-action explain_failure_extrovert
