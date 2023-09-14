@@ -2,20 +2,31 @@
 
 import pandas as pd
 from scipy.stats import ttest_ind
+import numpy as np
 
 t = pd.read_csv('t.csv')
 v = pd.read_csv('v.csv')
 vt = pd.read_csv('vt.csv')
 
-#view first five rows of DataFrame
-#t.head()
-#print(t)
 
-#define samples
-#group1 = df[df['method']=='A']
-#group2 = df[df['method']=='B']
+#age = pd.concat([v["Age"], vt["Age"]], axis = 0)
+#print('age statistics:', age.describe())
 
-#print(v[v.columns[17]])
+#sex = pd.concat([v["Sex"], vt["Sex"]], axis = 0)
+#print('sex statistics:', sex.describe())
+#print(np.unique(sex))
+
+# get all values in one column
+v_all = pd.concat([v.iloc[:, 17], v.iloc[:, 18], v.iloc[:, 19], v.iloc[:, 20], v.iloc[:, 21], v.iloc[:, 22], v.iloc[:, 23], v.iloc[:, 24]], axis = 0)
+print('v_median: ', v_all.median())
+print('v_statistics: ', v_all.describe())
+
+vt_all = pd.concat([vt.iloc[:, 17], vt.iloc[:, 18], vt.iloc[:, 19], vt.iloc[:, 20], vt.iloc[:, 21], vt.iloc[:, 22], vt.iloc[:, 23], vt.iloc[:, 24]], axis = 0)
+print('vt_median: ', vt_all.median())
+print('vt_statistics: ', vt_all.describe())
+
+test = ttest_ind(v_all, vt_all)
+print('t_test all = ', test)
 
 #perform independent two sample t-test
 print('\nt-test: textual versus visual:')
