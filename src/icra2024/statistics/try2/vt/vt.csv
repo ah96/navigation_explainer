@@ -1,0 +1,43 @@
+Response ID,Age,Sex,Nationality,Country of Residence,Completed level of education with specialization/major,Completed level of education with specialization/major [Comment],Profession,Profession [Other],Please specify your job title,Do you have previous experience with robotics?,Do you have previous experience with Explainable Artificial Intelligence?,Do you have color blindness?,I have understood the study design and task.,What was the first obstacle encountered by the robot during navigation?,What was the second obstacle encountered by the robot during navigation?,How was the second obstruction cleared?,I'm able to understand the actions/behavior of the robot with the given explanation.,I'm satisfied with the explanation provided.,The explanation provides sufficient details of the robot's actions and behaviors.,The explanation accurately describes the movement and actions of the robot.,The explanation provides reliable information about the robot's actions.,I could see the reasons behind choosing this method (a combination of visual and textual) for the explanation.,The explanation describes the robot's actions/behaviors efficiently.,The explanation describes the robot's actions and situation completely​​​​​.
+2,19,Male,Bosnian,Bosnia & Herzegovina,High School,Srednja elektrotehnička škola Sarajevo,Engineering,,N/A,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+4,19,Male,Bosnian,Bosnia and Herzegovina,High School,,Engineering,,Student,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+5,19,Male,Bosnia and Herzegovina,Bosnia and Herzegovina,High School,,Other,N/A,N/A,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,4,4,5,5,4
+6,22,Female,Bosniak,Bosnia & Herzegovina,High School,,Engineering,,Student at Faculty of Electrical Engineering Sarajevo,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+7,20,Male,Bosnian,Bosnia and Herzegovina,High School,,Other,N/A,N/A,No,Yes,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,4,5,5
+8,19,Female,BiH,BiH,High School,,Engineering,,Nemam posao,No,Yes,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,3,5,5
+9,21,Male,Bosnian,Bosnia & Herzegovina,High School,,Other,N/A,N/A,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,4,4,4,5,4
+14,21,Female,Bosniak,Bosnia and Herzegovina,High School,,Other,N/A,N/A,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,4
+15,21,Other,Bošnjak,Bosna i Hercegovina,Other,Elektrotehnički fakultet Sarajevo/Računarstvo i informatika ,Engineering,,N/A,No,No,No,Yes,Chair_2,Bookshelf_1,Rerouting,5,5,5,5,5,5,5,5
+16,27,Male,BOSNIAN,Bosnia and Herzegovina,Master Degree,,Engineering,,Software Engineer,Yes,No,No,Yes,Chair_2,Bookshelf_1,Rerouting,5,5,5,5,5,5,5,4
+17,20,Male,Bosniak,Bosnia and Herzegovina,High School,,Other,N/A,Unemployed (student),No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,4,4,5,4,5,4,4
+19,20,Male,Bosniak,Bosnia and Herzegovina,High School,,Engineering,,programmer,Yes,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+20,21,Male,BIH,Bosnia and Herzegovina,High School,,Engineering,,Computer Science and Informatics,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,4,4,5,5
+21,21,Male,Bosnian,Bosnia and Herzegovina,High School,Mathematics and Informatics ,Other,Student,Student,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,4,4
+23,21,Male,Bosnian and Herzegovinian,Bosnia and Herzegovina,High School,Currently enrolled in BA in Computer Science.,Other,N/A,N/A,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,4,5,4,5,5,4
+26,19,Male,Bosniak,Bosnia and Herzegovina,High School,"High School name : ""Prva gimnazija Sarajevo"", language major",Engineering,,Electrical engineering,No,Yes,No,Yes,Chair_2,Human_4,Moving human_4,5,4,4,5,5,5,4,4
+28,23,Female,Indian,Germany ,Bachelor Degree,Psychology ,Other,N/A,N/A,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,4,5,4,3,5,5
+32,27,Male,Bosnia and Herzegovina ,Bosnia and Herzegovina ,Master Degree,,Information Services,,Project Manager ,Yes,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,4
+34,27,Male,Bosnian/Croatian,Germany,Master Degree,"M.Sc. Electrical Engineering, Automation and Safety, Automation and Control Engineering",Engineering,,Scientific Researcher at University,Yes,No,No,Yes,Chair_2,Human_4,Rerouting,5,5,5,5,5,5,5,5
+35,24,Female,Indian,United Kingdom ,Master Degree,,Psychology,,Assistant psychologist ,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+36,29,Male,Bosnian,Bosnia and Herzegovina,Bachelor Degree,,Engineering,,Quality Assurance Engineer,No,No,No,Yes,Chair_2,Human_4,Moving human_4,4,4,5,5,5,4,5,4
+38,24,Female,Indian,India,Master Degree,,Psychology,,Therapist ,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+39,25,Male,Indian,Germany,Bachelor Degree,Computer Engineering,AI/Robotics,,Working student Embedded AI,Yes,No,No,Yes,Chair_2,Human_4,Moving human_4,5,4,4,4,5,5,5,4
+40,31,Male,Bosnian,Germany,Master Degree,,Engineering,,Software Engineer,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+41,29,Male,syrian,Germany,High School,,Engineering,,Computer science engineering,No,No,No,Yes,Chair_2,Human_4,Moving human_4,4,4,4,4,4,4,4,4
+42,22,Male,Bosnia and Herzegovina,Bosnia and Herzegovina,High School,,Other,N/A,Student,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+43,20,Female,Bosnia and Herzegovina,Bosnia and Herzegovina,High School,,Other,N/A,N/A,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,4,5,5,4,5,5
+44,24,Male,Indian,Germany,Bachelor Degree,,Information Services,,Software Developer,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,4,4,3,3,5,5,3
+47,37,Female,Egyptian,Egypt,Bachelor Degree,,Other,Computer science,Video editor,No,No,No,Yes,Chair_2,Bookshelf_1,Rerouting,4,4,4,4,4,4,4,4
+48,23,Male,Bosnian,Bosnia and Herzegovina ,Other,Student,Other,N/A,N/A,No,Yes,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,4,5
+49,26,Male,Spanish,Spain,Master Degree,,Education,,Predoctoral Researcher,No,No,No,Yes,Chair_2,Bookshelf_1,Rerouting,4,4,4,5,5,5,5,5
+51,20,Female,Bosnian,Bosnia and Herzegovina,High School,I went to medical high school but currently I'm in my final year at the Faculty of Electrical Engineering,Other,N/A,Student,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+52,20,Male,Bosnian,Bosnia and Herzegovina,High School,,Engineering,,Student,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+55,21,Female,German ,Germany ,High School,,Education,,Teaching ,Yes,Yes,No,Yes,Chair_2,Human_4,Moving human_4,3,3,3,3,3,3,3,3
+56,20,Male,Bosnia and Herzegovina,Bosnia and Herzegovina,High School,,Engineering,,Student,No,Yes,No,Yes,Chair_2,Human_4,Moving human_4,5,4,4,4,4,5,5,5
+58,29,Female,Bosnian,Bosnia and Herzegovina,Master Degree,,Engineering,,Data Analyst,Yes,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,5,5,5
+59,20,Male,Bosnian,Bosnia and Herzegovina,High School,,Engineering,,Student,No,No,No,Yes,Chair_2,Human_4,Moving human_4,5,5,5,5,5,4,5,4
+60,24,Male,Bosnian ,Bosnia and Herzegovina,High School,,Engineering,,Software developer,No,No,No,Yes,Chair_2,Human_4,Moving human_4,4,5,3,4,5,5,4,4
+61,24,Male,Indian,Germany,Bachelor Degree,,Engineering,,Student,No,No,No,Yes,Chair_2,Human_4,Moving human_4,4,3,4,4,4,4,4,4
+63,22,Male,Bosniak,Bosnia and Herzegovina,Other,Associate degree,Other,N/A,N/A,No,Yes,No,Yes,Chair_2,Human_4,Moving human_4,5,4,4,5,4,4,5,3
+64,25,Male,Bosnia and Herzegovina,Austria,Bachelor Degree,Automatic Control and Mechatronics,Engineering,,ASIC Pre-Silicon Digital design and Verification,Yes,No,No,Yes,Chair_2,Human_4,Moving human_4,5,3,4,4,4,4,4,3
+65,20,Female,BiH,Bosna i Hercegovina,High School,,Other,N/A,Student,Yes,No,No,Yes,Chair_2,Human_4,Moving human_4,5,4,4,4,5,4,4,4
