@@ -17,11 +17,11 @@ vt = pd.read_csv('vt.csv')
 #print(np.unique(sex))
 
 # get all values in one column
-v_all = pd.concat([v.iloc[:, 17], v.iloc[:, 18], v.iloc[:, 19], v.iloc[:, 20], v.iloc[:, 21], v.iloc[:, 22], v.iloc[:, 23], v.iloc[:, 24]], axis = 0)
+v_all = pd.concat([v.iloc[:, 17], v.iloc[:, 18], v.iloc[:, 19], v.iloc[:, 20], v.iloc[:, 21], v.iloc[:, 22], v.iloc[:, 23]], axis = 0)
 print('v_median: ', v_all.median())
 print('v_statistics: ', v_all.describe())
 
-vt_all = pd.concat([vt.iloc[:, 17], vt.iloc[:, 18], vt.iloc[:, 19], vt.iloc[:, 20], vt.iloc[:, 21], vt.iloc[:, 22], vt.iloc[:, 23], vt.iloc[:, 24]], axis = 0)
+vt_all = pd.concat([vt.iloc[:, 17], vt.iloc[:, 18], vt.iloc[:, 19], vt.iloc[:, 20], vt.iloc[:, 21], vt.iloc[:, 22], vt.iloc[:, 23]], axis = 0)
 print('vt_median: ', vt_all.median())
 print('vt_statistics: ', vt_all.describe())
 

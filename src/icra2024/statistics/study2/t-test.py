@@ -8,20 +8,20 @@ i = pd.read_csv('i.csv')
 e = pd.read_csv('e.csv')
 
 
-#age = pd.concat([i["Age"], e["Age"]], axis = 0)
-#print('age statistics:', age.describe())
+age = pd.concat([i["Age"], e["Age"]], axis = 0)
+print('age statistics:', age.describe())
 
-#sex = pd.concat([i["Sex"], e["Sex"]], axis = 0)
-#print('sex statistics:', sex.describe())
-#print(np.unique(sex))
+sex = pd.concat([i["Sex"], e["Sex"]], axis = 0)
+print('sex statistics:', sex.describe())
+print(np.unique(sex))
 
 
 # get all values in one column
-i_all = pd.concat([i.iloc[:, 18], i.iloc[:, 19], i.iloc[:, 20], i.iloc[:, 21], i.iloc[:, 22], i.iloc[:, 23], i.iloc[:, 24], i.iloc[:, 25]], axis = 0)
+i_all = pd.concat([i.iloc[:, 18], i.iloc[:, 19], i.iloc[:, 20], i.iloc[:, 21], i.iloc[:, 22], i.iloc[:, 23], i.iloc[:, 24]], axis = 0)
 print('i_median: ', i_all.median())
 print('i_statistics: ', i_all.describe())
 
-e_all = pd.concat([e.iloc[:, 18], e.iloc[:, 19], e.iloc[:, 20], e.iloc[:, 21], e.iloc[:, 22], e.iloc[:, 23], e.iloc[:, 24], e.iloc[:, 25]], axis = 0)
+e_all = pd.concat([e.iloc[:, 18], e.iloc[:, 19], e.iloc[:, 20], e.iloc[:, 21], e.iloc[:, 22], e.iloc[:, 23], e.iloc[:, 24]], axis = 0)
 print('e_median: ', e_all.median())
 print('e_statistics: ', e_all.describe())
 
