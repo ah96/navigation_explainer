@@ -15,7 +15,7 @@
   <arg name="tuck_arm"  default="true"/>
 
   <arg name="lost" default="false"/>
-  <arg name="gzpose" default="-x -9.0 -y 9.0 -z 0.0 -R 0.0 -P 0.0 -Y  0.0" unless="$(arg lost)"/>
+  <arg name="gzpose" default="-x 0.0  -y   0.0 -z  0.0   -R 0.0 -P 0.0 -Y  0.0" unless="$(arg lost)"/>
   <arg name="gzpose" default="-x 0.78 -y -11.1 -z -0.003 -R 0.0 -P 0.0 -Y 70.0" if="$(arg lost)"/>
 
   <arg name="planner"        default="base"/>
@@ -76,11 +76,10 @@
   </group>
      <group unless="$(arg advanced_navigation)">
       <node name="rviz" pkg="rviz" type="rviz" if="$(arg rviz)"
-            args="-d $(find tiago_2dnav)/config/rviz/hixron_explanation_layer.rviz"/>
+            args="-d $(find tiago_2dnav)/config/rviz/hixron_explanation_layer.rviz"/>       
     </group>
   </group>
-  <!--args="-d $(find tiago_2dnav)/config/rviz/navigation$(arg sim_sufix).rviz"/>-->
-  <!--args="-d $(find tiago_2dnav)/config/rviz/hixron_explanation_layer.rviz"/>-->
+<!-- args="-d $(find tiago_2dnav)/config/rviz/navigation$(arg sim_sufix).rviz"/>-->
 
   <group unless="$(arg public_sim)">
     <include file="$(find pal_loc_measure)/launch/pal_loc_measure.launch">
@@ -92,6 +91,7 @@
   <group if="$(arg public_sim)">
     <include file="$(find tiago_laser_sensors)/launch/rgbd_cloud_laser.launch">
       <arg name="cloud" value="/xtion/depth_registered/points"/>
+      <arg name="scan" value="/rgbd_scan"/>
     </include>
   </group>
 
