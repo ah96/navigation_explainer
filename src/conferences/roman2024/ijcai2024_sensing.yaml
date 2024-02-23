@@ -1,0 +1,12 @@
+functions:
+    - $(find rosplan_demos)/common/ijcai2024_sensing.py
+
+topics:
+  robot_at:
+    params:
+        - tiago
+        - '*'
+    topic: /amcl_pose
+    msg_type: geometry_msgs/PoseWithCovarianceStamped
+    operation: "'wp0' in msg.data and msg.data.split(' ')[1] == 'yes'"
+    

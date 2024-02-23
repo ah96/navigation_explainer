@@ -1,0 +1,140 @@
+domain ijcai2024 {
+    
+    types {
+        user: object;
+        robot: object;
+    };
+
+    pvariables {
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // Non-fluents
+
+        // robot non-fluents
+        // error happened
+        error(robot): { non-fluent, bool, default = true };
+
+        // human response preferences (probablities)
+        HUMAN_WANTS_VISUAL_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+        HUMAN_WANTS_TEXTUAL_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+        HUMAN_WANTS_RICH_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+        HUMAN_WANTS_POOR_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+        HUMAN_WANTS_SHORT_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+        HUMAN_WANTS_LONG_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+        HUMAN_WANTS_LOCAL_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+        HUMAN_WANTS_GLOBAL_RESPONSE_PROB(user): { non-fluent, real, default = 0.0 };
+
+
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // State fluents
+
+        // ROBOT
+        // goal
+        goal: { state-fluent, bool, default = false };
+
+        // robot either explain visually or textually, and when it does than "the modality has been explained/used"
+        explained_visual(robot, user): { state-fluent, bool, default = false };
+        explained_textual(robot, user): { state-fluent, bool, default = false }; // user preferred
+        explained_modality(robot, user): { state-fluent, bool, default = false };
+
+        // robot either explain rich or poor, and when it does than "the detail_level has been explained/used"
+        explained_rich(robot, user): { state-fluent, bool, default = false };
+        explained_poor(robot, user): { state-fluent, bool, default = false }; // user preferred
+        explained_detail(robot, user): { state-fluent, bool, default = false };
+
+        // robot either explain short or long, and when it does than "the length has been explained/used"
+        explained_short(robot, user): { state-fluent, bool, default = false };
+        explained_long(robot, user): { state-fluent, bool, default = false };
+        explained_length(robot, user): { state-fluent, bool, default = false };
+
+        // robot either explain local or global, and when it does than "the scope has been explained"
+        explained_local(robot, user): { state-fluent, bool, default = false };
+        explained_global(robot, user): { state-fluent, bool, default = false };
+        explained_scope(robot, user): { state-fluent, bool, default = false };
+
+        // USER
+        // user response preference variables = Bernoulli(respective_probability)
+        explanation_visual_wanted(user): { state-fluent, bool, default = false };
+        explanation_textual_wanted(user): { state-fluent, bool, default = false };
+        explanation_rich_wanted(user): { state-fluent, bool, default = false };
+        explanation_poor_wanted(user): { state-fluent, bool, default = false };
+        explanation_short_wanted(user): { state-fluent, bool, default = false };
+        explanation_long_wanted(user): { state-fluent, bool, default = false };
+        explanation_local_wanted(user): { state-fluent, bool, default = false };
+        explanation_global_wanted(user): { state-fluent, bool, default = false };
+
+
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // Action fluents
+        // action for every of 8 explanation property variables
+        explain_visual(robot, user): { action-fluent, bool, default = false };
+        explain_textual(robot, user): { action-fluent, bool, default = false };
+
+        explain_rich(robot, user): { action-fluent, bool, default = false };
+        explain_poor(robot, user): { action-fluent, bool, default = false };
+
+        explain_short(robot, user): { action-fluent, bool, default = false };
+        explain_long(robot, user): { action-fluent, bool, default = false };
+
+        explain_local(robot, user): { action-fluent, bool, default = false };
+        explain_global(robot, user): { action-fluent, bool, default = false };
+    };
+
+    cpfs {
+        // propagation of state fluents
+
+        // ROBOT
+        // goal is true when robot has explained: modality, detail_level, length, scope
+        goal' = (forall_{?r: robot, ?u: user} [ ( explained_modality(?r, ?u) ^ explained_detail(?r, ?u) ^ explained_length(?r, ?u) ^ explained_scope(?r, ?u) ) ]) | goal;
+
+        // robot explanation vars
+        // for instance visual is explained if an action explain_visual is called, and so on for every state-variable
+        explained_visual'(?r, ?u) = explain_visual(?r, ?u) | explained_visual(?r, ?u);
+        explained_textual'(?r, ?u) = explain_textual(?r, ?u) | explained_textual(?r, ?u);
+        // modality is explained when either visual or textual is explained
+        explained_modality'(?r, ?u) = explain_visual(?r, ?u) | explain_textual(?r, ?u) | explained_modality(?r, ?u);
+
+        explained_rich'(?r, ?u) = explain_rich(?r, ?u) | explained_rich(?r, ?u);
+        explained_poor'(?r, ?u) = explain_poor(?r, ?u) | explained_poor(?r, ?u);
+        explained_detail'(?r, ?u) = explain_rich(?r, ?u) | explain_poor(?r, ?u) | explained_detail(?r, ?u);
+
+        explained_short'(?r, ?u) = explain_short(?r, ?u) | explained_short(?r, ?u);
+        explained_long'(?r, ?u) = explain_long(?r, ?u) | explained_long(?r, ?u);
+        explained_length'(?r, ?u) = explain_short(?r, ?u) | explain_long(?r, ?u) | explained_length(?r, ?u);
+
+        explained_local'(?r, ?u) = explain_local(?r, ?u) | explained_local(?r, ?u);
+        explained_global'(?r, ?u) = explain_global(?r, ?u) | explained_global(?r, ?u);
+        explained_scope'(?r, ?u) = explain_local(?r, ?u) | explain_global(?r, ?u) | explained_scope(?r, ?u);
+        
+        // user explanation preference variables based on probablities
+        explanation_visual_wanted'(?u) = Bernoulli(HUMAN_WANTS_VISUAL_RESPONSE_PROB(?u));
+        explanation_textual_wanted'(?u) = Bernoulli(HUMAN_WANTS_TEXTUAL_RESPONSE_PROB(?u));
+        explanation_rich_wanted'(?u) = Bernoulli(HUMAN_WANTS_RICH_RESPONSE_PROB(?u));
+        explanation_poor_wanted'(?u) = Bernoulli(HUMAN_WANTS_POOR_RESPONSE_PROB(?u));
+        explanation_short_wanted'(?u) = Bernoulli(HUMAN_WANTS_SHORT_RESPONSE_PROB(?u));
+        explanation_long_wanted'(?u) = Bernoulli(HUMAN_WANTS_LONG_RESPONSE_PROB(?u));
+        explanation_local_wanted'(?u) = Bernoulli(HUMAN_WANTS_LOCAL_RESPONSE_PROB(?u));
+        explanation_global_wanted'(?u) = Bernoulli(HUMAN_WANTS_GLOBAL_RESPONSE_PROB(?u));
+    };
+
+    action-preconditions {
+        // preconditions for actions
+        // for instance, explain_visual happens when error happened, visual explanation is wanted from user and visual has not been used yet
+        forall_{?r: robot, ?u: user} [explain_visual(?r, ?u) => ( error(?r) ^ explanation_visual_wanted(?u) ^ ~explained_visual(?r, ?u) )];
+        forall_{?r: robot, ?u: user} [explain_textual(?r, ?u) => ( error(?r) ^ explanation_textual_wanted(?u) ^ ~explained_textual(?r, ?u) )];
+
+        // to make sequential decision-making, explain_rich (or poor) happens after modality has been chosen (visual and textual)
+        forall_{?r: robot, ?u: user} [explain_rich(?r, ?u) => ( explanation_rich_wanted(?u) ^ explained_modality(?r, ?u) ^ ~explained_rich(?r, ?u) )];
+        forall_{?r: robot, ?u: user} [explain_poor(?r, ?u) => ( explanation_poor_wanted(?u) ^ explained_modality(?r, ?u) ^ ~explained_poor(?r, ?u) )];
+
+        forall_{?r: robot, ?u: user} [explain_short(?r, ?u) => ( explanation_short_wanted(?u) ^ explained_detail(?r, ?u) ^ ~explained_short(?r, ?u) )];
+        forall_{?r: robot, ?u: user} [explain_long(?r, ?u) => ( explanation_long_wanted(?u) ^ explained_detail(?r, ?u) ^ ~explained_long(?r, ?u) )];
+
+        forall_{?r: robot, ?u: user} [explain_local(?r, ?u) => ( explanation_local_wanted(?u) ^ explained_length(?r, ?u) ^ ~explained_local(?r, ?u) )];
+        forall_{?r: robot, ?u: user} [explain_global(?r, ?u) => ( explanation_global_wanted(?u) ^ explained_length(?r, ?u) ^ ~explained_global(?r, ?u) )];
+    };
+
+    // 1 reward for reaching goal, 0 in all other cases
+	//reward = [sum_{?r : robot} (goal(?r))];
+	reward = if (goal) then 1
+	        else 0;
+}

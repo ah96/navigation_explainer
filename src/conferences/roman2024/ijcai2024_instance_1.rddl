@@ -1,0 +1,54 @@
+non-fluents nf_ijcai2024 {
+	domain = ijcai2024;
+	objects {
+                robot: {tiago};
+		user: {user_1};
+	};
+	
+	non-fluents {
+                // robot
+                error(tiago) = true;
+
+	    // user_1
+                HUMAN_WANTS_VISUAL_RESPONSE_PROB(user_1) = 0.1;
+                HUMAN_WANTS_TEXTUAL_RESPONSE_PROB(user_1) = 0.6;
+                HUMAN_WANTS_RICH_RESPONSE_PROB(user_1) = 0.2;
+                HUMAN_WANTS_POOR_RESPONSE_PROB(user_1) = 0.7;
+                HUMAN_WANTS_SHORT_RESPONSE_PROB(user_1) = 0.3;
+                HUMAN_WANTS_LONG_RESPONSE_PROB(user_1) = 0.8;
+                HUMAN_WANTS_LOCAL_RESPONSE_PROB(user_1) = 0.1;
+                HUMAN_WANTS_GLOBAL_RESPONSE_PROB(user_1) = 0.9;
+	};
+}
+
+instance ijcai2024_instance_1 {
+	domain = ijcai2024;
+	non-fluents = nf_ijcai2024;
+	init-state {
+        goal = false;
+
+        // robot explanation modality
+        explained_visual(tiago, user_1) = false;
+        explained_textual(tiago, user_1) = false;
+        explained_modality(tiago, user_1) = false;
+
+        // robot explanation detail level
+        explained_rich(tiago, user_1) = false;
+        explained_poor(tiago, user_1) = false;
+        explained_detail(tiago, user_1) = false;
+
+        // robot explanation length
+        explained_short(tiago, user_1) = false;
+        explained_long(tiago, user_1) = false;
+        explained_length(tiago, user_1) = false;
+
+        // robot explanation scope
+        explained_local(tiago, user_1) = false;
+        explained_global(tiago, user_1) = false;
+        explained_scope(tiago, user_1) = false;
+	};
+
+	max-nondef-actions = 1;
+	horizon  = 15;
+	discount = 1.0;
+}

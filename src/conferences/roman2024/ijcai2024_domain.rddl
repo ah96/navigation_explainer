@@ -1,0 +1,176 @@
+domain ijcai2024 {
+    
+    types {
+        human: object;
+        robot: object;
+        waypoint: object; 
+    };
+
+    pvariables {
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // Non-fluents
+
+        // error happened
+        // error(robot): { non-fluent, bool, default = true };
+        
+        HUMAN_AT(human, waypoint): { non-fluent, bool, default = false };
+        BOOK_AT(waypoint): { non-fluent, bool, default = false };
+
+        // human response preferences (probablities)
+        VISUAL_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+        TEXTUAL_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+        POOR_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+        RICH_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+        SHORT_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+        LONG_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+        LOCAL_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+        GLOBAL_EXPLANATION_PROB(human): { non-fluent, real, default = 0.5 };
+
+
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // State fluents
+
+        // goal
+        goal: { state-fluent, bool, default = false };
+
+        // ROBOT
+        robot_at(robot, waypoint): { state-fluent, bool, default = false };
+        book_fetched(robot): { state-fluent, bool, default = false };
+
+        // robot either choose visually or textually, and when it does than "the modality has been chosen/used"
+        chosen_visual(robot, human): { state-fluent, bool, default = false };
+        chosen_textual(robot, human): { state-fluent, bool, default = false };
+        chosen_modality(robot, human): { state-fluent, bool, default = false };
+
+        // robot either choose rich or poor, and when it does than "the detail_level has been chosen/used"
+        chosen_poor(robot, human): { state-fluent, bool, default = false };
+        chosen_rich(robot, human): { state-fluent, bool, default = false };
+        chosen_detail(robot, human): { state-fluent, bool, default = false };
+
+        // robot either choose short or long, and when it does than "the length has been chosen/used"
+        chosen_short(robot, human): { state-fluent, bool, default = false };
+        chosen_long(robot, human): { state-fluent, bool, default = false };
+        chosen_length(robot, human): { state-fluent, bool, default = false };
+
+        // robot either choose local or global, and when it does than "the scope has been chosen/used"
+        chosen_local(robot, human): { state-fluent, bool, default = false };
+        chosen_global(robot, human): { state-fluent, bool, default = false };
+        chosen_scope(robot, human): { state-fluent, bool, default = false };
+
+        explained(robot, human): { state-fluent, bool, default = false };
+
+        // human
+        // human response preference variables = Bernoulli(respective_probability)
+        explanation_visual_wanted(human): { state-fluent, bool, default = false };
+        explanation_textual_wanted(human): { state-fluent, bool, default = false };
+        explanation_poor_wanted(human): { state-fluent, bool, default = false };
+        explanation_rich_wanted(human): { state-fluent, bool, default = false };
+        explanation_short_wanted(human): { state-fluent, bool, default = false };
+        explanation_long_wanted(human): { state-fluent, bool, default = false };
+        explanation_local_wanted(human): { state-fluent, bool, default = false };
+        explanation_global_wanted(human): { state-fluent, bool, default = false };
+
+
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // Action fluents
+        // action for every of 8 explanation property variables
+        choose_visual(robot, human): { action-fluent, bool, default = false };
+        choose_textual(robot, human): { action-fluent, bool, default = false };
+
+        choose_poor(robot, human): { action-fluent, bool, default = false };
+        choose_rich(robot, human): { action-fluent, bool, default = false };
+
+        choose_short(robot, human): { action-fluent, bool, default = false };
+        choose_long(robot, human): { action-fluent, bool, default = false };
+
+        choose_local(robot, human): { action-fluent, bool, default = false };
+        choose_global(robot, human): { action-fluent, bool, default = false };
+
+        goto_waypoint(robot, waypoint, waypoint): { action-fluent, bool, default = false }; // robot from to
+        fetch_book(robot): { action-fluent, bool, default = false };
+        explain(robot, human): { action-fluent, bool, default = false };
+    };
+
+    cpfs {
+        // propagation of state fluents
+        robot_at'(?r, ?w) = if (exists_{?w1: waypoint} (goto_waypoint(?r, ?w1, ?w))) then true 
+                            else if (exists_{?w1: waypoint} (goto_waypoint(?r, ?w, ?w1))) then false
+                            else robot_at(?r, ?w);
+
+        // ROBOT
+        // goal is true when robot has chosen: modality, detail_level, length, scope
+        goal' = (forall_{?r: robot, ?h: human} [ ( (exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)]) ^ explained(?r, ?h) ^ chosen_modality(?r, ?h) ^ chosen_detail(?r, ?h) ^ chosen_length(?r, ?h) ^ chosen_scope(?r, ?h) ^ book_fetched(?r)) ]) | goal;
+        //goal' = (exists_{?r: robot, ?h: human} [ explained(?r, ?h) ]) | goal;
+
+        // robot explanation vars
+        // for instance visual is chosen if an action choose_visual is called, and so on for every state-variable
+        chosen_visual'(?r, ?h) = choose_visual(?r, ?h) | chosen_visual(?r, ?h);
+        chosen_textual'(?r, ?h) = choose_textual(?r, ?h) | chosen_textual(?r, ?h);
+        // modality is chosen when either visual or textual is chosen
+        chosen_modality'(?r, ?h) = choose_visual(?r, ?h) | choose_textual(?r, ?h) | chosen_modality(?r, ?h);
+
+        chosen_poor'(?r, ?h) = choose_poor(?r, ?h) | chosen_poor(?r, ?h);
+        chosen_rich'(?r, ?h) = choose_rich(?r, ?h) | chosen_rich(?r, ?h);
+        chosen_detail'(?r, ?h) = choose_rich(?r, ?h) | choose_poor(?r, ?h) | chosen_detail(?r, ?h);
+
+        chosen_short'(?r, ?h) = choose_short(?r, ?h) | chosen_short(?r, ?h);
+        chosen_long'(?r, ?h) = choose_long(?r, ?h) | chosen_long(?r, ?h);
+        chosen_length'(?r, ?h) = choose_short(?r, ?h) | choose_long(?r, ?h) | chosen_length(?r, ?h);
+
+        chosen_local'(?r, ?h) = choose_local(?r, ?h) | chosen_local(?r, ?h);
+        chosen_global'(?r, ?h) = choose_global(?r, ?h) | chosen_global(?r, ?h);
+        chosen_scope'(?r, ?h) = choose_local(?r, ?h) | choose_global(?r, ?h) | chosen_scope(?r, ?h);
+        
+        // human explanation preference variables based on probablities
+        explanation_visual_wanted'(?h) = Bernoulli(VISUAL_EXPLANATION_PROB(?h));
+        explanation_textual_wanted'(?h) = Bernoulli(TEXTUAL_EXPLANATION_PROB(?h));
+        explanation_poor_wanted'(?h) = Bernoulli(POOR_EXPLANATION_PROB(?h));
+        explanation_rich_wanted'(?h) = Bernoulli(RICH_EXPLANATION_PROB(?h));
+        explanation_short_wanted'(?h) = Bernoulli(SHORT_EXPLANATION_PROB(?h));
+        explanation_long_wanted'(?h) = Bernoulli(LONG_EXPLANATION_PROB(?h));
+        explanation_local_wanted'(?h) = Bernoulli(LOCAL_EXPLANATION_PROB(?h));
+        explanation_global_wanted'(?h) = Bernoulli(GLOBAL_EXPLANATION_PROB(?h));
+
+        book_fetched'(?r) = if (fetch_book(?r)) then true
+                            else book_fetched(?r);
+
+        explained'(?r, ?h) = explain(?r, ?h) | explained(?r, ?h);
+    };
+
+    action-preconditions {
+        // preconditions for actions
+        // for instance, choose_visual happens when visual explanation is wanted from human and visual has not been used yet
+        forall_{?r: robot, ?h: human} [choose_visual(?r, ?h) => ( ~goal ^ explanation_visual_wanted(?h) ^ ~chosen_visual(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)])];
+        forall_{?r: robot, ?h: human} [choose_textual(?r, ?h) => ( ~goal ^ explanation_textual_wanted(?h) ^ ~chosen_textual(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)])];
+
+        // to make sequential decision-making, choose_rich (or poor) happens after modality has been chosen (visual and textual)
+        forall_{?r: robot, ?h: human} [choose_rich(?r, ?h) => ( ~goal ^ explanation_rich_wanted(?h) ^ chosen_modality(?r, ?h) ^ ~chosen_rich(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)] ^ book_fetched(?r))];
+        forall_{?r: robot, ?h: human} [choose_poor(?r, ?h) => ( ~goal ^ explanation_poor_wanted(?h) ^ chosen_modality(?r, ?h) ^ ~chosen_poor(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)] ^ book_fetched(?r))];
+
+        forall_{?r: robot, ?h: human} [choose_short(?r, ?h) => ( ~goal ^ explanation_short_wanted(?h) ^ chosen_detail(?r, ?h) ^ ~chosen_short(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)] ^ book_fetched(?r))];
+        forall_{?r: robot, ?h: human} [choose_long(?r, ?h) => ( ~goal ^ explanation_long_wanted(?h) ^ chosen_detail(?r, ?h) ^ ~chosen_long(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)] ^ book_fetched(?r))];
+
+        forall_{?r: robot, ?h: human} [choose_local(?r, ?h) => ( ~goal ^ explanation_local_wanted(?h) ^ chosen_length(?r, ?h) ^ ~chosen_local(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)] ^ book_fetched(?r))];
+        forall_{?r: robot, ?h: human} [choose_global(?r, ?h) => ( ~goal ^ explanation_global_wanted(?h) ^ chosen_length(?r, ?h) ^ ~chosen_global(?r, ?h) ^ exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)] ^ book_fetched(?r))];
+
+        // A robot must be in a position to move to another
+        forall_{?r: robot, ?wf: waypoint, ?wt: waypoint} [goto_waypoint(?r, ?wf, ?wt) => (~goal ^ robot_at(?r, ?wf))];
+        
+        // A robot can not move to its current position
+        forall_{?r: robot, ?wf: waypoint, ?wt: waypoint} [goto_waypoint(?r, ?wf, ?wt) => (?wf ~= ?wt)];
+
+        // A robot can not be in two places at the same time
+        forall_{?r: robot, ?w1: waypoint, ?w2: waypoint} [?w1 == ?w2 | (robot_at(?r, ?w1) => ~robot_at(?r, ?w2))];
+
+        // To fetch a book, a robot must be at a book's location
+        forall_{?r: robot} [fetch_book(?r) => (exists_{?w: waypoint} [~goal ^ robot_at(?r, ?w) ^ BOOK_AT(?w)])];
+
+        // To explain, a robot must be at a human's location
+        forall_{?r: robot, ?h: human} [explain(?r, ?h) => ( ~goal ^ chosen_modality(?r, ?h) ^ chosen_detail(?r, ?h) ^ chosen_length(?r, ?h) ^ chosen_scope(?r, ?h) ^ book_fetched(?r) )];
+    };
+
+    // 1 reward for reaching goal, 0 in all other cases
+	reward = if (goal) then 1000 else -100;
+	//reward = if (goal ^ forall_{?r: robot, ?h: human} (exists_{?w: waypoint} [robot_at(?r, ?w) ^ HUMAN_AT(?h, ?w)]) )  then 100
+	//       else -10;
+}

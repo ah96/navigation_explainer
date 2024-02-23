@@ -1,0 +1,42 @@
+non-fluents nf_ijcai2024 {
+	domain = ijcai2024;
+	objects {
+                robot: {tiago};
+		human: {human_1};
+                waypoint: {start_location, book_location, visitor_location};
+	};
+	
+	non-fluents {
+                // robot
+                // error(tiago) = true;
+
+                BOOK_AT(book_location);
+        
+	        // human_1
+                HUMAN_AT(human_1, start_location) = false;
+                HUMAN_AT(human_1, book_location) = false;
+                HUMAN_AT(human_1, visitor_location);
+                
+                VISUAL_EXPLANATION_PROB(human_1) = 0.4;
+                TEXTUAL_EXPLANATION_PROB(human_1) = 0.6;
+                POOR_EXPLANATION_PROB(human_1) = 0.7;
+                RICH_EXPLANATION_PROB(human_1) = 0.3;
+                SHORT_EXPLANATION_PROB(human_1) = 0.2;
+                LONG_EXPLANATION_PROB(human_1) = 0.8;
+                LOCAL_EXPLANATION_PROB(human_1) = 0.1;
+                GLOBAL_EXPLANATION_PROB(human_1) = 0.9;
+	};
+}
+
+instance ijcai2024_instance {
+	domain = ijcai2024;
+	non-fluents = nf_ijcai2024;
+	
+        init-state {
+                robot_at(tiago, start_location);  
+	};
+
+	max-nondef-actions = 1;
+	horizon  = 15;
+	discount = 1.0;
+}

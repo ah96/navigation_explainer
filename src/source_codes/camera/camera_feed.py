@@ -40,6 +40,8 @@ def image_raw_callback(img):
     # get image from the topic and convert it to cv2 format
     image = np.frombuffer(img.data, dtype=np.uint8).reshape(img.height, img.width, -1)
 
+    image = image[...,::-1].copy()
+
     # save image for dataset
     saveImage(image)
 
@@ -72,7 +74,7 @@ def image_depth_callback(img):
 if __name__ == '__main__':
     rospy.init_node('camera_feed', anonymous=True)
     image_raw_sub = rospy.Subscriber('/xtion/rgb/image_raw', Image, image_raw_callback)
-    image_depth_sub = rospy.Subscriber('/xtion/depth_registered/image_raw', Image, image_depth_callback) #"32FC1"
+    #image_depth_sub = rospy.Subscriber('/xtion/depth_registered/image_raw', Image, image_depth_callback) #"32FC1"
     #ts = message_filters.ApproximateTimeSynchronizer([image_sub, info_sub], 10, 0.2)
     #ts.registerCallback(callback)
     rospy.spin()

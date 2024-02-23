@@ -1,0 +1,65 @@
+digraph plan {
+0[ label="plan_start",style=filled,fillcolor=black,fontcolor=white];
+1[ label="goto_waypoint_start
+(tiago,start_location,book_location)"];
+2[ label="goto_waypoint_end
+(tiago,start_location,book_location)"];
+3[ label="fetch_book_start
+(tiago)"];
+4[ label="fetch_book_end
+(tiago)"];
+5[ label="goto_waypoint_start
+(tiago,book_location,visitor_location)"];
+6[ label="goto_waypoint_end
+(tiago,book_location,visitor_location)"];
+7[ label="choose_visual_start
+(tiago,human_1)"];
+8[ label="choose_visual_end
+(tiago,human_1)"];
+9[ label="choose_poor_start
+(tiago,human_1)"];
+10[ label="choose_poor_end
+(tiago,human_1)"];
+11[ label="choose_long_start
+(tiago,human_1)"];
+12[ label="choose_long_end
+(tiago,human_1)"];
+13[ label="choose_global_start
+(tiago,human_1)"];
+14[ label="choose_global_end
+(tiago,human_1)"];
+15[ label="explain_start
+(tiago,human_1)"];
+16[ label="explain_end
+(tiago,human_1)"];
+17[ label="goto_waypoint_start
+(tiago,visitor_location,book_location)"];
+18[ label="goto_waypoint_end
+(tiago,visitor_location,book_location)"];
+"0" -> "1" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"1" -> "2" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"0" -> "3" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"3" -> "4" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"0" -> "4" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"2" -> "5" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"5" -> "6" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"2" -> "6" [ label="[0.001, inf]" , penwidth=2, color="blue"]
+"0" -> "7" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"7" -> "8" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"8" -> "9" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"9" -> "10" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"10" -> "11" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"11" -> "12" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"12" -> "13" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"13" -> "14" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"8" -> "15" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"10" -> "15" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"12" -> "15" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"14" -> "15" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"4" -> "15" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"15" -> "16" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"0" -> "16" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"6" -> "17" [ label="[0.001, inf]" , penwidth=2, color="green"]
+"17" -> "18" [ label="[0.001, 0.001]" , penwidth=2, color="red"]
+"6" -> "18" [ label="[0.001, inf]" , penwidth=2, color="blue"]
+}
