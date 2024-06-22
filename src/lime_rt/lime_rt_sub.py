@@ -195,11 +195,12 @@ class lime_rt_sub(object):
         segment_start = time.time()
 
         # find local_costmap_rgb
-        local_costmap_rgb = gray2rgb(self.local_costmap)
+        #local_costmap_rgb = gray2rgb(self.local_costmap)
 
         # Find segments_slic
-        segments_slic = slic(local_costmap_rgb, n_segments=8, compactness=100.0, max_iter=1000, sigma=0, spacing=None, multichannel=True, convert2lab=False, enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False)#, start_label=1, mask=None)
-                        #slic(image, n_segments=100, compactness=10.0, max_iter=10, sigma=0, spacing=None, multichannel=True, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False) #0.14.2
+        segments_slic = slic(self.local_costmap, n_segments=8, compactness=0.1, sigma=0, start_label=1, channel_axis=None, min_size_factor=0.01, max_size_factor=50, enforce_connectivity=True)
+                        #slic(local_costmap_rgb, n_segments=8, compactness=100.0, max_num_iter=100, sigma=0, spacing=None, convert2lab=False, enforce_connectivity=True, min_size_factor=0.01, max_size_factor=10, slic_zero=False)#, start_label=1, mask=None)
+                        #slic(image, n_segments=100, compactness=10.0, max_num_iter=10, sigma=0, spacing=None, convert2lab=None, enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3, slic_zero=False) #0.14.2
 
         segment_end = time.time()        
         print('SLIC runtime = ', segment_end - segment_start)
@@ -210,10 +211,11 @@ class lime_rt_sub(object):
         self.segments[:, :] = ctr
         ctr = ctr + 1
 
-        # add obstacle segments
+        # add obstacle segments--to have ordinal numbering of segments (0-free space, >1-objects/obstacles)
         num_of_obstacles = 0        
         for i in np.unique(segments_slic):
             temp = self.local_costmap[segments_slic == i]
+            # logic to check whether this is an obstacle
             count_of_99_s = np.count_nonzero(temp != 0) #np.count_nonzero(temp == 99)
             if count_of_99_s > 0.95 * temp.shape[0]: #or np.all(image[segments_slic == i] == 99) 
                 self.segments[segments_slic == i] = ctr
@@ -230,12 +232,13 @@ class lime_rt_sub(object):
     # create data--perturbations based on segments
     def create_data(self):
         # create N+1 perturbations for N obstacle segments--superpixels
+        # to get best explanation one would need N! perturbations 
         self.n_features = np.unique(self.segments).shape[0]
         self.n_samples = self.n_features
         lst = [[1]*self.n_features]
         for i in range(1, self.n_samples):
             lst.append([1]*self.n_features)
-            lst[i][self.n_features-i] = 0    
+            lst[i][self.n_features-i] = 0 # free space is always on  
         self.data = np.array(lst).reshape((self.n_samples, self.n_features))
 
     # plot costmaps

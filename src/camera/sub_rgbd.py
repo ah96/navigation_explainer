@@ -34,6 +34,7 @@ def camera_callback(rgb_msg, depth_msg):
     # DEPTH
     # convert depth image to np array
     depth_image = np.frombuffer(depth_msg.data, dtype=np.float32).reshape(depth_msg.height, depth_msg.width, -1)
+    
     # fill missing values with negative distance
     depth_image = np.nan_to_num(depth_image, nan=-1.0)
 
@@ -51,9 +52,9 @@ def camera_callback(rgb_msg, depth_msg):
     #camera_info_K.tofile(dirMain + '/K_' + str(img_ctr) + '.csv', sep=',',format='%10.5f')
     #camera_info_D.tofile(dirMain + '/D_' + str(img_ctr) + '.csv', sep=',',format='%10.5f')
     #np.array(depth_image).tofile(dirMain + '/depth_' + str(img_ctr) + '.csv', sep=',',format='%10.5f')
-    np.array(pos).tofile(dirMain + '/position_' + str(img_ctr) + '.csv', sep=',',format='%10.5f')
-    np.array(orient).tofile(dirMain + '/quaternion_' + str(img_ctr) + '.csv', sep=',',format='%10.5f')
-    print('\n' + str(img_ctr))
+    #np.array(pos).tofile(dirMain + '/position_' + str(img_ctr) + '.csv', sep=',',format='%10.5f')
+    #np.array(orient).tofile(dirMain + '/quaternion_' + str(img_ctr) + '.csv', sep=',',format='%10.5f')
+    #print('\n' + str(img_ctr))
 
     img_ctr += 1
 
@@ -71,7 +72,7 @@ if __name__ == '__main__':
     ts = message_filters.ApproximateTimeSynchronizer([image_sub, depth_sub], 10, 1.0)
     ts.registerCallback(camera_callback)
 
-    sub = rospy.Subscriber ('/amcl_pose', PoseWithCovarianceStamped, pose_callback) 
+    #sub = rospy.Subscriber ('/amcl_pose', PoseWithCovarianceStamped, pose_callback) 
     rospy.spin()
 
 # rosbag record rosout tf amcl_pose xtion/rgb/camera_info xtion/rgb/image_raw /xtion/depth_registered/image_raw
