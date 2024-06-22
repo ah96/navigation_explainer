@@ -13,7 +13,7 @@ recognizer = sr.Recognizer()
 engine = pyttsx3.init(driverName='espeak')  # or 'sapi5' for Windows, 'nsss' for Mac
 
 # Set your OpenAI API key
-openai.api_key = 'sk-proj-LEmPE8WAYOxRUTKIf6J8T3BlbkFJU2CurKhPlUKRCfE7T7EB'
+openai.api_key = '----'
 
 def listen_and_respond():
     # Initialize the ROS node
